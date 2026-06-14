@@ -66,6 +66,41 @@ Hardware lines in cut sheet; assembly guide mentions hardware & joints; mobile/t
 ---
 **ALL BLOCKS COMPLETE** — B1 (hardware catalog), B2 (functional doors/drawers), A1 (joinery) shipped across commits cf6f860 → (block 8).
 
+---
+
+# Development Plan 2 — F-Series (Modeling & Design Tools)
+
+All seven F features, in dependency order. Same cadence: one block per work
+unit, each ending in a commit. Status: ⬜ todo · 🔄 in progress · ✅ done
+
+### F-Block 1 — Unit system (F7) ✅
+Global mm/cm/inch setting; `fmtLen`/`parseLen` helpers; applied to properties
+dims+positions, overall size, 3D dim labels, cut sheet & PDF; fractional inches
+in read-only displays; settings selector. (Built first so later tools display units.)
+**Done:** `_unit` + `MM_PER`, `toUnit`/`fromUnit`/`parseLen`/`fmtLen`/`fmtLenLabel` (1/16" fractions); Units section in settings; applied to props (show/apply), overall, 3D labels, cut-sheet table, PDF note. Verified: mm/cm/inch convert, `1 1/2"` fractions, 20"→508mm round-trip, no errors.
+
+### F-Block 2 — Alignment & distribution (F3) ⬜
+Multi-select align min/center/max per axis + distribute evenly.
+
+### F-Block 3 — Mirror & array (F4) ⬜
+Mirror across X/Y/Z; linear array (count+spacing) and radial array (count+angle).
+
+### F-Block 4 — Measurement & annotation (F5) ⬜
+Measure mode: two-point distance (+ angle); persistent annotation overlay; uses unit formatter.
+
+### F-Block 5 — Template/preset library (F2) ⬜
+Parametric presets (bookcase, wardrobe, base cabinet, table, drawer unit) + modal with W/H/D.
+
+### F-Block 6 — Sub-assemblies / nested grouping (F6) ⬜
+Named groups + group-of-groups; select/move as a unit; group manager.
+
+### F-Block 7 — Parametric overall resize (F1) ⬜
+Editable overall W/H/D → proportional refit of all panels (positions + in-plane
+dims, thickness preserved). Pragmatic parametric resize for any design.
+
+### F-Block 8 — Integration, polish & docs ⬜
+Units flow into new features; mobile/theme; regression; README + DEVPLAN.
+
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).
 - Always run a **save → reload** round-trip to confirm new fields persist through Postgres JSONB.

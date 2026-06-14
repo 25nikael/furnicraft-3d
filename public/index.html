@@ -316,6 +316,20 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <input type="radio" name="navmode" id="nav-fps" value="fps">
           <label for="nav-fps">FPS <small>WASD + free mouse look</small></label>
         </div>
+        <div class="sd-divider"></div>
+        <div class="sd-section">Units</div>
+        <div class="sd-row" onclick="setUnit('mm')">
+          <input type="radio" name="unit" id="unit-mm" value="mm" checked>
+          <label for="unit-mm">Millimetres <small>mm</small></label>
+        </div>
+        <div class="sd-row" onclick="setUnit('cm')">
+          <input type="radio" name="unit" id="unit-cm" value="cm">
+          <label for="unit-cm">Centimetres <small>cm</small></label>
+        </div>
+        <div class="sd-row" onclick="setUnit('inch')">
+          <input type="radio" name="unit" id="unit-inch" value="inch">
+          <label for="unit-inch">Inches <small>fractional</small></label>
+        </div>
         <div id="fps-hint">
           <strong>WASD</strong> — move &nbsp;|&nbsp; <strong>Mouse</strong> — look<br>
           <strong>Q/E</strong> — down/up &nbsp;|&nbsp; <strong>Shift</strong> — fast<br>
@@ -1238,6 +1252,51 @@ function logoutUser() {
 var _currentTheme   = localStorage.getItem('fc3d_theme')   || 'dark';
 var _currentNavMode = localStorage.getItem('fc3d_navmode') || 'orbit';
 
+// ── Units (F-series F1) ───────────────────────────────
+// Internal model is always mm; these convert for display/entry.
+var _unit  = localStorage.getItem('fc3d_unit') || 'mm';
+var MM_PER = { mm: 1, cm: 10, inch: 25.4 };
+function toUnit(mm)   { return mm / MM_PER[_unit]; }
+function fromUnit(v)  { return v * MM_PER[_unit]; }
+function parseLen(str){ var v = parseFloat(str); return isNaN(v) ? NaN : fromUnit(v); }
+// Decimal value for editable number inputs
+function fmtLen(mm) {
+  if (_unit === 'mm') return '' + Math.round(mm);
+  if (_unit === 'cm') return (mm / 10).toFixed(1);
+  return (mm / 25.4).toFixed(3);
+}
+// Nearest-1/16" fractional string for read-only labels
+function _inchFrac(mm) {
+  var inch = mm / 25.4, whole = Math.floor(inch), s = Math.round((inch - whole) * 16);
+  if (s === 16) { whole++; s = 0; }
+  if (s === 0) return whole + '"';
+  var num = s, den = 16;
+  while (num % 2 === 0 && den % 2 === 0) { num /= 2; den /= 2; }
+  return (whole > 0 ? whole + ' ' : '') + num + '/' + den + '"';
+}
+// Read-only display (fractional inches, unit-suffixed)
+function fmtLenLabel(mm) {
+  if (_unit === 'mm') return Math.round(mm) + '';
+  if (_unit === 'cm') return (mm / 10).toFixed(1);
+  return _inchFrac(mm);
+}
+function setUnit(u) {
+  _unit = u;
+  localStorage.setItem('fc3d_unit', u);
+  updateUnitLabels();
+  if (selected) showProps(selected);
+  refreshOverall();
+  updateDims();
+}
+function updateUnitLabels() {
+  var spans = document.querySelectorAll('.dim-unit');
+  for (var i = 0; i < spans.length; i++) spans[i].textContent = _unit;
+  ['mm','cm','inch'].forEach(function (u) {
+    var el = document.getElementById('unit-' + u);
+    if (el) el.checked = (_unit === u);
+  });
+}
+
 function toggleSettings(e) {
   e.stopPropagation();
   document.getElementById('settings-dropdown').classList.toggle('open');
@@ -1353,6 +1412,7 @@ function _tickFPS(dt) {
 function _applyPrefs() {
   setTheme(_currentTheme);
   if (_currentNavMode === 'fps') setNavMode('fps');
+  updateUnitLabels();
 }
 
 // ── Topbar state ──────────────────────────────────────
@@ -3489,9 +3549,9 @@ function updateDims() {
   var bb = furnitureBBox();
   var minX=bb.minX,maxX=bb.maxX,minY=bb.minY,maxY=bb.maxY,minZ=bb.minZ,maxZ=bb.maxZ;
   var OF=40;
-  drawDimLine(new THREE.Vector3(minX,minY-OF,maxZ), new THREE.Vector3(maxX,minY-OF,maxZ), ''+Math.round(maxX-minX));
-  drawDimLine(new THREE.Vector3(maxX+OF,minY,maxZ), new THREE.Vector3(maxX+OF,maxY,maxZ), ''+Math.round(maxY-minY));
-  drawDimLine(new THREE.Vector3(maxX+OF*2,minY-OF,minZ), new THREE.Vector3(maxX+OF*2,minY-OF,maxZ), ''+Math.round(maxZ-minZ));
+  drawDimLine(new THREE.Vector3(minX,minY-OF,maxZ), new THREE.Vector3(maxX,minY-OF,maxZ), fmtLenLabel(maxX-minX));
+  drawDimLine(new THREE.Vector3(maxX+OF,minY,maxZ), new THREE.Vector3(maxX+OF,maxY,maxZ), fmtLenLabel(maxY-minY));
+  drawDimLine(new THREE.Vector3(maxX+OF*2,minY-OF,minZ), new THREE.Vector3(maxX+OF*2,minY-OF,maxZ), fmtLenLabel(maxZ-minZ));
   if (selected) {
     var p = selected;
     var euler = new THREE.Euler((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180, 'XYZ');
@@ -3503,12 +3563,12 @@ function updateDims() {
     drawDimLine(
       top.clone().sub(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
       top.clone().add(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
-      ''+Math.round(p.w), '#0ABAB5'
+      fmtLenLabel(p.w), '#0ABAB5'
     );
     drawDimLine(
       dFront.clone().sub(hHalf).add(new THREE.Vector3(OF*0.8, 0, 0)),
       dFront.clone().add(hHalf).add(new THREE.Vector3(OF*0.8, 0, 0)),
-      ''+Math.round(p.h), '#0ABAB5'
+      fmtLenLabel(p.h), '#0ABAB5'
     );
   }
 }
@@ -3588,12 +3648,12 @@ function showProps(p) {
     lbl.style.fontWeight = role === 'Thickness' ? '600' : '';
   });
   document.getElementById('p-name').value  = p.name;
-  document.getElementById('p-w').value     = Math.round(p.w);
-  document.getElementById('p-h').value     = Math.round(p.h);
-  document.getElementById('p-d').value     = Math.round(p.d);
-  document.getElementById('p-x').value     = Math.round(p.x);
-  document.getElementById('p-y').value     = Math.round(p.y);
-  document.getElementById('p-z').value     = Math.round(p.z);
+  document.getElementById('p-w').value     = fmtLen(p.w);
+  document.getElementById('p-h').value     = fmtLen(p.h);
+  document.getElementById('p-d').value     = fmtLen(p.d);
+  document.getElementById('p-x').value     = fmtLen(p.x);
+  document.getElementById('p-y').value     = fmtLen(p.y);
+  document.getElementById('p-z').value     = fmtLen(p.z);
   document.getElementById('p-mat').value    = p.material || 'custom';
   var isCustom = (p.material === 'custom' || !p.material);
   document.getElementById('custom-colors').style.display = isCustom ? '' : 'none';
@@ -3682,12 +3742,12 @@ function applyProps() {
   saveUndo();
   var p = selected;
   p.name      = document.getElementById('p-name').value;
-  p.w         = Math.max(1, parseFloat(document.getElementById('p-w').value) || p.w);
-  p.h         = Math.max(1, parseFloat(document.getElementById('p-h').value) || p.h);
-  p.d         = Math.max(1, parseFloat(document.getElementById('p-d').value) || p.d);
-  p.x         = parseFloat(document.getElementById('p-x').value) || 0;
-  p.y         = parseFloat(document.getElementById('p-y').value) || 0;
-  p.z         = parseFloat(document.getElementById('p-z').value) || 0;
+  p.w         = Math.max(1, parseLen(document.getElementById('p-w').value) || p.w);
+  p.h         = Math.max(1, parseLen(document.getElementById('p-h').value) || p.h);
+  p.d         = Math.max(1, parseLen(document.getElementById('p-d').value) || p.d);
+  p.x         = parseLen(document.getElementById('p-x').value) || 0;
+  p.y         = parseLen(document.getElementById('p-y').value) || 0;
+  p.z         = parseLen(document.getElementById('p-z').value) || 0;
   var matKey = document.getElementById('p-mat').value;
   p.material = matKey;
   var fd2 = FMAT[matKey];
@@ -3739,9 +3799,9 @@ function refreshOverall() {
     return;
   }
   var bb = furnitureBBox();
-  document.getElementById('ov-w').value = Math.round(bb.maxX-bb.minX);
-  document.getElementById('ov-h').value = Math.round(bb.maxY-bb.minY);
-  document.getElementById('ov-d').value = Math.round(bb.maxZ-bb.minZ);
+  document.getElementById('ov-w').value = fmtLen(bb.maxX-bb.minX);
+  document.getElementById('ov-h').value = fmtLen(bb.maxY-bb.minY);
+  document.getElementById('ov-d').value = fmtLen(bb.maxZ-bb.minZ);
 }
 
 function refreshCompList() {
@@ -3959,14 +4019,14 @@ function showCutSheet() {
   tbody.innerHTML = '';
   panels.forEach(function(p, i) {
     var fd = panelFaceDims(p);
-    var thick = Math.round(panelThickness(p));
+    var thick = fmtLenLabel(panelThickness(p));
     var mitreTxt = _jointSummary(p, true);
     var rawStyle = (fd.rawL > fd.faceL || fd.rawW > fd.faceW) ? 'font-weight:600;color:#c0392b;' : '';
     var tr = document.createElement('tr');
     tr.innerHTML = '<td>'+(i+1)+'</td><td>'+p.name+'</td>'
-      +'<td>'+Math.round(fd.faceL)+'</td><td>'+Math.round(fd.faceW)+'</td><td>'+thick+'</td>'
+      +'<td>'+fmtLenLabel(fd.faceL)+'</td><td>'+fmtLenLabel(fd.faceW)+'</td><td>'+thick+'</td>'
       +'<td>'+mitreTxt+'</td>'
-      +'<td style="'+rawStyle+'">'+fd.rawL+'</td><td style="'+rawStyle+'">'+fd.rawW+'</td>'
+      +'<td style="'+rawStyle+'">'+fmtLenLabel(fd.rawL)+'</td><td style="'+rawStyle+'">'+fmtLenLabel(fd.rawW)+'</td>'
       +'<td>'+(p.grain==='length'?'↔ Length':'↕ Width')+'</td>'
       +'<td><span style="display:inline-block;width:13px;height:13px;background:'+p.color+';border:1px solid '+p.edgeColor+';border-radius:2px;vertical-align:middle;margin-right:5px;"></span>Panel</td>';
     tbody.appendChild(tr);
@@ -4370,10 +4430,10 @@ function exportToPDF() {
 
   var rows = panels.map(function(p,i) {
     var fd = panelFaceDims(p);
-    var thick = Math.round(panelThickness(p));
+    var thick = fmtLenLabel(panelThickness(p));
     var mitre = _jointSummary(p, false);
-    return [i+1, p.name, Math.round(fd.faceL), Math.round(fd.faceW), thick,
-            mitre, fd.rawL, fd.rawW, p.grain==='length'?'Length':'Width', p.material||'custom'];
+    return [i+1, p.name, fmtLenLabel(fd.faceL), fmtLenLabel(fd.faceW), thick,
+            mitre, fmtLenLabel(fd.rawL), fmtLenLabel(fd.rawW), p.grain==='length'?'Length':'Width', p.material||'custom'];
   });
 
   doc.autoTable({
@@ -4390,7 +4450,7 @@ function exportToPDF() {
 
   var afterTable = doc.lastAutoTable.finalY + 6;
   doc.setFontSize(8); doc.setTextColor(120,120,120); doc.setFont('helvetica','italic');
-  doc.text('All dimensions in mm. Raw dimensions include mitre overhang allowance.', margin, afterTable);
+  doc.text('All dimensions in ' + _unit + '. Raw dimensions include mitre overhang allowance.', margin, afterTable);
 
   // ── Hardware BOM ───────────────────────────────────────────
   if (hardware.length) {
