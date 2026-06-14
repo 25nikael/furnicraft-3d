@@ -1,6 +1,12 @@
-# Node / serve
+# Node
 node_modules/
 .npm/
+npm-debug.log*
+
+# Environment / secrets
+.env
+.env.local
+*.pem
 
 # OS
 .DS_Store

@@ -770,24 +770,37 @@ var GROUP_PALETTE = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c'
 function groupColor(gid) { return GROUP_PALETTE[(gid - 1) % GROUP_PALETTE.length]; }
 
 // ═══════════════════════════════════════════════════════════════
-//  ACCOUNTS & PROJECTS  (localStorage-backed)
+//  ACCOUNTS & PROJECTS  (backend API)
 // ═══════════════════════════════════════════════════════════════
 var _currentUser    = null;   // { id, email }
 var _currentProjId  = null;   // id of the loaded/saved project, or null
+var _serverConfig   = null;   // { googleClientId, dbReady }
 
-function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function _getToken()    { return localStorage.getItem('fc3d_token') || ''; }
+function _setToken(t)   { localStorage.setItem('fc3d_token', t); }
+function _clearToken()  { localStorage.removeItem('fc3d_token'); }
 
-async function _hashPw(pw) {
-  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
-  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+// Thin fetch wrapper that attaches the JWT and parses JSON / errors.
+async function api(path, opts) {
+  opts = opts || {};
+  var headers = opts.headers || {};
+  headers['Content-Type'] = 'application/json';
+  var tok = _getToken();
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  var resp = await fetch('/api' + path, {
+    method:  opts.method || 'GET',
+    headers: headers,
+    body:    opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  var data = null;
+  try { data = await resp.json(); } catch (e) { data = {}; }
+  if (!resp.ok) {
+    var err = new Error(data.error || ('Request failed (' + resp.status + ')'));
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
 }
-
-function _getAccounts()  { return JSON.parse(localStorage.getItem('fc3d_accounts')  || '[]'); }
-function _saveAccounts(a){ localStorage.setItem('fc3d_accounts', JSON.stringify(a)); }
-function _getProjects()  { return JSON.parse(localStorage.getItem('fc3d_projects')  || '[]'); }
-function _saveProjects(a){ localStorage.setItem('fc3d_projects', JSON.stringify(a)); }
-function _getSession()   { return JSON.parse(localStorage.getItem('fc3d_session')   || 'null'); }
-function _saveSession(s) { localStorage.setItem('fc3d_session', JSON.stringify(s)); }
 
 // ── Auth ──────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
@@ -1054,19 +1067,27 @@ async function doRegisterStep1() {
   if (!email || !email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
   if (pw.length < 6)  { err.textContent = 'Password must be at least 6 characters.'; return; }
   if (pw !== pw2)     { err.textContent = 'Passwords do not match.'; return; }
-  var accounts = _getAccounts();
-  if (accounts.find(function(a){ return a.email === email; })) { err.textContent = 'That email is already registered.'; return; }
-  var code = String(Math.floor(100000 + Math.random() * 900000));
-  _pendingOTP = { email: email, pw: pw, code: code };
-  document.getElementById('reg-otp-email').textContent   = email;
-  document.getElementById('reg-otp-display').textContent = code;
-  document.getElementById('reg-otp-input').value         = '';
-  document.getElementById('reg-otp-err').textContent     = '';
-  document.getElementById('reg-ok').textContent          = '';
-  document.getElementById('reg-step1').style.display = 'none';
-  document.getElementById('reg-step2').style.display = '';
-  // When EmailJS is configured, send code here:
-  // emailjs.send('YOUR_SERVICE', 'YOUR_TEMPLATE', { to_email: email, otp: code });
+  try {
+    var res = await api('/auth/register', { method:'POST', body:{ email:email, password:pw } });
+    _pendingOTP = { email: email };
+    document.getElementById('reg-otp-email').textContent = email;
+    var devbox = document.getElementById('reg-otp-devbox');
+    if (res.devMode && res.devCode) {
+      // No SMTP configured — show the code in the UI for development
+      document.getElementById('reg-otp-display').textContent = res.devCode;
+      if (devbox) devbox.style.display = '';
+    } else {
+      // A real email was sent — hide the dev box
+      if (devbox) devbox.style.display = 'none';
+    }
+    document.getElementById('reg-otp-input').value     = '';
+    document.getElementById('reg-otp-err').textContent = '';
+    document.getElementById('reg-ok').textContent      = '';
+    document.getElementById('reg-step1').style.display = 'none';
+    document.getElementById('reg-step2').style.display = '';
+  } catch(e) {
+    err.textContent = e.message;
+  }
 }
 
 async function doRegisterStep2() {
@@ -1075,15 +1096,16 @@ async function doRegisterStep2() {
   var err = document.getElementById('reg-otp-err');
   var ok  = document.getElementById('reg-ok');
   err.textContent = ''; ok.textContent = '';
-  if (entered !== _pendingOTP.code) { err.textContent = 'Incorrect code. Please try again.'; return; }
-  var hash    = await _hashPw(_pendingOTP.pw);
-  var account = { id: _uid(), email: _pendingOTP.email, passwordHash: hash, verified: true };
-  var accounts = _getAccounts();
-  accounts.push(account);
-  _saveAccounts(accounts);
-  _pendingOTP = null;
-  ok.textContent = 'Email verified! Signing you in…';
-  setTimeout(function(){ _setSession(account); closeAuth(); }, 800);
+  if (!entered) { err.textContent = 'Enter the verification code.'; return; }
+  try {
+    var res = await api('/auth/verify', { method:'POST', body:{ email:_pendingOTP.email, code:entered } });
+    _pendingOTP = null;
+    _applyAuth(res);
+    ok.textContent = 'Email verified! Signing you in…';
+    setTimeout(function(){ closeAuth(); }, 700);
+  } catch(e) {
+    err.textContent = e.message;
+  }
 }
 
 function cancelOTP() {
@@ -1094,11 +1116,12 @@ function cancelOTP() {
 }
 
 // ── Google Sign-In ────────────────────────────────────
-var GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID'; // ← replace with your Client ID from console.cloud.google.com
+function _googleClientId() { return _serverConfig ? _serverConfig.googleClientId : ''; }
 
 function doGoogleSignIn() {
-  if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
-    alert('Google Sign-In is not configured yet.\n\nTo enable it:\n1. Go to console.cloud.google.com\n2. Create an OAuth 2.0 Client ID (Web application)\n3. Replace YOUR_GOOGLE_CLIENT_ID in index.html with your Client ID');
+  var cid = _googleClientId();
+  if (!cid) {
+    alert('Google Sign-In is not configured on the server.\n\nTo enable it:\n1. Create an OAuth 2.0 Client ID at console.cloud.google.com\n2. Set GOOGLE_CLIENT_ID in the server\'s .env file\n3. Restart the server');
     return;
   }
   if (typeof google === 'undefined' || !google.accounts) {
@@ -1106,14 +1129,14 @@ function doGoogleSignIn() {
     return;
   }
   google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
+    client_id: cid,
     callback: _handleGoogleCredential,
     auto_select: false,
     cancel_on_tap_outside: true
   });
   google.accounts.id.prompt(function(notification) {
     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      // Prompt blocked (e.g. third-party cookie policy) — fall back to popup
+      // Prompt blocked (e.g. third-party cookie policy) — fall back to popup button
       google.accounts.id.renderButton(
         document.getElementById('google-btn-wrap'),
         { theme: 'outline', size: 'large', width: '100%' }
@@ -1122,26 +1145,17 @@ function doGoogleSignIn() {
   });
 }
 
-function _decodeJWT(token) {
+// Send Google's ID token to our backend, which verifies it and returns a session
+async function _handleGoogleCredential(response) {
   try {
-    var base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-    return JSON.parse(atob(base64));
-  } catch(e) { return null; }
-}
-
-function _handleGoogleCredential(response) {
-  var payload = _decodeJWT(response.credential);
-  if (!payload || !payload.email) { alert('Google sign-in failed. Please try again.'); return; }
-  var email    = payload.email.toLowerCase();
-  var accounts = _getAccounts();
-  var account  = accounts.find(function(a){ return a.email === email; });
-  if (!account) {
-    account = { id: _uid(), email: email, googleId: payload.sub, verified: true, name: payload.name || '' };
-    accounts.push(account);
-    _saveAccounts(accounts);
+    var res = await api('/auth/google', { method:'POST', body:{ credential: response.credential } });
+    _applyAuth(res);
+    closeAuth();
+  } catch(e) {
+    var el = document.getElementById('li-err');
+    if (el) el.textContent = e.message;
+    else alert(e.message);
   }
-  _setSession(account);
-  closeAuth();
 }
 
 async function doLogin() {
@@ -1150,18 +1164,19 @@ async function doLogin() {
   var err   = document.getElementById('li-err');
   err.textContent = '';
   if (!email || !pw) { err.textContent = 'Enter your email and password.'; return; }
-  var accounts = _getAccounts();
-  var account  = accounts.find(function(a){ return a.email === email; });
-  if (!account) { err.textContent = 'No account found for that email.'; return; }
-  var hash = await _hashPw(pw);
-  if (hash !== account.passwordHash) { err.textContent = 'Incorrect password.'; return; }
-  _setSession(account);
-  closeAuth();
+  try {
+    var res = await api('/auth/login', { method:'POST', body:{ email:email, password:pw } });
+    _applyAuth(res);
+    closeAuth();
+  } catch(e) {
+    err.textContent = e.message;
+  }
 }
 
-function _setSession(account) {
-  _currentUser = { id: account.id, email: account.email };
-  _saveSession(_currentUser);
+// Store the JWT + user returned by any auth endpoint, then refresh the UI
+function _applyAuth(res) {
+  _setToken(res.token);
+  _currentUser = res.user;   // { id, email, name }
   _updateTopbar();
 }
 
@@ -1169,7 +1184,7 @@ function logoutUser() {
   if (!confirm('Sign out of ' + _currentUser.email + '?')) return;
   _currentUser   = null;
   _currentProjId = null;
-  localStorage.removeItem('fc3d_session');
+  _clearToken();
   _updateTopbar();
   document.getElementById('topbar-proj-name').textContent = 'Unsaved project';
 }
@@ -1322,16 +1337,16 @@ function _loadProjectState(state) {
   refreshUI();
 }
 
-function saveCurrentProject() {
+async function saveCurrentProject() {
   if (!_currentUser)   { openAuth(); return; }
   if (!_currentProjId) { openProjectManager(); return; }
-  var projects = _getProjects();
-  var idx = projects.findIndex(function(p){ return p.id === _currentProjId; });
-  if (idx < 0) { openProjectManager(); return; }
-  projects[idx].state        = _projectState();
-  projects[idx].lastModified = new Date().toISOString();
-  _saveProjects(projects);
-  _flashSave();
+  try {
+    await api('/projects/' + _currentProjId, { method:'PUT', body:{ state:_projectState() } });
+    _flashSave();
+  } catch(e) {
+    if (e.status === 404) { _currentProjId = null; openProjectManager(); }
+    else alert('Could not save: ' + e.message);
+  }
 }
 
 function _flashSave() {
@@ -1341,30 +1356,44 @@ function _flashSave() {
   setTimeout(function(){ btn.textContent = orig; }, 1400);
 }
 
-function openProjectManager() {
+var _projectList = [];   // cached metadata list from the server
+
+async function openProjectManager() {
   if (!_currentUser) { openAuth(); return; }
-  _renderProjectList();
-  var pname = _currentProjId ? (_getProjects().find(function(p){ return p.id===_currentProjId; })||{}).name || '' : '';
-  document.getElementById('proj-save-name').value   = pname;
   document.getElementById('proj-save-err').textContent = '';
   document.getElementById('proj-modal').classList.add('active');
+  document.getElementById('proj-list-wrap').innerHTML = '<div class="proj-empty">Loading…</div>';
+  await _refreshProjectList();
+  var cur = _projectList.find(function(p){ return String(p.id) === String(_currentProjId); });
+  document.getElementById('proj-save-name').value = cur ? cur.name : '';
 }
 function closeProjectManager() { document.getElementById('proj-modal').classList.remove('active'); }
 
-function _renderProjectList() {
-  var projects = _getProjects().filter(function(p){ return p.userId === _currentUser.id; });
+async function _refreshProjectList() {
   var wrap = document.getElementById('proj-list-wrap');
-  if (!projects.length) {
+  try {
+    var res = await api('/projects');
+    _projectList = res.projects || [];
+  } catch(e) {
+    wrap.innerHTML = '<div class="proj-empty">Could not load projects.<br>' + e.message + '</div>';
+    return;
+  }
+  _renderProjectList();
+}
+
+function _renderProjectList() {
+  var wrap = document.getElementById('proj-list-wrap');
+  if (!_projectList.length) {
     wrap.innerHTML = '<div class="proj-empty">No saved projects yet.<br>Save your current design below.</div>';
     return;
   }
-  projects.sort(function(a,b){ return b.lastModified.localeCompare(a.lastModified); });
-  wrap.innerHTML = '<div class="proj-list">' + projects.map(function(proj) {
-    var d   = new Date(proj.lastModified);
+  wrap.innerHTML = '<div class="proj-list">' + _projectList.map(function(proj) {
+    var d   = new Date(proj.updatedAt);
     var lbl = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    var cur = proj.id === _currentProjId ? ' style="background:#f0f6ff;"' : '';
+    var isCur = String(proj.id) === String(_currentProjId);
+    var cur = isCur ? ' style="background:var(--teal-dim);"' : '';
     return '<div class="proj-item"' + cur + '>'
-      + '<div class="proj-item-name" title="'+proj.name+'">'+proj.name+(proj.id===_currentProjId?' ●':'')+'</div>'
+      + '<div class="proj-item-name" title="'+proj.name+'">'+proj.name+(isCur?' ●':'')+'</div>'
       + '<div class="proj-item-date">'+lbl+'</div>'
       + '<div class="proj-item-btns">'
       + '<button class="pi-btn" onclick="loadProject(\''+proj.id+'\')">Open</button>'
@@ -1373,53 +1402,67 @@ function _renderProjectList() {
   }).join('') + '</div>';
 }
 
-function saveProjectAs() {
+async function saveProjectAs() {
   var name = document.getElementById('proj-save-name').value.trim();
   var err  = document.getElementById('proj-save-err');
   if (!name) { err.textContent = 'Enter a project name.'; return; }
   err.textContent = '';
-  var projects = _getProjects();
-  if (_currentProjId) {
-    var idx = projects.findIndex(function(p){ return p.id===_currentProjId; });
-    if (idx >= 0) { projects[idx].name = name; projects[idx].state = _projectState(); projects[idx].lastModified = new Date().toISOString(); _saveProjects(projects); _renderProjectList(); document.getElementById('topbar-proj-name').textContent = name; _flashSave(); return; }
+  try {
+    if (_currentProjId) {
+      await api('/projects/' + _currentProjId, { method:'PUT', body:{ name:name, state:_projectState() } });
+    } else {
+      var res = await api('/projects', { method:'POST', body:{ name:name, state:_projectState() } });
+      _currentProjId = res.project.id;
+    }
+    document.getElementById('topbar-proj-name').textContent = name;
+    await _refreshProjectList();
+    _flashSave();
+  } catch(e) {
+    err.textContent = e.message;
   }
-  var proj = { id: _uid(), userId: _currentUser.id, name: name, lastModified: new Date().toISOString(), state: _projectState() };
-  projects.push(proj);
-  _saveProjects(projects);
-  _currentProjId = proj.id;
-  document.getElementById('topbar-proj-name').textContent = name;
-  _renderProjectList();
-  _flashSave();
 }
 
-function loadProject(projId) {
-  var projects = _getProjects();
-  var proj = projects.find(function(p){ return p.id === projId; });
-  if (!proj) return;
-  if (panels.length && !confirm('Load "' + proj.name + '"? Unsaved changes will be lost.')) return;
-  _loadProjectState(proj.state);
-  _currentProjId = proj.id;
-  document.getElementById('topbar-proj-name').textContent = proj.name;
-  closeProjectManager();
+async function loadProject(projId) {
+  if (panels.length && !confirm('Load this project? Unsaved changes will be lost.')) return;
+  try {
+    var res = await api('/projects/' + projId);
+    var proj = res.project;
+    _loadProjectState(proj.state);
+    _currentProjId = proj.id;
+    document.getElementById('topbar-proj-name').textContent = proj.name;
+    closeProjectManager();
+  } catch(e) {
+    alert('Could not open project: ' + e.message);
+  }
 }
 
-function deleteProject(projId) {
-  var projects = _getProjects();
-  var proj = projects.find(function(p){ return p.id === projId; });
-  if (!proj) return;
-  if (!confirm('Delete "' + proj.name + '"? This cannot be undone.')) return;
-  _saveProjects(projects.filter(function(p){ return p.id !== projId; }));
-  if (_currentProjId === projId) { _currentProjId = null; document.getElementById('topbar-proj-name').textContent = 'Unsaved project'; }
-  _renderProjectList();
+async function deleteProject(projId) {
+  var proj = _projectList.find(function(p){ return String(p.id) === String(projId); });
+  var nm = proj ? proj.name : 'this project';
+  if (!confirm('Delete "' + nm + '"? This cannot be undone.')) return;
+  try {
+    await api('/projects/' + projId, { method:'DELETE' });
+    if (String(_currentProjId) === String(projId)) {
+      _currentProjId = null;
+      document.getElementById('topbar-proj-name').textContent = 'Unsaved project';
+    }
+    await _refreshProjectList();
+  } catch(e) {
+    alert('Could not delete: ' + e.message);
+  }
 }
 
-// ── Init: restore session ─────────────────────────────
-(function() {
-  var sess = _getSession();
-  if (sess) {
-    var accounts = _getAccounts();
-    var account  = accounts.find(function(a){ return a.id === sess.id; });
-    if (account) { _currentUser = { id: account.id, email: account.email }; }
+// ── Init: load server config + restore session ─────────
+(async function() {
+  try { _serverConfig = await api('/auth/config'); }
+  catch(e) { _serverConfig = { googleClientId:'', dbReady:false }; }
+  if (_getToken()) {
+    try {
+      var res = await api('/auth/me');
+      _currentUser = res.user;
+    } catch(e) {
+      _clearToken();   // token invalid or expired
+    }
   }
   _updateTopbar();
 })();
