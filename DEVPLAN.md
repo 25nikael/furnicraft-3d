@@ -33,9 +33,10 @@ Select / move / duplicate / delete hardware; properties panel (position, rotatio
 **Checkpoint:** full place/move/edit/delete; persists.
 **Done:** `selectedHw` + `Box3Helper` highlight; click-to-select in scene & list; XZ-plane drag mirroring panel drag; dynamic hardware properties panel (name, finish, position, rotation, per-type size params); `snapSelectedHwToFace` (projects onto nearest panel face, orients to normal, sets `attachedTo`); duplicate/delete. Verified: select/edit/param-rebuild/snap/duplicate + save→reload preserves `attachedTo`.
 
-### Block 3 — Complex hardware: hinges, slides, cleats (B1c) ⬜
+### Block 3 — Complex hardware: hinges, slides, cleats (B1c) ✅
 Factory geometry for euro hinge, telescoping drawer slide, French cleat; `attachedTo` orientation helpers.
 **Checkpoint:** all 7 hardware types placeable; persists. *(B1 complete.)*
+**Done:** `HW_DEFS` extended with hinge (cup+arm+plate), slide (telescoping outer/inner members), cleat (45° extruded profile); added `wood` finish. All inherit the generic select/edit/snap/persist pipeline. Verified: catalog shows 7, all build with geometry, save→reload round-trip, no warnings.
 
 ### Block 4 — Joint model + recess joints (A1a) ⬜
 Per-edge joint metadata + Properties UI; geometry for dado, groove, rabbet (recess in `buildMesh`).

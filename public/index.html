@@ -2085,7 +2085,8 @@ var HW_FINISH = {
   steel:  { name:'Brushed Steel', color:0xB6BCC4, specular:0x9aa0a8, shininess:120 },
   chrome: { name:'Chrome',        color:0xD8DEE6, specular:0xffffff, shininess:220 },
   brass:  { name:'Brass',         color:0xC9A24B, specular:0xe8d9a0, shininess:140 },
-  black:  { name:'Matte Black',   color:0x2A2A2E, specular:0x444448, shininess:40  }
+  black:  { name:'Matte Black',   color:0x2A2A2E, specular:0x444448, shininess:40  },
+  wood:   { name:'Wood',          color:0x9A6B3F, specular:0x2a1a08, shininess:18  }
 };
 
 function _hwMaterial(finishKey) {
@@ -2172,6 +2173,56 @@ var HW_DEFS = {
       ledge.position.z = pr.ledge / 2;
       meshes.push(ledge);
       return meshes;
+    }
+  },
+  hinge: {
+    label: 'Hinge', icon: '⬗', finish: 'steel',
+    params: { cup: 35, arm: 48 },
+    build: function (pr) {
+      var meshes = [];
+      var cupR = pr.cup / 2;
+      // Cup mortised into the door (along -Z, behind the mounting face)
+      var cup = new THREE.Mesh(_cyl(cupR, cupR, 12, 'z'));
+      cup.position.z = -6;
+      meshes.push(cup);
+      // Arm reaching back toward the cabinet side
+      var arm = new THREE.Mesh(new THREE.BoxGeometry(14, 10, pr.arm));
+      arm.position.z = -pr.arm / 2 - 6;
+      meshes.push(arm);
+      // Mounting plate at the cabinet end
+      var plate = new THREE.Mesh(new THREE.BoxGeometry(42, 12, 12));
+      plate.position.z = -pr.arm - 6;
+      meshes.push(plate);
+      return meshes;
+    }
+  },
+  slide: {
+    label: 'Drawer Slide', icon: '⬌', finish: 'steel',
+    params: { length: 450, height: 45 },
+    build: function (pr) {
+      var meshes = [];
+      // Outer (cabinet) member — thin in X, runs front-to-back along Z
+      var outer = new THREE.Mesh(new THREE.BoxGeometry(12, pr.height, pr.length));
+      outer.position.x = -3;
+      meshes.push(outer);
+      // Inner (drawer) member — telescoped, slightly shorter
+      var inner = new THREE.Mesh(new THREE.BoxGeometry(8, pr.height * 0.7, pr.length * 0.95));
+      inner.position.x = 4;
+      meshes.push(inner);
+      return meshes;
+    }
+  },
+  cleat: {
+    label: 'French Cleat', icon: '◣', finish: 'wood',
+    params: { length: 300, height: 60, thickness: 18 },
+    build: function (pr) {
+      // Right-triangle profile (45° bevel) extruded along its length
+      var s = new THREE.Shape();
+      s.moveTo(0, 0); s.lineTo(pr.thickness, 0); s.lineTo(0, pr.height); s.lineTo(0, 0);
+      var geo = new THREE.ExtrudeGeometry(s, { depth: pr.length, bevelEnabled: false });
+      geo.translate(-pr.thickness / 2, -pr.height / 2, -pr.length / 2);
+      geo.rotateY(Math.PI / 2); // run the length along X
+      return [new THREE.Mesh(geo)];
     }
   }
 };
