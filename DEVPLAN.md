@@ -53,9 +53,10 @@ Designate panel as door (hinge side, swing angle); swing animation; hinge hardwa
 **Checkpoint:** door swings open/closed; designation persists.
 **Done:** generic `func` field on panels (door|drawer); `doorPose` pivots the panel about its hinge edge; `tickFunctional` animates swing (300°/s) from the render loop; Function properties section (type, hinge side, angle, open/close toggle); `addHingesForDoor` places 2 hinges on the hinge edge. Verified: swing to 100° + back to base, pivot moves position & rotation, hinges added, func persists through save/reload, no errors.
 
-### Block 7 — Functional drawers + clearance (B2b) ⬜
+### Block 7 — Functional drawers + clearance (B2b) ✅
 Designate drawer (travel, slide type); auto slide-clearance calc; slide-out animation; slide hardware moves with drawer.
 **Checkpoint:** drawer opens/closes with clearance; persists. *(B2 complete.)*
+**Done:** drawer kind on `func` (travel/slide/clearance); whole front group slides along the front's out-direction (`applyDrawerSlide`/`tickDrawer` at 900mm/s); clearance UI + guidance (12.5mm/side default); `addSlidesForDrawer` places 2 slides at the box sides accounting for clearance. Verified: slides out 450mm & back, group moves together, slides added, func (incl clearance) persists, no errors.
 
 ### Block 8 — Integration, polish & docs ⬜
 Hardware lines in cut sheet; assembly guide mentions hardware & joints; mobile/touch + light-theme styling for new UI; regression pass (save/load, AI design, cut sheet); README update.

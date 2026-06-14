@@ -1736,7 +1736,7 @@ function snapPanel(p) {
            mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false,
            joints: JSON.parse(JSON.stringify(p.joints||{})),
            func: p.func ? { kind:p.func.kind, hingeSide:p.func.hingeSide, angle:p.func.angle,
-                            travel:p.func.travel, slide:p.func.slide, open:p.func.open } : null };
+                            travel:p.func.travel, slide:p.func.slide, clearance:p.func.clearance, open:p.func.open } : null };
 }
 
 function saveUndo() {
@@ -2762,12 +2762,13 @@ function setFunc(field, value) {
   if (field === 'kind') {
     if (value === 'none')        p.func = null;
     else if (value === 'door')   p.func = { kind:'door', hingeSide:'left', angle:100, open:false };
-    else if (value === 'drawer') p.func = { kind:'drawer', travel:Math.round(p.d||300), slide:'sidemount', open:false };
+    else if (value === 'drawer') p.func = { kind:'drawer', travel:450, slide:'sidemount', clearance:12.5, open:false };
     p._swingCur = undefined; p._slideCur = 0;
+    syncDrawerGroup(p);  // reset whole group to base
     syncPos(p);
   } else {
     if (!p.func) return;
-    if (field === 'angle' || field === 'travel') p.func[field] = parseFloat(value) || 0;
+    if (field === 'angle' || field === 'travel' || field === 'clearance') p.func[field] = parseFloat(value) || 0;
     else p.func[field] = value;
     p._swingCur = undefined;
   }
@@ -2792,9 +2793,13 @@ function renderFuncUI(p) {
       + '<button class="btn" style="margin-top:6px;" onclick="toggleFuncOpen()">'+(f.open?'Close':'Open')+' door</button>'
       + '<button class="btn" onclick="addHingesForDoor()">＋ Add hinges</button>';
   } else if (f && f.kind === 'drawer') {
+    var clr = (f.clearance != null ? f.clearance : 12.5);
     html += '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Travel</span>'
       + '<input class="prop-input" type="number" min="10" value="'+(f.travel||Math.round(p.d||300))+'" style="width:60px;" onchange="setFunc(\'travel\',this.value)"></div>'
-      + '<button class="btn" style="margin-top:6px;" onclick="toggleFuncOpen()">'+(f.open?'Close':'Open')+' drawer</button>'
+      + '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Clear/side</span>'
+      + '<input class="prop-input" type="number" min="0" step="0.5" value="'+clr+'" style="width:60px;" onchange="setFunc(\'clearance\',this.value)"></div>'
+      + '<div style="font-size:10px;color:#555;margin:2px 0 4px;">Side-mount slides need '+clr+'mm/side ('+(2*clr)+'mm total). Box width ≈ opening − '+(2*clr)+'mm.</div>'
+      + '<button class="btn" style="margin-top:2px;" onclick="toggleFuncOpen()">'+(f.open?'Close':'Open')+' drawer</button>'
       + '<button class="btn" onclick="addSlidesForDrawer()">＋ Add slides</button>';
   }
   body.innerHTML = html;
@@ -2814,6 +2819,57 @@ function addHingesForDoor() {
     local[along] = fr * halfAlong;
     var w = local.applyQuaternion(Q0).add(new THREE.Vector3(p.x, p.y, p.z));
     var hw = mkHardware({ type:'hinge', x:Math.round(w.x), y:Math.round(w.y), z:Math.round(w.z), attachedTo:p.id });
+    hardware.push(hw); buildHardwareMesh(hw);
+  });
+  refreshHwList();
+}
+
+// ── Drawers (Block 7) ───────────────────────────────────────────
+// A drawer = the front panel's whole group slides out along the front's
+// outward (+Z local) direction. Front carries the func config.
+function _drawerGroup(p) {
+  return p.groupId ? panels.filter(function (q) { return q.groupId === p.groupId; }) : [p];
+}
+
+function _drawerOutDir(p) {
+  var Q0 = new THREE.Quaternion().setFromEuler(new THREE.Euler((p.rx||0)*_D,(p.ry||0)*_D,(p.rz||0)*_D,'XYZ'));
+  return new THREE.Vector3(0, 0, 1).applyQuaternion(Q0).normalize();
+}
+
+function applyDrawerSlide(p) {
+  var delta = _drawerOutDir(p).multiplyScalar(p._slideCur || 0);
+  _drawerGroup(p).forEach(function (q) {
+    var bp = new THREE.Vector3(q.x, q.y, q.z).add(delta);
+    [q.mesh, q.edges, q.selBox].forEach(function (o) { if (o) o.position.copy(bp); });
+    if (q.jointMarkers) q.jointMarkers.forEach(function (m) { m.position.copy(bp); });
+    if (q.mitreLines)   q.mitreLines.forEach(function (l) { l.position.copy(bp); });
+  });
+}
+
+// Reset a drawer group back to base positions
+function syncDrawerGroup(p) {
+  _drawerGroup(p).forEach(function (q) { syncPos(q); });
+}
+
+function tickDrawer(p, dt) {
+  var target = p.func.open ? (p.func.travel || p.d || 300) : 0;
+  if (p._slideCur === undefined) p._slideCur = target;
+  if (p._slideCur === target) { if (p.func.open) applyDrawerSlide(p); return; }
+  var dir = target > p._slideCur ? 1 : -1;
+  p._slideCur += dir * 900 * dt;   // 900 mm/s
+  if ((dir > 0 && p._slideCur >= target) || (dir < 0 && p._slideCur <= target)) p._slideCur = target;
+  applyDrawerSlide(p);
+}
+
+function addSlidesForDrawer() {
+  if (!selected || !selected.func || selected.func.kind !== 'drawer') return;
+  var p = selected; saveUndo();
+  var clr = (p.func.clearance != null ? p.func.clearance : 12.5);
+  var travel = p.func.travel || p.d || 300;
+  [-1, 1].forEach(function (s) {
+    var hw = mkHardware({ type:'slide',
+      x: Math.round(p.x + s * (p.w / 2 + clr)), y: Math.round(p.y), z: Math.round(p.z - travel / 2),
+      params: { length: Math.round(travel), height: 45 }, attachedTo: p.id });
     hardware.push(hw); buildHardwareMesh(hw);
   });
   refreshHwList();
