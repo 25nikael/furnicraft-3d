@@ -58,9 +58,13 @@ Designate drawer (travel, slide type); auto slide-clearance calc; slide-out anim
 **Checkpoint:** drawer opens/closes with clearance; persists. *(B2 complete.)*
 **Done:** drawer kind on `func` (travel/slide/clearance); whole front group slides along the front's out-direction (`applyDrawerSlide`/`tickDrawer` at 900mm/s); clearance UI + guidance (12.5mm/side default); `addSlidesForDrawer` places 2 slides at the box sides accounting for clearance. Verified: slides out 450mm & back, group moves together, slides added, func (incl clearance) persists, no errors.
 
-### Block 8 — Integration, polish & docs ⬜
+### Block 8 — Integration, polish & docs ✅
 Hardware lines in cut sheet; assembly guide mentions hardware & joints; mobile/touch + light-theme styling for new UI; regression pass (save/load, AI design, cut sheet); README update.
 **Checkpoint:** end-to-end clean; committed.
+**Done:** Hardware BOM section in the cut sheet (`renderHardwareBOM`) + PDF hardware table; "Install hardware" assembly step; joinery already surfaced via `_jointSummary`; new UI reuses themed classes (light theme verified); README "Design features" section. Regression verified: 7 parts + 2 BOM rows, AI opens, light theme intact, full round-trip preserves panels/hardware/joints/func, no errors.
+
+---
+**ALL BLOCKS COMPLETE** — B1 (hardware catalog), B2 (functional doors/drawers), A1 (joinery) shipped across commits cf6f860 → (block 8).
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).

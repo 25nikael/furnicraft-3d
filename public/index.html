@@ -743,6 +743,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
             <tbody id="cs-tbody"></tbody>
           </table>
         </div>
+        <div class="cs-sec" id="cs-hw-sec">
+          <h3>Hardware</h3>
+          <div id="cs-hardware"></div>
+        </div>
         <div class="cs-sec">
           <h3>Stock Board Optimizer</h3>
           <div class="stk-row">
@@ -3924,10 +3928,33 @@ function _jointSummary(p, html) {
   return html ? '<span style="color:#0ABAB5;font-weight:600;">' + txt + '</span>' : txt;
 }
 
+function _hwGroups() {
+  var groups = {};
+  hardware.forEach(function (h) {
+    var k = h.type + '|' + h.finish;
+    if (!groups[k]) groups[k] = { type: h.type, finish: h.finish, count: 0 };
+    groups[k].count++;
+  });
+  return groups;
+}
+
+function renderHardwareBOM() {
+  var el = document.getElementById('cs-hardware');
+  if (!el) return;
+  if (!hardware.length) { el.innerHTML = '<p style="font-size:12px;color:#888;">No hardware added.</p>'; return; }
+  var groups = _hwGroups();
+  var rows = Object.keys(groups).map(function (k) {
+    var g = groups[k];
+    return '<tr><td>' + hwLabel(g.type) + '</td><td>' + (HW_FINISH[g.finish] ? HW_FINISH[g.finish].name : g.finish) + '</td><td>' + g.count + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="cs-tbl"><thead><tr><th>Item</th><th>Finish</th><th>Qty</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
 function showCutSheet() {
   document.getElementById('cs-modal').style.display = 'block';
   switchCsTab('cs');
   renderAssemblyGuide();
+  renderHardwareBOM();
   var tbody = document.getElementById('cs-tbody');
   tbody.innerHTML = '';
   panels.forEach(function(p, i) {
@@ -4275,6 +4302,15 @@ function renderAssemblyGuide() {
       + (tags ? '<div class="asm-tags">'+tags+'</div>' : '')
       + '</div></div>';
   }).join('');
+  // Hardware install step (Block 8)
+  if (hardware.length) {
+    var groups = _hwGroups();
+    var list = Object.keys(groups).map(function (k) { return groups[k].count + '× ' + hwLabel(groups[k].type); }).join(', ');
+    container.innerHTML += '<div class="asm-step"><div class="asm-num done">✓</div><div class="asm-body">'
+      + '<div class="asm-title">Install hardware</div>'
+      + '<div class="asm-desc">Fit the following hardware: ' + list + '. Hang doors on their hinges and mount drawers on their slides, checking clearances before final fixing.</div>'
+      + '</div></div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4355,6 +4391,27 @@ function exportToPDF() {
   var afterTable = doc.lastAutoTable.finalY + 6;
   doc.setFontSize(8); doc.setTextColor(120,120,120); doc.setFont('helvetica','italic');
   doc.text('All dimensions in mm. Raw dimensions include mitre overhang allowance.', margin, afterTable);
+
+  // ── Hardware BOM ───────────────────────────────────────────
+  if (hardware.length) {
+    var groups = _hwGroups();
+    var hwRows = Object.keys(groups).map(function (k) {
+      var g = groups[k];
+      return [hwLabel(g.type), (HW_FINISH[g.finish] ? HW_FINISH[g.finish].name : g.finish), g.count];
+    });
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(30,42,58);
+    doc.text('Hardware', margin, afterTable + 10);
+    doc.autoTable({
+      startY: afterTable + 13,
+      head: [['Item','Finish','Qty']],
+      body: hwRows,
+      theme: 'striped',
+      headStyles: { fillColor:[30,42,58], fontSize:8, halign:'center' },
+      bodyStyles: { fontSize:8 },
+      columnStyles: { 2:{halign:'center',cellWidth:16} },
+      margin: { left:margin, right:margin }
+    });
+  }
 
   // ── Page 3+: Board optimizer layouts ──────────────────────
   var canvases = document.querySelectorAll('.board-cvs');

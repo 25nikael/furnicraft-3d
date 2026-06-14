@@ -9,6 +9,18 @@ guides, export to PDF, and save your projects to your account in the cloud.
 - **Database** — PostgreSQL (users + projects)
 - **Auth** — email/password (bcrypt + JWT), Google Sign-In, email OTP verification
 
+## Design features
+- **Panels** — parametric boxes with material/grain, mitre joints, rounded edges
+- **Joinery** — per-edge dado, groove, rabbet, finger/box, dovetail (true recessed
+  geometry) plus dowel and pocket-hole markers; shown in the cut sheet & PDF
+- **Hardware catalog** — placeable knobs, bar handles, legs, shelf pins, hinges,
+  drawer slides and French cleats (procedural geometry, multiple finishes), with
+  select/move/snap-to-face editing and a hardware BOM in the cut sheet
+- **Functional components** — designate a panel as a working **door** (swings on
+  its hinge edge) or **drawer** (slides out with the box, auto slide-clearance)
+- **Output** — auto cut sheet with board-nesting optimizer, assembly guide, PDF export
+- **AI Designer** — describe furniture in plain language and generate a starting design
+
 ---
 
 ## Quick start (local)
