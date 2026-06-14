@@ -125,9 +125,30 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .clr{width:36px;height:26px;padding:1px 2px;border:1px solid var(--bd2);border-radius:3px;cursor:pointer;background:var(--bg3);}
 
 /* ── Mobile responsive ────────────────────────────── */
+/* ── Mobile export FAB ───────────────────────────────── */
+#mobile-export-fab{
+  display:none;position:fixed;bottom:80px;right:14px;z-index:60;
+  width:52px;height:52px;border-radius:50%;border:none;
+  background:var(--teal);color:#000;font-size:20px;cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);align-items:center;justify-content:center;
+}
+#mobile-export-menu{
+  display:none;position:fixed;bottom:142px;right:14px;z-index:61;
+  background:var(--bg2);border:1px solid var(--bd2);border-radius:10px;
+  box-shadow:0 6px 24px rgba(0,0,0,.5);overflow:hidden;min-width:180px;
+}
+#mobile-export-menu button{
+  display:block;width:100%;padding:13px 16px;text-align:left;border:none;
+  background:none;color:var(--txt);font-size:13px;cursor:pointer;border-bottom:1px solid var(--bd);
+}
+#mobile-export-menu button:last-child{border-bottom:none;}
+#mobile-export-menu button:hover{background:var(--teal-dim);color:var(--teal);}
+#mobile-export-menu.open{display:block;}
+
 @media (max-width: 768px) {
-  /* Show drawer toggle buttons */
+  /* Show drawer toggle buttons and export FAB */
   .drawer-toggle{display:flex;align-items:center;justify-content:center;}
+  #mobile-export-fab{display:flex;}
 
   /* Side panels become fixed drawers */
   #left-panel{
@@ -150,9 +171,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   .tb-btn{padding:4px 8px;font-size:11px;}
   #info-hud{display:none;}
 
-  /* Toolbar: larger tap targets, wrap if needed */
-  #toolbar{padding:8px 10px;gap:5px;flex-wrap:wrap;bottom:12px;max-width:92vw;}
-  .tbtn{padding:9px 12px;font-size:13px;border-radius:16px;}
+  /* Toolbar: scrollable row — no wrapping, no overflow clip */
+  #toolbar{
+    padding:8px 10px;gap:8px;bottom:12px;
+    flex-wrap:nowrap;overflow-x:auto;max-width:94vw;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  #toolbar::-webkit-scrollbar{display:none;}
+  .tbtn{padding:10px 14px;font-size:13px;border-radius:16px;white-space:nowrap;flex-shrink:0;}
 
   /* Snap HUD higher so it clears toolbar */
   #snap-hud{bottom:80px;}
@@ -161,6 +187,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   .dim-input,.prop-input{font-size:14px;padding:5px 8px;}
   .comp-item{padding:10px 12px;font-size:13px;}
   .btn{padding:10px;font-size:13px;}
+
+  /* Cut Sheet modal — full screen on mobile */
+  #cs-inner{margin:0;border-radius:0;min-height:100vh;}
+  #cs-body{padding:12px;}
 }
 /* ── AI Design modal ─────────────────────────────── */
 .ai-chip{padding:5px 10px;border:1px solid var(--bd2);border-radius:12px;background:var(--bg3);color:var(--txt2);font-size:11px;cursor:pointer;transition:all .12s;text-align:left;}
@@ -295,6 +325,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 <button id="drawer-left-btn"  class="drawer-toggle" onclick="toggleDrawer('left')"  title="Components">☰</button>
 <button id="drawer-right-btn" class="drawer-toggle" onclick="toggleDrawer('right')" title="Properties">⚙</button>
 <div id="drawer-overlay" class="drawer-overlay" onclick="closeDrawers()"></div>
+
+<!-- Mobile export FAB -->
+<button id="mobile-export-fab" onclick="toggleMobileExport(event)" title="Export">⬇</button>
+<div id="mobile-export-menu">
+  <button onclick="closeMobileExport(); showCutSheet();">✂ Cut Sheet</button>
+  <button onclick="closeMobileExport(); showCutSheet(); setTimeout(function(){ switchCsTab('asm'); }, 100);">🔧 Assembly Guide</button>
+  <button onclick="closeMobileExport(); exportToPDF();">📄 Export PDF</button>
+</div>
 
 <!-- ── Auth modal ────────────────────────────────────── -->
 <div class="overlay-modal" id="auth-modal">
@@ -1996,6 +2034,14 @@ function closeDrawers() {
   document.getElementById('right-panel').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('open');
 }
+function toggleMobileExport(e) {
+  e.stopPropagation();
+  document.getElementById('mobile-export-menu').classList.toggle('open');
+}
+function closeMobileExport() {
+  document.getElementById('mobile-export-menu').classList.remove('open');
+}
+document.addEventListener('click', function() { closeMobileExport(); });
 
 // ── Touch → mouse bridge ──────────────────────────────
 // Single-touch: drives panel selection/drag/resize (same code path as mouse).
@@ -2086,14 +2132,22 @@ canvas.addEventListener('mousedown', function(e) {
     if (p) {
       e.stopImmediatePropagation();
       var ctrl = e.ctrlKey || e.metaKey;
+      // Check if panel (or its group) was ALREADY selected before this click.
+      // First click = select only. Second click + drag = move.
+      var alreadySelected = !ctrl && (
+        selected === p ||
+        (p.groupId && selectedGroup.some(function(q){ return q === p; }))
+      );
       doSelect(p, ctrl);
-      saveUndo();
-      dragPending = true;
-      isDragging  = false;
-      orbitCtrl.enabled = false;
-      dragStart  = { mx: e.clientX, my: e.clientY };
-      panelStart = { x: selected.x, y: selected.y, z: selected.z };
-      groupStart = selectedGroup.map(function(q) { return { panel:q, x:q.x, y:q.y, z:q.z }; });
+      if (alreadySelected) {
+        saveUndo();
+        dragPending = true;
+        isDragging  = false;
+        orbitCtrl.enabled = false;
+        dragStart  = { mx: e.clientX, my: e.clientY };
+        panelStart = { x: selected.x, y: selected.y, z: selected.z };
+        groupStart = selectedGroup.map(function(q) { return { panel:q, x:q.x, y:q.y, z:q.z }; });
+      }
     }
     return;
   }
