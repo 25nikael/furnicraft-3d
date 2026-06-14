@@ -734,7 +734,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div class="cs-sec">
           <h3>Parts List</h3>
           <table class="cs-tbl">
-            <thead><tr><th>#</th><th>Name</th><th>Length</th><th>Width</th><th>Thickness</th><th>Mitre</th><th>L raw</th><th>W raw</th><th>Grain</th><th>Colour</th></tr></thead>
+            <thead><tr><th>#</th><th>Name</th><th>Length</th><th>Width</th><th>Thickness</th><th>Joinery</th><th>L raw</th><th>W raw</th><th>Grain</th><th>Colour</th></tr></thead>
             <tbody id="cs-tbody"></tbody>
           </table>
         </div>
@@ -1713,7 +1713,8 @@ function mkPanel(o) {
     mesh:        null,
     edges:       null,
     selBox:      null,
-    mitreLines:  []
+    mitreLines:  [],
+    jointMarkers: []
   };
 }
 
@@ -1807,13 +1808,20 @@ function mitrableFaces(p) {
   /* tk === 'd' */ return { xMin:true,  xMax:true,  yMin:true,  yMax:true,  zMin:false, zMax:false };
 }
 
-// ── Joinery geometry (Block 4): true recesses via axis-aligned box subtraction ──
-function hasJoints(p) {
+// ── Joinery geometry (Block 4/5): true recesses via axis-aligned box subtraction ──
+var CUT_JOINTS    = ['dado','groove','rabbet','finger','dovetail'];
+var MARKER_JOINTS = ['dowel','pocket'];
+
+function _anyJoint(p, list) {
   if (!p.joints) return false;
   return Object.keys(p.joints).some(function (k) {
-    return p.joints[k] && p.joints[k].type && p.joints[k].type !== 'none';
+    var t = p.joints[k] && p.joints[k].type;
+    return t && list.indexOf(t) >= 0;
   });
 }
+function hasJoints(p)       { return _anyJoint(p, CUT_JOINTS.concat(MARKER_JOINTS)); }
+function hasCutJoints(p)    { return _anyJoint(p, CUT_JOINTS); }
+function hasMarkerJoints(p) { return _anyJoint(p, MARKER_JOINTS); }
 
 function _thickAxisXYZ(p) {
   var roles = panelDimRoles(p);
@@ -1843,6 +1851,36 @@ function jointCutAABB(p, edgeKey, j) {
   box[A][1] = Math.min(half[A], box[A][1]);
   if (box[A][0] >= box[A][1]) return null;
   return box;
+}
+
+// Finger / box / dovetail: alternating slots removed along the edge length
+function fingerCuts(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0), s = /Max$/.test(edgeKey) ? 1 : -1;
+  if (A === tAxis) return [];
+  var B = ['x','y','z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+  var depth = Math.max(1, Math.min(j.depth || 18, 2 * half[A] - 1)); // finger length into the board
+  var count = Math.max(2, Math.round(j.count || 6));
+  var bMin = -half[B], seg = (2 * half[B]) / count;
+  var cuts = [];
+  for (var i = 0; i < count; i++) {
+    if (i % 2 === 1) { // remove every other segment → leaves interlocking fingers
+      var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+      box[A] = s > 0 ? [half[A] - depth, half[A]] : [-half[A], -half[A] + depth];
+      box[B] = [bMin + i * seg, bMin + (i + 1) * seg];
+      cuts.push(box);
+    }
+  }
+  return cuts;
+}
+
+// All cut boxes for a joint (recess types → 1, finger/dovetail → N, markers → 0)
+function jointCuts(p, edgeKey, j) {
+  var t = j.type;
+  if (t === 'dado' || t === 'groove' || t === 'rabbet') { var b = jointCutAABB(p, edgeKey, j); return b ? [b] : []; }
+  if (t === 'finger' || t === 'dovetail') { return fingerCuts(p, edgeKey, j); }
+  return [];
 }
 
 // box minus axis-aligned cut → up to 6 sub-boxes
@@ -1875,11 +1913,11 @@ function buildJointedGeometry(p, grainW) {
   Object.keys(p.joints).forEach(function (edgeKey) {
     var j = p.joints[edgeKey];
     if (!j || !j.type || j.type === 'none') return;
-    var cut = jointCutAABB(p, edgeKey, j);
-    if (!cut) return;
-    var next = [];
-    boxes.forEach(function (b) { next = next.concat(subtractBox(b, cut)); });
-    boxes = next;
+    jointCuts(p, edgeKey, j).forEach(function (cut) {
+      var next = [];
+      boxes.forEach(function (b) { next = next.concat(subtractBox(b, cut)); });
+      boxes = next;
+    });
   });
   var pos = [], nor = [], uv = [];
   boxes.forEach(function (b) {
@@ -1901,6 +1939,54 @@ function buildJointedGeometry(p, grainW) {
   geo.setAttribute('normal',   new THREE.Float32BufferAttribute(nor, 3));
   geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uv, 2));
   return geo;
+}
+
+// Dowel / pocket-hole markers — overlay meshes that follow the panel transform
+function buildJointMarkers(p) {
+  if (p.jointMarkers) { p.jointMarkers.forEach(function (m) { scene.remove(m); if (m.geometry) m.geometry.dispose(); }); }
+  p.jointMarkers = [];
+  if (!hasMarkerJoints(p)) return;
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var D = Math.PI / 180, rx = (p.rx || 0) * D, ry = (p.ry || 0) * D, rz = (p.rz || 0) * D;
+  var dowelMat  = new THREE.MeshPhongMaterial({ color: 0xC9A24B, shininess: 30 });
+  var pocketMat = new THREE.MeshPhongMaterial({ color: 0x222226, shininess: 10 });
+  Object.keys(p.joints).forEach(function (edgeKey) {
+    var j = p.joints[edgeKey];
+    if (!j || (j.type !== 'dowel' && j.type !== 'pocket')) return;
+    var A = edgeKey.charAt(0), s = /Max$/.test(edgeKey) ? 1 : -1;
+    if (A === tAxis) return;
+    var B = ['x','y','z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+    var count = Math.max(1, Math.round(j.count || 3));
+    var dia = Math.max(3, j.width || 8);
+    var len = Math.max(8, j.depth || 16);
+    var bMin = -half[B], span = 2 * half[B];
+    for (var i = 0; i < count; i++) {
+      var local = { x: 0, y: 0, z: 0 };
+      local[B] = bMin + span * (i + 1) / (count + 1);
+      var geo, mat;
+      if (j.type === 'dowel') {
+        // Dowel protruding from the edge face along the edge axis
+        local[A] = s * half[A];
+        geo = _cyl(dia / 2, dia / 2, len, A);
+        mat = dowelMat;
+      } else {
+        // Pocket-hole entry on the +thickness face near the edge
+        local[A] = s * (half[A] - Math.min(20, half[A] * 0.4));
+        local[tAxis] = half[tAxis];
+        geo = _cyl(dia / 2, dia / 2, len, tAxis);
+        mat = pocketMat;
+      }
+      geo.translate(local.x, local.y, local.z);
+      var mk = new THREE.Mesh(geo, mat);
+      mk.position.set(p.x, p.y, p.z);
+      mk.rotation.set(rx, ry, rz);
+      mk.castShadow = true;
+      mk.userData.pid = p.id;
+      scene.add(mk);
+      p.jointMarkers.push(mk);
+    }
+  });
 }
 
 function buildMesh(p) {
@@ -1945,7 +2031,7 @@ function buildMesh(p) {
     posAttr.needsUpdate = true;
     norAttr.needsUpdate = true;
     uvAttr.needsUpdate  = true;
-  } else if (hasJoints(p)) {
+  } else if (hasCutJoints(p)) {
     geo = buildJointedGeometry(p, grainW);
   } else {
     // Custom flat geometry (supports mitre shifts)
@@ -1994,7 +2080,7 @@ function buildMesh(p) {
   p.mesh.userData.pid = p.id;
   scene.add(p.mesh);
 
-  if (!p.roundedEdges && !hasJoints(p)) {
+  if (!p.roundedEdges && !hasCutJoints(p)) {
     // Edge lines follow mitre-shifted vertices
     var v2 = panelVerts(p);
     var edgePairs = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
@@ -2011,6 +2097,7 @@ function buildMesh(p) {
   }
 
   buildMitreLines(p);
+  buildJointMarkers(p);
 }
 
 function removeMesh(p) {
@@ -2018,6 +2105,7 @@ function removeMesh(p) {
   if (p.edges)  { scene.remove(p.edges);  p.edges.geometry.dispose();  p.edges  = null; }
   if (p.selBox) { scene.remove(p.selBox); p.selBox.geometry.dispose(); p.selBox = null; }
   if (p.mitreLines) { p.mitreLines.forEach(function(l){ scene.remove(l); l.geometry.dispose(); }); p.mitreLines = []; }
+  if (p.jointMarkers) { p.jointMarkers.forEach(function(m){ scene.remove(m); if (m.geometry) m.geometry.dispose(); }); p.jointMarkers = []; }
 }
 
 function syncPos(p) {
@@ -2026,6 +2114,7 @@ function syncPos(p) {
   if (p.edges)  { p.edges.position.set(p.x,p.y,p.z);  p.edges.rotation.set(rx,ry,rz); }
   if (p.selBox) { p.selBox.position.set(p.x,p.y,p.z); p.selBox.rotation.set(rx,ry,rz); }
   if (p.mitreLines) p.mitreLines.forEach(function(l){ l.position.set(p.x,p.y,p.z); l.rotation.set(rx,ry,rz); });
+  if (p.jointMarkers) p.jointMarkers.forEach(function(m){ m.position.set(p.x,p.y,p.z); m.rotation.set(rx,ry,rz); });
 }
 
 function buildMitreLines(p) {
@@ -3354,13 +3443,16 @@ function renderJointsUI(p) {
     var key = e[0], j = (p.joints && p.joints[key]) || { type: 'none' }, t = j.type || 'none';
     function opt(v, l){ return '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>'; }
     var sel = '<select class="prop-input" style="width:84px;" onchange="setJoint(\''+key+'\',\'type\',this.value)">'
-      + opt('none','None') + opt('dado','Dado') + opt('groove','Groove') + opt('rabbet','Rabbet') + '</select>';
+      + opt('none','None') + opt('dado','Dado') + opt('groove','Groove') + opt('rabbet','Rabbet')
+      + opt('finger','Finger') + opt('dovetail','Dovetail') + opt('dowel','Dowel') + opt('pocket','Pocket') + '</select>';
     var rows = '';
     if (t !== 'none') {
       function inp(field, val, min){ return '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;font-size:10px;">'+field+'</span>'
         + '<input class="prop-input" type="number" min="'+min+'" value="'+val+'" style="width:54px;" onchange="setJoint(\''+key+'\',\''+field+'\',this.value)"></div>'; }
-      rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1)
-        + (t !== 'rabbet' ? inp('offset', j.offset||0, 0) : '');
+      if (t === 'dado' || t === 'groove')      rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1) + inp('offset', j.offset||0, 0);
+      else if (t === 'rabbet')                 rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1);
+      else if (t === 'finger' || t === 'dovetail') rows = inp('depth', j.depth||18, 1) + inp('count', j.count||6, 2);
+      else                                     rows = inp('count', j.count||3, 1) + inp('width', j.width||8, 1) + inp('depth', j.depth||16, 1); // dowel / pocket
     }
     return '<div style="border-top:1px solid var(--bd);padding:5px 0;"><div class="prop-row">'
       + '<span class="prop-lbl" style="width:auto;flex:1;">'+e[1]+' edge</span>'+sel+'</div>'+rows+'</div>';
@@ -3375,8 +3467,13 @@ function setJoint(edgeKey, field, value) {
   if (field === 'type') {
     if (value === 'none') { delete p.joints[edgeKey]; }
     else {
-      var j = p.joints[edgeKey] || { depth: 6, width: 6, offset: 0 };
-      j.type = value; p.joints[edgeKey] = j;
+      var defaults = { depth: 6, width: 6, offset: 0, count: 3 };
+      if (value === 'finger' || value === 'dovetail') defaults = { depth: 18, width: 6, offset: 0, count: 6 };
+      else if (value === 'dowel' || value === 'pocket') defaults = { depth: 16, width: 8, offset: 0, count: 3 };
+      var j = p.joints[edgeKey] || defaults;
+      j.type = value;
+      if (j.count === undefined) j.count = defaults.count;
+      p.joints[edgeKey] = j;
       // joints & mitre are mutually exclusive on the same edge
       var mk = 'mitre' + edgeKey.charAt(0).toUpperCase() + edgeKey.slice(1);
       if (p[mk]) p[mk] = false;
@@ -3619,6 +3716,30 @@ function ungroupSelected() {
 // ═══════════════════════════════════════════════════════════════
 //  CUT SHEET
 // ═══════════════════════════════════════════════════════════════
+// Combined mitre + joinery description for a panel (used in cut sheet & PDF)
+function _jointSummary(p, html) {
+  var parts = [];
+  var ml = [];
+  if (p.mitreXMin) ml.push('−X'); if (p.mitreXMax) ml.push('+X');
+  if (p.mitreYMin) ml.push('−Y'); if (p.mitreYMax) ml.push('+Y');
+  if (p.mitreZMin) ml.push('−Z'); if (p.mitreZMax) ml.push('+Z');
+  if (ml.length) parts.push('Mitre ' + ml.join('/') + ' ' + (p.mitreAngle || 45) + '°');
+  if (p.joints) {
+    var EL  = { xMin:'−X', xMax:'+X', yMin:'−Y', yMax:'+Y', zMin:'−Z', zMax:'+Z' };
+    var LBL = { dado:'Dado', groove:'Groove', rabbet:'Rabbet', finger:'Finger', dovetail:'Dovetail', dowel:'Dowel', pocket:'Pocket' };
+    Object.keys(p.joints).forEach(function (k) {
+      var j = p.joints[k]; if (!j || !j.type || !LBL[j.type]) return;
+      var d = LBL[j.type] + ' ' + EL[k];
+      if (j.type === 'finger' || j.type === 'dovetail' || j.type === 'dowel' || j.type === 'pocket') d += ' ×' + (j.count || 6);
+      else d += ' ' + (j.depth || 6) + 'mm';
+      parts.push(d);
+    });
+  }
+  if (!parts.length) return html ? '—' : '—';
+  var txt = parts.join(html ? '<br>' : ', ');
+  return html ? '<span style="color:#0ABAB5;font-weight:600;">' + txt + '</span>' : txt;
+}
+
 function showCutSheet() {
   document.getElementById('cs-modal').style.display = 'block';
   switchCsTab('cs');
@@ -3628,16 +3749,7 @@ function showCutSheet() {
   panels.forEach(function(p, i) {
     var fd = panelFaceDims(p);
     var thick = Math.round(panelThickness(p));
-    var mitreLabel = [];
-    if (p.mitreXMin) mitreLabel.push('−X');
-    if (p.mitreXMax) mitreLabel.push('+X');
-    if (p.mitreYMin) mitreLabel.push('−Y');
-    if (p.mitreYMax) mitreLabel.push('+Y');
-    if (p.mitreZMin) mitreLabel.push('−Z');
-    if (p.mitreZMax) mitreLabel.push('+Z');
-    var mitreTxt = mitreLabel.length
-      ? '<span style="color:#ff6b00;font-weight:600;">'+mitreLabel.join(' ')+' '+(p.mitreAngle||45)+'°</span>'
-      : '—';
+    var mitreTxt = _jointSummary(p, true);
     var rawStyle = (fd.rawL > fd.faceL || fd.rawW > fd.faceW) ? 'font-weight:600;color:#c0392b;' : '';
     var tr = document.createElement('tr');
     tr.innerHTML = '<td>'+(i+1)+'</td><td>'+p.name+'</td>'
@@ -4038,18 +4150,14 @@ function exportToPDF() {
   var rows = panels.map(function(p,i) {
     var fd = panelFaceDims(p);
     var thick = Math.round(panelThickness(p));
-    var mitreLabel = [];
-    if (p.mitreXMin) mitreLabel.push('−X'); if (p.mitreXMax) mitreLabel.push('+X');
-    if (p.mitreYMin) mitreLabel.push('−Y'); if (p.mitreYMax) mitreLabel.push('+Y');
-    if (p.mitreZMin) mitreLabel.push('−Z'); if (p.mitreZMax) mitreLabel.push('+Z');
-    var mitre = mitreLabel.length ? mitreLabel.join(' ')+'  '+(p.mitreAngle||45)+'°' : '—';
+    var mitre = _jointSummary(p, false);
     return [i+1, p.name, Math.round(fd.faceL), Math.round(fd.faceW), thick,
             mitre, fd.rawL, fd.rawW, p.grain==='length'?'Length':'Width', p.material||'custom'];
   });
 
   doc.autoTable({
     startY: 28,
-    head: [['#','Name','Length','Width','Thick','Mitre','L raw','W raw','Grain','Material']],
+    head: [['#','Name','Length','Width','Thick','Joinery','L raw','W raw','Grain','Material']],
     body: rows,
     theme: 'striped',
     headStyles: { fillColor:[30,42,58], fontSize:8, halign:'center' },

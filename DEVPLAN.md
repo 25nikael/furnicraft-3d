@@ -43,9 +43,10 @@ Per-edge joint metadata + Properties UI; geometry for dado, groove, rabbet (rece
 **Checkpoint:** set dado/rabbet/groove on an edge, see the recess; persists.
 **Done:** `joints` map on panels; true recesses via axis-aligned box subtraction (`jointCutAABB` + `subtractBox` + `buildJointedGeometry`, merged non-indexed with continuous UVs); Joinery properties section (`renderJointsUI`/`setJoint`) per in-plane edge with depth/width/offset; mutually exclusive with mitre. Verified: box 36→108→180 verts (real subdivision), all 3 types, save→reload preserves joints + geometry, no errors.
 
-### Block 5 — Interlocking joints + fastener markers (A1b) ⬜
+### Block 5 — Interlocking joints + fastener markers (A1b) ✅
 Finger/box & dovetail profiled edges; dowel & pocket-hole markers; joints reflected in cut sheet / assembly notes.
 **Checkpoint:** all joint types representable; notes in cut sheet; persists. *(A1 complete.)*
+**Done:** finger/dovetail via multi-slot box subtraction (`fingerCuts`/`jointCuts`); dowel & pocket-hole overlay markers (`buildJointMarkers`, synced in syncPos/removeMesh); UI extended with all 4 new types + count param; `_jointSummary` surfaces mitre+joints in the cut-sheet table & PDF (column renamed Mitre→Joinery). Verified: finger 288 verts, markers 7 (rebuild on reload), summary text, cut sheet renders, no errors. NOTE: dovetail is shown schematically as box-comb interlock (axis-aligned); true angled pins deferred.
 
 ### Block 6 — Functional doors (B2a) ⬜
 Designate panel as door (hinge side, swing angle); swing animation; hinge hardware tie-in; open/close toggle.
