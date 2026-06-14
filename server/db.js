@@ -29,7 +29,8 @@ function getPool() {
         ? { rejectUnauthorized: false }
         : false,
       max: 10,
-      idleTimeoutMillis: 30000
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000   // fail fast so retries can kick in
     });
     pool.on('error', (err) => {
       console.error('[db] unexpected pool error:', err.message);
@@ -75,7 +76,37 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects (user_id);
 `;
 
-/** Connect and ensure the schema exists. Resolves to true on success. */
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/**
+ * Try to connect and ensure the schema exists.
+ * @param {number} maxAttempts  0 = retry forever (background mode).
+ * @returns {Promise<boolean>} true once connected.
+ */
+async function connectWithRetry(maxAttempts) {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    attempt++;
+    try {
+      await getPool().query(SCHEMA);
+      ready = true;
+      console.log('[db] connected and schema ready');
+      return true;
+    } catch (err) {
+      ready = false;
+      console.error(`[db] connect attempt ${attempt} failed: ${err.message}`);
+      if (maxAttempts && attempt >= maxAttempts) return false;
+      await sleep(Math.min(30000, 2000 * attempt)); // backoff, capped at 30s
+    }
+  }
+}
+
+/**
+ * Connect and ensure the schema exists. Makes a few attempts up front (the DB
+ * is often not accepting connections the instant the web service boots), then
+ * keeps retrying in the background so the app recovers without a manual restart.
+ */
 async function init() {
   if (!process.env.DATABASE_URL) {
     console.warn('[db] DATABASE_URL not set — auth & projects disabled. '
@@ -83,17 +114,12 @@ async function init() {
     ready = false;
     return false;
   }
-  try {
-    await getPool().query(SCHEMA);
-    ready = true;
-    console.log('[db] connected and schema ready');
-    return true;
-  } catch (err) {
-    ready = false;
-    console.error('[db] connection failed:', err.message);
-    console.error('[db] auth & projects disabled until the database is reachable.');
-    return false;
+  const ok = await connectWithRetry(5);
+  if (!ok) {
+    console.warn('[db] not ready after initial attempts — retrying in background.');
+    connectWithRetry(0); // fire-and-forget; flips ready=true once reachable
   }
+  return ok;
 }
 
 module.exports = { init, query, getPool, isReady };
