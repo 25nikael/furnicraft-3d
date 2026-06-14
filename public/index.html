@@ -584,6 +584,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
       </div>
     </div>
+    <div id="hw-prop-panel" style="display:none;">
+      <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
   </div>
 </div>
 
@@ -2293,11 +2296,155 @@ function refreshHwList() {
     return;
   }
   wrap.innerHTML = hardware.map(function (hw) {
-    return '<li class="comp-item" style="justify-content:space-between;">'
-      + '<span class="comp-name" title="' + hw.name + '">' + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
-      + '<button class="pi-btn del" onclick="deleteHardware(\'' + hw.id + '\')" style="flex:0 0 auto;">✕</button>'
+    var sel = (selectedHw === hw) ? ' sel' : '';
+    return '<li class="comp-item' + sel + '" style="justify-content:space-between;">'
+      + '<span class="comp-name" title="' + hw.name + '" onclick="selectHardwareById(\'' + hw.id + '\')">' + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
+      + '<button class="pi-btn del" onclick="event.stopPropagation();deleteHardware(\'' + hw.id + '\')" style="flex:0 0 auto;">✕</button>'
       + '</li>';
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HARDWARE SELECTION, MOVE & EDIT  (Block 2)
+// ═══════════════════════════════════════════════════════════════
+var selectedHw    = null;
+var hwSelBox      = null;
+var dragPendingHw = false;
+var isDraggingHw  = false;
+var hwStart       = null;
+
+function hwMeshList() { return hardware.map(function (h) { return h.mesh; }).filter(Boolean); }
+
+function rebuildHwSelBox() {
+  if (hwSelBox) { scene.remove(hwSelBox); if (hwSelBox.geometry) hwSelBox.geometry.dispose(); hwSelBox = null; }
+  if (!selectedHw || !selectedHw.mesh) return;
+  var box = new THREE.Box3().setFromObject(selectedHw.mesh);
+  hwSelBox = new THREE.Box3Helper(box, new THREE.Color(0x0ABAB5));
+  scene.add(hwSelBox);
+}
+
+function clearHwSelection() {
+  selectedHw = null;
+  if (hwSelBox) { scene.remove(hwSelBox); hwSelBox = null; }
+  var pnl = document.getElementById('hw-prop-panel');
+  if (pnl) pnl.style.display = 'none';
+}
+
+function selectHardware(hw) {
+  doSelect(null);              // clear any panel selection (also clears hw via clearHwSelection)
+  selectedHw = hw;
+  rebuildHwSelBox();
+  document.getElementById('no-sel').style.display     = 'none';
+  document.getElementById('prop-panel').style.display = 'none';
+  document.getElementById('hw-prop-panel').style.display = 'block';
+  showHwProps(hw);
+  refreshHwList();
+}
+
+function selectHardwareById(id) {
+  var hw = hardware.filter(function (h) { return String(h.id) === String(id); })[0];
+  if (hw) selectHardware(hw);
+}
+
+function _hwRow(lbl, field, val) {
+  return '<div class="prop-row"><span class="prop-lbl">' + lbl + '</span>'
+    + '<input class="prop-input" type="number" value="' + val + '" onchange="updateHwField(\'' + field + '\',this.value)"></div>';
+}
+
+function showHwProps(hw) {
+  var body = document.getElementById('hw-prop-body');
+  if (!body) return;
+  var finishOpts = Object.keys(HW_FINISH).map(function (k) {
+    return '<option value="' + k + '"' + (hw.finish === k ? ' selected' : '') + '>' + HW_FINISH[k].name + '</option>';
+  }).join('');
+  var paramRows = Object.keys(hw.params).map(function (k) {
+    return '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">' + k + '</span>'
+      + '<input class="prop-input" type="number" min="1" value="' + hw.params[k] + '" onchange="updateHwParam(\'' + k + '\',this.value)"></div>';
+  }).join('');
+  body.innerHTML =
+      '<div class="prop-title">' + (HW_DEFS[hw.type] || {}).label + '</div>'
+    + '<input class="name-input" value="' + String(hw.name).replace(/"/g, '&quot;') + '" onchange="updateHwField(\'name\',this.value)">'
+    + '<div class="prop-title" style="margin-top:8px;">Finish</div>'
+    + '<select class="prop-input" style="width:100%;" onchange="updateHwField(\'finish\',this.value)">' + finishOpts + '</select>'
+    + '<div class="prop-title" style="margin-top:8px;">Position — anchor (mm)</div>'
+    + _hwRow('X', 'x', hw.x) + _hwRow('Y', 'y', hw.y) + _hwRow('Z', 'z', hw.z)
+    + '<div class="prop-title" style="margin-top:8px;">Rotation (°)</div>'
+    + _hwRow('X', 'rx', hw.rx) + _hwRow('Y', 'ry', hw.ry) + _hwRow('Z', 'rz', hw.rz)
+    + '<div class="prop-title" style="margin-top:8px;">Size (mm)</div>' + paramRows
+    + '<button class="btn" style="margin-top:10px;" onclick="snapSelectedHwToFace()">⊏ Snap to nearest face</button>'
+    + '<button class="btn" onclick="duplicateSelectedHw()">⧉ Duplicate</button>'
+    + '<button class="btn danger" onclick="deleteHardware(selectedHw.id)">✕ Delete</button>';
+}
+
+function updateHwField(field, v) {
+  if (!selectedHw) return;
+  saveUndo();
+  if (field === 'name') { selectedHw.name = v; refreshHwList(); }
+  else if (field === 'finish') { selectedHw.finish = v; buildHardwareMesh(selectedHw); rebuildHwSelBox(); }
+  else { selectedHw[field] = parseFloat(v) || 0; syncHwPos(selectedHw); rebuildHwSelBox(); }
+}
+
+function updateHwParam(key, v) {
+  if (!selectedHw) return;
+  saveUndo();
+  selectedHw.params[key] = Math.max(1, parseFloat(v) || 1);
+  buildHardwareMesh(selectedHw);
+  rebuildHwSelBox();
+}
+
+function duplicateSelectedHw() {
+  if (!selectedHw) return;
+  saveUndo();
+  var s = selectedHw;
+  var hw = mkHardware({ type: s.type, name: s.name + ' copy', x: s.x + 30, y: s.y, z: s.z + 30,
+                        rx: s.rx, ry: s.ry, rz: s.rz, params: s.params, finish: s.finish, attachedTo: s.attachedTo });
+  hardware.push(hw);
+  buildHardwareMesh(hw);
+  refreshHwList();
+  selectHardware(hw);
+}
+
+function _clampHw(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function _normalToRot(n) {
+  if (n[0] === 1)  return [0, 90, 0];
+  if (n[0] === -1) return [0, -90, 0];
+  if (n[1] === 1)  return [-90, 0, 0];
+  if (n[1] === -1) return [90, 0, 0];
+  if (n[2] === 1)  return [0, 0, 0];
+  return [0, 180, 0]; // -Z
+}
+
+// Snap the selected hardware onto the nearest panel face, oriented outward.
+function snapSelectedHwToFace() {
+  if (!selectedHw || !panels.length) return;
+  var hw = selectedHw, best = null, bestScore = Infinity;
+  panels.forEach(function (p) {
+    var e = panelWorldHalfExtents(p.rx || 0, p.ry || 0, p.rz || 0, p.w / 2, p.h / 2, p.d / 2);
+    var faces = [
+      { n: [1, 0, 0],  c: [p.x + e.hw, p.y, p.z] }, { n: [-1, 0, 0], c: [p.x - e.hw, p.y, p.z] },
+      { n: [0, 1, 0],  c: [p.x, p.y + e.hh, p.z] }, { n: [0, -1, 0], c: [p.x, p.y - e.hh, p.z] },
+      { n: [0, 0, 1],  c: [p.x, p.y, p.z + e.hd] }, { n: [0, 0, -1], c: [p.x, p.y, p.z - e.hd] }
+    ];
+    faces.forEach(function (f) {
+      var dx = hw.x - f.c[0], dy = hw.y - f.c[1], dz = hw.z - f.c[2];
+      var along = dx * f.n[0] + dy * f.n[1] + dz * f.n[2];
+      var lat = Math.sqrt(Math.max(0, dx * dx + dy * dy + dz * dz - along * along));
+      var score = Math.abs(along) + lat * 0.25;
+      if (score < bestScore) { bestScore = score; best = { p: p, f: f, e: e }; }
+    });
+  });
+  if (!best) return;
+  saveUndo();
+  var f = best.f, e = best.e, p = best.p, px = hw.x, py = hw.y, pz = hw.z;
+  if (f.n[0] !== 0)      { px = f.c[0]; py = _clampHw(hw.y, p.y - e.hh, p.y + e.hh); pz = _clampHw(hw.z, p.z - e.hd, p.z + e.hd); }
+  else if (f.n[1] !== 0) { py = f.c[1]; px = _clampHw(hw.x, p.x - e.hw, p.x + e.hw); pz = _clampHw(hw.z, p.z - e.hd, p.z + e.hd); }
+  else                   { pz = f.c[2]; px = _clampHw(hw.x, p.x - e.hw, p.x + e.hw); py = _clampHw(hw.y, p.y - e.hh, p.y + e.hh); }
+  hw.x = Math.round(px); hw.y = Math.round(py); hw.z = Math.round(pz);
+  var rot = _normalToRot(f.n);
+  hw.rx = rot[0]; hw.ry = rot[1]; hw.rz = rot[2];
+  hw.attachedTo = p.id;
+  syncHwPos(hw); rebuildHwSelBox(); showHwProps(hw);
+  if (typeof flashSnap === 'function') flashSnap();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2314,6 +2461,7 @@ function clearSelBoxes() {
 function doSelect(p, addToGroup) {
   clearSelBoxes();
   clearHandles();
+  clearHwSelection();
 
   if (!p) {
     selected = null;
@@ -2529,6 +2677,26 @@ canvas.addEventListener('mousedown', function(e) {
     return;
   }
 
+  // ── Hardware hit ─────────────────────────────────────────────
+  var hwHit = ray.intersectObjects(hwMeshList(), true);
+  if (hwHit.length) {
+    var hwid = hwHit[0].object.userData.hwid;
+    var hw = hardware.filter(function(h){ return String(h.id) === String(hwid); })[0];
+    if (hw) {
+      e.stopImmediatePropagation();
+      var alreadyHw = (selectedHw === hw);
+      selectHardware(hw);
+      if (alreadyHw) {
+        saveUndo();
+        dragPendingHw = true; isDraggingHw = false;
+        orbitCtrl.enabled = false;
+        dragStart = { mx: e.clientX, my: e.clientY };
+        hwStart   = { x: hw.x, y: hw.y, z: hw.z };
+      }
+      return;
+    }
+  }
+
   doSelect(null);
 }, true); // capture phase
 
@@ -2538,6 +2706,28 @@ document.addEventListener('mousemove', function(e) {
   if (dragPending && !isDragging) {
     var ddx = e.clientX - dragStart.mx, ddy = e.clientY - dragStart.my;
     if (ddx*ddx + ddy*ddy > DRAG_THRESHOLD*DRAG_THRESHOLD) isDragging = true;
+  }
+  if (dragPendingHw && !isDraggingHw) {
+    var hddx = e.clientX - dragStart.mx, hddy = e.clientY - dragStart.my;
+    if (hddx*hddx + hddy*hddy > DRAG_THRESHOLD*DRAG_THRESHOLD) isDraggingHw = true;
+  }
+
+  // ── Hardware drag (XZ plane at its current height) ───────────
+  if (isDraggingHw && selectedHw) {
+    var hwp = selectedHw, hsp = hwStart;
+    var hplane = new THREE.Plane(new THREE.Vector3(0,1,0), -hsp.y);
+    var hr0 = canvas.getBoundingClientRect();
+    var hsR = new THREE.Raycaster();
+    hsR.setFromCamera(new THREE.Vector2(((dragStart.mx-hr0.left)/hr0.width)*2-1, ((dragStart.my-hr0.top)/hr0.height)*-2+1), camera);
+    ray.setFromCamera(new THREE.Vector2(((e.clientX-hr0.left)/hr0.width)*2-1, ((e.clientY-hr0.top)/hr0.height)*-2+1), camera);
+    var hsi=new THREE.Vector3(), hci=new THREE.Vector3();
+    hsR.ray.intersectPlane(hplane, hsi); ray.ray.intersectPlane(hplane, hci);
+    if (hsi.lengthSq() || hci.lengthSq()) {
+      hwp.x = Math.round(hsp.x + (hci.x - hsi.x));
+      hwp.z = Math.round(hsp.z + (hci.z - hsi.z));
+      syncHwPos(hwp); rebuildHwSelBox();
+    }
+    return;
   }
 
   // ── Resize ──────────────────────────────────────────────────
@@ -2666,10 +2856,11 @@ document.addEventListener('mousemove', function(e) {
         scene.updateMatrixWorld();
         ray.setFromCamera(ndc(e), camera);
         var overPanel = ray.intersectObjects(panelMeshes()).length > 0;
-        // Disable orbit whenever cursor is over a panel — OC.mousedown checks
-        // this flag before doing anything, so it skips when we want to drag.
-        orbitCtrl.enabled = !overPanel;
-        canvas.style.cursor = overPanel ? 'move' : 'default';
+        var overHw = !overPanel && ray.intersectObjects(hwMeshList(), true).length > 0;
+        // Disable orbit whenever cursor is over a panel or hardware — OC.mousedown
+        // checks this flag before doing anything, so it skips when we want to drag.
+        orbitCtrl.enabled = !(overPanel || overHw);
+        canvas.style.cursor = (overPanel || overHw) ? 'move' : 'default';
       }
     } else {
       orbitCtrl.enabled = true;
@@ -2678,9 +2869,11 @@ document.addEventListener('mousemove', function(e) {
 });
 
 document.addEventListener('mouseup', function() {
-  if (!isResizing && !isDragging && !dragPending) return;
+  if (!isResizing && !isDragging && !dragPending && !isDraggingHw && !dragPendingHw) return;
   orbitCtrl.enabled = true;
   isResizing = isDragging = dragPending = false;
+  if (isDraggingHw && selectedHw) showHwProps(selectedHw);
+  isDraggingHw = dragPendingHw = false;
   if (activeHandle) { activeHandle.material.color.setHex(HANDLE_COL); activeHandle = null; }
   if (hoveredHandle) { hoveredHandle.material.color.setHex(HANDLE_COL); hoveredHandle = null; }
   canvas.style.cursor = 'default';

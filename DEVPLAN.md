@@ -28,9 +28,10 @@ Data model + persistence wiring; procedural factory for knob, handle, leg, shelf
 **Checkpoint:** add a knob/handle/leg/shelf-pin; save & reload preserves them.
 **Done:** `hardware[]` + `nextHwId` state; `mkHardware`/`snapHardware`/`buildHardwareMesh`/`removeHardwareMesh`; `HW_DEFS` factory (knob, handle, leg, shelf-pin) + `HW_FINISH` metals; catalog modal + left-panel Hardware list; wired into `_projectState`/`_loadProjectState`, `saveUndo`/`undo`, `refreshUI`. Verified: add all 4, render, save→reload round-trip, undo.
 
-### Block 2 — Hardware selection, placement & editing (B1b) ⬜
+### Block 2 — Hardware selection, placement & editing (B1b) ✅
 Select / move / duplicate / delete hardware; properties panel (position, rotation, size); snap-to-panel-face.
 **Checkpoint:** full place/move/edit/delete; persists.
+**Done:** `selectedHw` + `Box3Helper` highlight; click-to-select in scene & list; XZ-plane drag mirroring panel drag; dynamic hardware properties panel (name, finish, position, rotation, per-type size params); `snapSelectedHwToFace` (projects onto nearest panel face, orients to normal, sets `attachedTo`); duplicate/delete. Verified: select/edit/param-rebuild/snap/duplicate + save→reload preserves `attachedTo`.
 
 ### Block 3 — Complex hardware: hinges, slides, cleats (B1c) ⬜
 Factory geometry for euro hinge, telescoping drawer slide, French cleat; `attachedTo` orientation helpers.
