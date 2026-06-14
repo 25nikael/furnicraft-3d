@@ -48,9 +48,10 @@ Finger/box & dovetail profiled edges; dowel & pocket-hole markers; joints reflec
 **Checkpoint:** all joint types representable; notes in cut sheet; persists. *(A1 complete.)*
 **Done:** finger/dovetail via multi-slot box subtraction (`fingerCuts`/`jointCuts`); dowel & pocket-hole overlay markers (`buildJointMarkers`, synced in syncPos/removeMesh); UI extended with all 4 new types + count param; `_jointSummary` surfaces mitre+joints in the cut-sheet table & PDF (column renamed Mitre→Joinery). Verified: finger 288 verts, markers 7 (rebuild on reload), summary text, cut sheet renders, no errors. NOTE: dovetail is shown schematically as box-comb interlock (axis-aligned); true angled pins deferred.
 
-### Block 6 — Functional doors (B2a) ⬜
+### Block 6 — Functional doors (B2a) ✅
 Designate panel as door (hinge side, swing angle); swing animation; hinge hardware tie-in; open/close toggle.
 **Checkpoint:** door swings open/closed; designation persists.
+**Done:** generic `func` field on panels (door|drawer); `doorPose` pivots the panel about its hinge edge; `tickFunctional` animates swing (300°/s) from the render loop; Function properties section (type, hinge side, angle, open/close toggle); `addHingesForDoor` places 2 hinges on the hinge edge. Verified: swing to 100° + back to base, pivot moves position & rotation, hinges added, func persists through save/reload, no errors.
 
 ### Block 7 — Functional drawers + clearance (B2b) ⬜
 Designate drawer (travel, slide type); auto slide-clearance calc; slide-out animation; slide hardware moves with drawer.

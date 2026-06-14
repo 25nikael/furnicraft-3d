@@ -588,6 +588,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         </label>
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
       </div>
+      <div class="prop-sec">
+        <div class="prop-title">Function</div>
+        <div style="font-size:10px;color:#555;margin-bottom:4px;">Make this panel a working door or drawer front</div>
+        <div id="func-body"></div>
+      </div>
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
@@ -1710,6 +1715,7 @@ function mkPanel(o) {
     mitreAngle: o.mitreAngle !== undefined ? o.mitreAngle : 45,
     roundedEdges: o.roundedEdges || false,
     joints:      o.joints ? JSON.parse(JSON.stringify(o.joints)) : {},
+    func:        o.func ? JSON.parse(JSON.stringify(o.func)) : null,
     mesh:        null,
     edges:       null,
     selBox:      null,
@@ -1728,7 +1734,9 @@ function snapPanel(p) {
            mitreYMin:p.mitreYMin, mitreYMax:p.mitreYMax,
            mitreZMin:p.mitreZMin, mitreZMax:p.mitreZMax,
            mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false,
-           joints: JSON.parse(JSON.stringify(p.joints||{})) };
+           joints: JSON.parse(JSON.stringify(p.joints||{})),
+           func: p.func ? { kind:p.func.kind, hingeSide:p.func.hingeSide, angle:p.func.angle,
+                            travel:p.func.travel, slide:p.func.slide, open:p.func.open } : null };
 }
 
 function saveUndo() {
@@ -2693,6 +2701,125 @@ function snapSelectedHwToFace() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  FUNCTIONAL COMPONENTS — doors (Block 6) & drawers (Block 7)
+// ═══════════════════════════════════════════════════════════════
+var _D = Math.PI / 180;
+
+// Swung pose for a door: rotate the panel about its hinge edge by theta (radians)
+function doorPose(p, theta) {
+  var P0 = new THREE.Vector3(p.x, p.y, p.z);
+  var Q0 = new THREE.Quaternion().setFromEuler(new THREE.Euler((p.rx||0)*_D,(p.ry||0)*_D,(p.rz||0)*_D,'XYZ'));
+  var f = p.func, lx = 0, ly = 0, axis, th = theta;
+  if (f.hingeSide === 'right')      { lx = p.w/2;  axis = new THREE.Vector3(0,1,0); th = -theta; }
+  else if (f.hingeSide === 'top')   { ly = p.h/2;  axis = new THREE.Vector3(1,0,0); th = -theta; }
+  else if (f.hingeSide === 'bottom'){ ly = -p.h/2; axis = new THREE.Vector3(1,0,0); th = theta;  }
+  else                              { lx = -p.w/2; axis = new THREE.Vector3(0,1,0); th = theta;  } // left
+  var pivot = P0.clone().add(new THREE.Vector3(lx, ly, 0).applyQuaternion(Q0));
+  var qr = new THREE.Quaternion().setFromAxisAngle(axis, th);
+  var pos = pivot.clone().add(P0.clone().sub(pivot).applyQuaternion(qr));
+  return { pos: pos, quat: qr.clone().multiply(Q0) };
+}
+
+function applyFuncPose(p) {
+  if (!p.mesh || !p.func) return;
+  var pose;
+  if (p.func.kind === 'door') pose = doorPose(p, (p._swingCur || 0) * _D);
+  else if (p.func.kind === 'drawer' && typeof drawerPose === 'function') pose = drawerPose(p, p._slideCur || 0);
+  else return;
+  [p.mesh, p.edges, p.selBox].forEach(function (o) { if (o) { o.position.copy(pose.pos); o.quaternion.copy(pose.quat); } });
+  if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(pose.pos); m.quaternion.copy(pose.quat); });
+  if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(pose.pos); l.quaternion.copy(pose.quat); });
+}
+
+// Stepped each frame from animate()
+function tickFunctional(dt) {
+  panels.forEach(function (p) {
+    if (!p.func) return;
+    if (p.func.kind === 'door') {
+      var target = p.func.open ? (p.func.angle || 100) : 0;
+      if (p._swingCur === undefined) p._swingCur = target;
+      if (p._swingCur === target) { if (p.func.open) applyFuncPose(p); return; }
+      var dir = target > p._swingCur ? 1 : -1;
+      p._swingCur += dir * 300 * dt;        // 300°/s
+      if ((dir > 0 && p._swingCur >= target) || (dir < 0 && p._swingCur <= target)) p._swingCur = target;
+      applyFuncPose(p);
+    } else if (p.func.kind === 'drawer' && typeof tickDrawer === 'function') {
+      tickDrawer(p, dt);
+    }
+  });
+}
+
+function toggleFuncOpen() {
+  if (!selected || !selected.func) return;
+  selected.func.open = !selected.func.open;
+  renderFuncUI(selected);
+}
+
+function setFunc(field, value) {
+  if (!selected) return;
+  saveUndo();
+  var p = selected;
+  if (field === 'kind') {
+    if (value === 'none')        p.func = null;
+    else if (value === 'door')   p.func = { kind:'door', hingeSide:'left', angle:100, open:false };
+    else if (value === 'drawer') p.func = { kind:'drawer', travel:Math.round(p.d||300), slide:'sidemount', open:false };
+    p._swingCur = undefined; p._slideCur = 0;
+    syncPos(p);
+  } else {
+    if (!p.func) return;
+    if (field === 'angle' || field === 'travel') p.func[field] = parseFloat(value) || 0;
+    else p.func[field] = value;
+    p._swingCur = undefined;
+  }
+  renderFuncUI(p);
+  refreshUI();
+}
+
+function renderFuncUI(p) {
+  var body = document.getElementById('func-body');
+  if (!body) return;
+  var f = p.func, kind = f ? f.kind : 'none';
+  function opt(v, l, cur) { return '<option value="'+v+'"'+(cur===v?' selected':'')+'>'+l+'</option>'; }
+  var html = '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Type</span>'
+    + '<select class="prop-input" style="width:90px;" onchange="setFunc(\'kind\',this.value)">'
+    + opt('none','None',kind) + opt('door','Door',kind) + opt('drawer','Drawer',kind) + '</select></div>';
+  if (f && f.kind === 'door') {
+    html += '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Hinge</span>'
+      + '<select class="prop-input" style="width:90px;" onchange="setFunc(\'hingeSide\',this.value)">'
+      + opt('left','Left',f.hingeSide) + opt('right','Right',f.hingeSide) + opt('top','Top',f.hingeSide) + opt('bottom','Bottom',f.hingeSide) + '</select></div>'
+      + '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Angle°</span>'
+      + '<input class="prop-input" type="number" min="10" max="170" value="'+(f.angle||100)+'" style="width:60px;" onchange="setFunc(\'angle\',this.value)"></div>'
+      + '<button class="btn" style="margin-top:6px;" onclick="toggleFuncOpen()">'+(f.open?'Close':'Open')+' door</button>'
+      + '<button class="btn" onclick="addHingesForDoor()">＋ Add hinges</button>';
+  } else if (f && f.kind === 'drawer') {
+    html += '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;">Travel</span>'
+      + '<input class="prop-input" type="number" min="10" value="'+(f.travel||Math.round(p.d||300))+'" style="width:60px;" onchange="setFunc(\'travel\',this.value)"></div>'
+      + '<button class="btn" style="margin-top:6px;" onclick="toggleFuncOpen()">'+(f.open?'Close':'Open')+' drawer</button>'
+      + '<button class="btn" onclick="addSlidesForDrawer()">＋ Add slides</button>';
+  }
+  body.innerHTML = html;
+}
+
+function addHingesForDoor() {
+  if (!selected || !selected.func || selected.func.kind !== 'door') return;
+  var p = selected; saveUndo();
+  var side = p.func.hingeSide;
+  var Q0 = new THREE.Quaternion().setFromEuler(new THREE.Euler((p.rx||0)*_D,(p.ry||0)*_D,(p.rz||0)*_D,'XYZ'));
+  var ex = side==='right'? p.w/2 : (side==='left'? -p.w/2 : 0);
+  var ey = side==='top'?   p.h/2 : (side==='bottom'? -p.h/2 : 0);
+  var along = (side==='left'||side==='right') ? 'y' : 'x';
+  var halfAlong = along==='y' ? p.h/2 : p.w/2;
+  [-0.6, 0.6].forEach(function (fr) {
+    var local = new THREE.Vector3(ex, ey, p.d/2);
+    local[along] = fr * halfAlong;
+    var w = local.applyQuaternion(Q0).add(new THREE.Vector3(p.x, p.y, p.z));
+    var hw = mkHardware({ type:'hinge', x:Math.round(w.x), y:Math.round(w.y), z:Math.round(w.z), attachedTo:p.id });
+    hardware.push(hw); buildHardwareMesh(hw);
+  });
+  refreshHwList();
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  SELECTION
 // ═══════════════════════════════════════════════════════════════
 var ray = new THREE.Raycaster();
@@ -3429,6 +3556,7 @@ function showProps(p) {
     cb.checked  = ok && !!p['mitre'+propKey.charAt(0).toUpperCase()+propKey.slice(1)];
   });
   renderJointsUI(p);
+  renderFuncUI(p);
   propBusy = false;
 }
 
@@ -3914,6 +4042,7 @@ function animate() {
   var dt  = Math.min((now - _lastFrameTime) / 1000, 0.1); // seconds, capped
   _lastFrameTime = now;
   _tickFPS(dt);
+  tickFunctional(dt);
   if (_currentNavMode === 'orbit') orbitCtrl.update();
   renderer.render(scene, camera);
   if (isDragging || isResizing || cameraMoving) {
