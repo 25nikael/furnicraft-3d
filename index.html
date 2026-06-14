@@ -61,6 +61,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 #topbar-user{font-size:12px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
 #app{display:flex;flex:1;overflow:hidden;}
 
+/* ── Mobile drawer toggles ────────────────────────── */
+.drawer-toggle{display:none;position:fixed;top:50%;transform:translateY(-50%);z-index:60;width:28px;height:56px;border:none;border-radius:0;cursor:pointer;background:var(--bg3);color:var(--teal);font-size:16px;border:1px solid var(--bd2);}
+#drawer-left-btn {left:0; border-radius:0 8px 8px 0;}
+#drawer-right-btn{right:0;border-radius:8px 0 0 8px;}
+.drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:55;}
+.drawer-overlay.open{display:block;}
+
 /* ── Left panel ───────────────────────────────────── */
 #left-panel{width:188px;min-width:188px;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:10;}
 .sec-title{padding:6px 10px;font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.7px;background:var(--bg0);border-bottom:1px solid var(--bd);border-top:1px solid var(--bd);flex-shrink:0;}
@@ -117,6 +124,44 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .name-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
 .clr{width:36px;height:26px;padding:1px 2px;border:1px solid var(--bd2);border-radius:3px;cursor:pointer;background:var(--bg3);}
 
+/* ── Mobile responsive ────────────────────────────── */
+@media (max-width: 768px) {
+  /* Show drawer toggle buttons */
+  .drawer-toggle{display:flex;align-items:center;justify-content:center;}
+
+  /* Side panels become fixed drawers */
+  #left-panel{
+    position:fixed;left:0;top:42px;bottom:0;z-index:56;
+    transform:translateX(-100%);transition:transform .22s ease;
+    width:220px;min-width:0;box-shadow:4px 0 20px rgba(0,0,0,.5);
+  }
+  #left-panel.open{transform:translateX(0);}
+
+  #right-panel{
+    position:fixed;right:0;top:42px;bottom:0;z-index:56;
+    transform:translateX(100%);transition:transform .22s ease;
+    width:230px;min-width:0;box-shadow:-4px 0 20px rgba(0,0,0,.5);
+  }
+  #right-panel.open{transform:translateX(0);}
+
+  /* Topbar: hide text-heavy items, keep essentials */
+  #topbar-user{display:none!important;}
+  #topbar-proj-name{max-width:120px;}
+  .tb-btn{padding:4px 8px;font-size:11px;}
+  #info-hud{display:none;}
+
+  /* Toolbar: larger tap targets, wrap if needed */
+  #toolbar{padding:8px 10px;gap:5px;flex-wrap:wrap;bottom:12px;max-width:92vw;}
+  .tbtn{padding:9px 12px;font-size:13px;border-radius:16px;}
+
+  /* Snap HUD higher so it clears toolbar */
+  #snap-hud{bottom:80px;}
+
+  /* Dim inputs larger for fat fingers */
+  .dim-input,.prop-input{font-size:14px;padding:5px 8px;}
+  .comp-item{padding:10px 12px;font-size:13px;}
+  .btn{padding:10px;font-size:13px;}
+}
 /* ── Cut Sheet modal ──────────────────────────────── */
 #cs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;overflow-y:auto;}
 #cs-inner{background:var(--bg2);margin:16px auto;max-width:980px;border-radius:10px;box-shadow:0 6px 40px rgba(0,0,0,.7);overflow:hidden;border:1px solid var(--bd2);}
@@ -239,6 +284,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 </div>
 <!-- FPS crosshair (shown in FPS mode) -->
 <div id="fps-crosshair"></div>
+
+<!-- Mobile drawer toggles + overlay -->
+<button id="drawer-left-btn"  class="drawer-toggle" onclick="toggleDrawer('left')"  title="Components">☰</button>
+<button id="drawer-right-btn" class="drawer-toggle" onclick="toggleDrawer('right')" title="Properties">⚙</button>
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeDrawers()"></div>
 
 <!-- ── Auth modal ────────────────────────────────────── -->
 <div class="overlay-modal" id="auth-modal">
@@ -1655,6 +1705,61 @@ function ndc(e) {
     ((e.clientY - r.top)  / r.height) * -2 + 1
   );
 }
+
+// ── Mobile drawer ─────────────────────────────────────
+function toggleDrawer(side) {
+  var panel   = document.getElementById(side === 'left' ? 'left-panel' : 'right-panel');
+  var overlay = document.getElementById('drawer-overlay');
+  var isOpen  = panel.classList.contains('open');
+  closeDrawers();
+  if (!isOpen) { panel.classList.add('open'); overlay.classList.add('open'); }
+}
+function closeDrawers() {
+  document.getElementById('left-panel').classList.remove('open');
+  document.getElementById('right-panel').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+}
+
+// ── Touch → mouse bridge ──────────────────────────────
+// Single-touch: drives panel selection/drag/resize (same code path as mouse).
+// Multi-touch (2+ fingers): passed straight through to OrbitControls (pinch/rotate/pan).
+var _touchActive = false;
+
+function _touchToMouse(type, touch) {
+  var evt = new MouseEvent(type, {
+    bubbles: true, cancelable: true,
+    clientX: touch.clientX, clientY: touch.clientY,
+    button: 0, buttons: type === 'mouseup' ? 0 : 1
+  });
+  return evt;
+}
+
+canvas.addEventListener('touchstart', function(e) {
+  closeDrawers();
+  if (e.touches.length !== 1) return; // let OrbitControls handle multi-touch
+  e.preventDefault();
+  _touchActive = true;
+  canvas.dispatchEvent(_touchToMouse('mousedown', e.touches[0]));
+}, { passive: false });
+
+document.addEventListener('touchmove', function(e) {
+  if (!_touchActive || e.touches.length !== 1) return;
+  e.preventDefault();
+  document.dispatchEvent(_touchToMouse('mousemove', e.touches[0]));
+}, { passive: false });
+
+document.addEventListener('touchend', function(e) {
+  if (!_touchActive) return;
+  _touchActive = false;
+  var touch = e.changedTouches[0];
+  document.dispatchEvent(_touchToMouse('mouseup', touch));
+}, { passive: true });
+
+document.addEventListener('touchcancel', function() {
+  if (!_touchActive) return;
+  _touchActive = false;
+  document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+}, { passive: true });
 
 var DRAG_THRESHOLD  = 5;  // px of movement before panel drag activates
 var HANDLE_HIT_PX   = 22; // px radius for screen-space handle picking
