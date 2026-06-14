@@ -162,6 +162,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   .comp-item{padding:10px 12px;font-size:13px;}
   .btn{padding:10px;font-size:13px;}
 }
+/* ── AI Design modal ─────────────────────────────── */
+.ai-chip{padding:5px 10px;border:1px solid var(--bd2);border-radius:12px;background:var(--bg3);color:var(--txt2);font-size:11px;cursor:pointer;transition:all .12s;text-align:left;}
+.ai-chip:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-dim);}
+#ai-gen-btn:disabled{opacity:.5;cursor:not-allowed;}
+#ai-prompt:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+
 /* ── Cut Sheet modal ──────────────────────────────── */
 #cs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;overflow-y:auto;}
 #cs-inner{background:var(--bg2);margin:16px auto;max-width:980px;border-radius:10px;box-shadow:0 6px 40px rgba(0,0,0,.7);overflow:hidden;border:1px solid var(--bd2);}
@@ -429,6 +435,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn" id="btn-wire">Wireframe</button>
       <button class="tbtn on" id="btn-dims">Dims ✓</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
+      <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
   </div>
 
@@ -526,6 +533,80 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         </label>
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI Design modal ───────────────────────────────── -->
+<div class="overlay-modal" id="ai-modal">
+  <div class="modal-box" style="max-width:540px;">
+    <div class="modal-hdr">
+      <span style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">✦ AI Furniture Designer</span>
+      <button class="modal-close" onclick="closeAIDesign()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- API key row -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);">Anthropic API Key</label>
+          <a href="https://console.anthropic.com/keys" target="_blank" style="font-size:11px;color:var(--teal);text-decoration:none;">Get a key ↗</a>
+        </div>
+        <div style="display:flex;gap:7px;">
+          <input type="password" id="ai-key" placeholder="sk-ant-…" autocomplete="off"
+            style="flex:1;padding:7px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;font-family:monospace;">
+          <button onclick="saveAIKey()" class="tbtn prim" style="padding:7px 14px;border-radius:6px;">Save</button>
+        </div>
+        <div id="ai-key-status" style="font-size:11px;margin-top:4px;color:var(--txt3);"></div>
+      </div>
+
+      <!-- Prompt examples -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:6px;">Examples — click to fill</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;" id="ai-examples">
+          <button class="ai-chip" onclick="fillPrompt(this)">Simple bookshelf, 5 shelves, 900mm wide, oak</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">Floating wall cabinet, 600mm wide, 400mm deep, white melamine with soft-close doors</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">Bedside table with drawer, pine, 450mm wide</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">L-shaped corner desk, 1500×1200mm, walnut top, steel legs</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">TV unit with cable management, 1800mm wide, low profile 400mm tall, oak</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">Kitchen wall cabinet row, 3 units, 600mm each, white melamine</button>
+        </div>
+      </div>
+
+      <!-- Prompt input -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);display:block;margin-bottom:5px;">Describe your furniture</label>
+        <textarea id="ai-prompt" rows="4" placeholder="e.g. A wall-mounted bookshelf 1200mm wide with 4 adjustable shelves in oak. Mount with French cleats."
+          style="width:100%;padding:9px 11px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;resize:vertical;line-height:1.5;"></textarea>
+      </div>
+
+      <!-- Generate button -->
+      <button id="ai-gen-btn" onclick="generateAIDesign()"
+        style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:opacity .15s;">
+        ✦ Generate Design
+      </button>
+
+      <!-- Status / result -->
+      <div id="ai-status" style="display:none;text-align:center;padding:10px;font-size:13px;color:var(--txt2);"></div>
+      <div id="ai-result" style="display:none;">
+        <div style="background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:4px;" id="ai-res-name"></div>
+          <div style="font-size:12px;color:var(--txt2);margin-bottom:8px;" id="ai-res-desc"></div>
+          <div style="font-size:11px;color:var(--txt3);border-top:1px solid var(--bd);padding-top:8px;" id="ai-res-notes"></div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="applyAIDesign(false)"
+            style="flex:1;padding:10px;border-radius:7px;border:1px solid var(--teal);background:var(--teal-dim);color:var(--teal);font-size:13px;font-weight:600;cursor:pointer;">
+            Add to canvas
+          </button>
+          <button onclick="applyAIDesign(true)"
+            style="flex:1;padding:10px;border-radius:7px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
+            Replace & Apply
+          </button>
+        </div>
+      </div>
+      <div id="ai-err" class="auth-err" style="margin-top:8px;"></div>
+
     </div>
   </div>
 </div>
@@ -640,6 +721,202 @@ function _getSession()   { return JSON.parse(localStorage.getItem('fc3d_session'
 function _saveSession(s) { localStorage.setItem('fc3d_session', JSON.stringify(s)); }
 
 // ── Auth ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  AI DESIGN ASSISTANT
+// ═══════════════════════════════════════════════════════════════
+var _aiDesignResult = null; // holds parsed JSON from last generation
+
+var AI_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker. When given a furniture description, output ONLY a valid JSON object — no markdown fences, no explanation, just raw JSON.
+
+COORDINATE SYSTEM (all values in mm):
+- X axis: left = negative, right = positive. Horizontal centre of design = 0
+- Y axis: floor = 0, upward = positive. Panel y = vertical centre of panel
+- Z axis: back = negative, front = positive. Depth centre of design = 0
+- Panel position (x,y,z) is the CENTRE point of the panel
+
+WOODWORKING CONSTRUCTION RULES:
+1. Structural panels (sides, tops, bottoms, shelves): 18mm thick
+2. Back panels: 12mm thick, recessed 6mm from back face (z = -(depth/2 - 6))
+3. Side panels span FULL height: h = total_height, x = ±(total_width/2 - 9)
+4. Top & bottom panels fit BETWEEN sides: w = total_width - 36
+   - Bottom: y = 9 (sits on floor), Top: y = total_height - 9
+5. Shelves fit between sides: w = total_width - 36, d = depth - 12 (clear of back)
+6. Drawers: front panel only (face frame), positioned flush with cabinet front
+7. Doors: single panel per door opening, d=18, z = depth/2 + 9 (proud of cabinet)
+8. Wall-mounted units MUST include a mounting rail: h=75, d=18, positioned at back-top inside cabinet
+9. For desks with legs: use 4 leg panels, w=50, d=50, h=leg_height, positioned at corners
+10. French cleats for wall mounting: two panels per cleat set (wall piece + cabinet piece)
+
+MATERIALS — use ONLY these exact keys: oak, walnut, pine, maple, cherry, birch, white, black, grey
+- Structural carcass: oak / birch / pine / white
+- Visible faces / doors: oak / walnut / cherry / maple
+- Back panels: birch
+- Painted/modern look: white or black
+- MDF painted: grey
+
+OUTPUT JSON FORMAT:
+{
+  "name": "Furniture Name",
+  "description": "One sentence design summary",
+  "assembly_notes": "Brief ordered assembly steps",
+  "panels": [
+    {
+      "name": "Left Side",
+      "w": 18,
+      "h": 800,
+      "d": 400,
+      "x": -241,
+      "y": 400,
+      "z": 0,
+      "material": "oak"
+    }
+  ]
+}
+
+Always include ALL structural panels needed to build the piece. Ensure panels touch correctly at joints. Minimise off-cuts by using standard sheet sizes where possible.`;
+
+function openAIDesign() {
+  var saved = localStorage.getItem('fc3d_ai_key') || '';
+  if (saved) {
+    document.getElementById('ai-key').value = saved;
+    document.getElementById('ai-key-status').textContent = 'Key loaded from storage.';
+  }
+  _aiDesignResult = null;
+  document.getElementById('ai-result').style.display = 'none';
+  document.getElementById('ai-status').style.display  = 'none';
+  document.getElementById('ai-err').textContent = '';
+  document.getElementById('ai-modal').classList.add('active');
+}
+function closeAIDesign() { document.getElementById('ai-modal').classList.remove('active'); }
+
+function saveAIKey() {
+  var k = document.getElementById('ai-key').value.trim();
+  if (!k.startsWith('sk-ant-')) { document.getElementById('ai-key-status').textContent = 'Key should start with sk-ant-…'; return; }
+  localStorage.setItem('fc3d_ai_key', k);
+  document.getElementById('ai-key-status').textContent = '✓ Saved.';
+}
+
+function fillPrompt(btn) {
+  document.getElementById('ai-prompt').value = btn.textContent.trim();
+}
+
+async function generateAIDesign() {
+  var key    = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
+  var prompt = document.getElementById('ai-prompt').value.trim();
+  var errEl  = document.getElementById('ai-err');
+  var statEl = document.getElementById('ai-status');
+  var resEl  = document.getElementById('ai-result');
+  var btn    = document.getElementById('ai-gen-btn');
+
+  errEl.textContent = '';
+  resEl.style.display = 'none';
+
+  if (!key) { errEl.textContent = 'Enter your Anthropic API key above first.'; return; }
+  if (!prompt) { errEl.textContent = 'Describe the furniture you want to design.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Designing…';
+  statEl.style.display = 'block';
+  statEl.textContent = 'Consulting Claude for the best woodworking design…';
+
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type':                   'application/json',
+        'x-api-key':                      key,
+        'anthropic-version':              '2023-06-01',
+        'anthropic-dangerous-allow-browser': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        system: AI_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!resp.ok) {
+      var e = await resp.json().catch(function(){ return {}; });
+      throw new Error(e.error ? e.error.message : ('API error ' + resp.status));
+    }
+
+    var data = await resp.json();
+    var raw  = data.content[0].text.trim();
+
+    // Strip markdown code fences if model wrapped it anyway
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'');
+
+    var design = JSON.parse(raw);
+    if (!design.panels || !Array.isArray(design.panels) || design.panels.length === 0)
+      throw new Error('Claude returned no panels. Try rephrasing your description.');
+
+    _aiDesignResult = design;
+    statEl.style.display = 'none';
+    document.getElementById('ai-res-name').textContent  = design.name || 'Untitled';
+    document.getElementById('ai-res-desc').textContent  = design.description || '';
+    document.getElementById('ai-res-notes').textContent = '📋 ' + (design.assembly_notes || '');
+    resEl.style.display = 'block';
+
+  } catch(err) {
+    statEl.style.display = 'none';
+    errEl.textContent = '⚠ ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦ Generate Design';
+  }
+}
+
+function applyAIDesign(replace) {
+  if (!_aiDesignResult) return;
+  var design = _aiDesignResult;
+
+  if (replace && panels.length > 0) {
+    if (!confirm('Replace the current design with "' + design.name + '"?\nThis cannot be undone.')) return;
+    saveUndo();
+    // Remove all existing meshes and panels
+    panels.slice().forEach(function(p) {
+      if (p.mesh)   scene.remove(p.mesh);
+      if (p.edges)  scene.remove(p.edges);
+      if (p.selBox) scene.remove(p.selBox);
+      (p.mitreLines || []).forEach(function(l){ scene.remove(l); });
+    });
+    panels.length = 0;
+    doSelect(null);
+  } else {
+    saveUndo();
+  }
+
+  var mat  = design.panels[0] ? (design.panels[0].material || 'oak') : 'oak';
+  var fmat = FMAT[mat] || FMAT.oak;
+
+  design.panels.forEach(function(pd) {
+    var m    = FMAT[pd.material] || FMAT.oak;
+    var p = mkPanel({
+      name:      pd.name      || 'Panel',
+      w:         Math.max(1, pd.w || 18),
+      h:         Math.max(1, pd.h || 18),
+      d:         Math.max(1, pd.d || 18),
+      x:         pd.x || 0,
+      y:         pd.y || 9,
+      z:         pd.z || 0,
+      rx:        pd.rx || 0,
+      ry:        pd.ry || 0,
+      rz:        pd.rz || 0,
+      material:  pd.material || 'oak',
+      color:     m.color,
+      edgeColor: m.edgeColor
+    });
+    panels.push(p);
+    buildMesh(p);
+  });
+
+  refreshUI();
+  fitCamera();
+  document.getElementById('topbar-proj-name').textContent = design.name || 'AI Design';
+  closeAIDesign();
+}
+
 function openAuth() {
   switchAuthTab('login');
   document.getElementById('li-email').value = '';
