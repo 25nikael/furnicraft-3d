@@ -577,6 +577,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <label id="lbl-m-zmax" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#555;cursor:pointer;"><input type="checkbox" id="m-zmax"> Front (+Z)</label>
       </div>
       <div class="prop-sec">
+        <div class="prop-title">Joinery</div>
+        <div style="font-size:10px;color:#555;margin-bottom:4px;">Per-edge dado, groove or rabbet (recessed cuts)</div>
+        <div id="joints-body"></div>
+      </div>
+      <div class="prop-sec">
         <div class="prop-title">Appearance</div>
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#aaa;cursor:pointer;">
           <input type="checkbox" id="p-rounded"> Rounded edges
@@ -1704,6 +1709,7 @@ function mkPanel(o) {
     mitreZMax: o.mitreZMax || false,
     mitreAngle: o.mitreAngle !== undefined ? o.mitreAngle : 45,
     roundedEdges: o.roundedEdges || false,
+    joints:      o.joints ? JSON.parse(JSON.stringify(o.joints)) : {},
     mesh:        null,
     edges:       null,
     selBox:      null,
@@ -1720,7 +1726,8 @@ function snapPanel(p) {
            mitreXMin:p.mitreXMin, mitreXMax:p.mitreXMax,
            mitreYMin:p.mitreYMin, mitreYMax:p.mitreYMax,
            mitreZMin:p.mitreZMin, mitreZMax:p.mitreZMax,
-           mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false };
+           mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false,
+           joints: JSON.parse(JSON.stringify(p.joints||{})) };
 }
 
 function saveUndo() {
@@ -1800,6 +1807,102 @@ function mitrableFaces(p) {
   /* tk === 'd' */ return { xMin:true,  xMax:true,  yMin:true,  yMax:true,  zMin:false, zMax:false };
 }
 
+// ── Joinery geometry (Block 4): true recesses via axis-aligned box subtraction ──
+function hasJoints(p) {
+  if (!p.joints) return false;
+  return Object.keys(p.joints).some(function (k) {
+    return p.joints[k] && p.joints[k].type && p.joints[k].type !== 'none';
+  });
+}
+
+function _thickAxisXYZ(p) {
+  var roles = panelDimRoles(p);
+  var k = Object.keys(roles).filter(function (a) { return roles[a] === 'Thickness'; })[0];
+  return { w: 'x', h: 'y', d: 'z' }[k];
+}
+
+// Local-space cut box {x:[min,max],y:..,z:..} for a joint on an edge, or null
+function jointCutAABB(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0);              // x | y | z
+  var s = /Max$/.test(edgeKey) ? 1 : -1; // + or - side
+  if (A === tAxis) return null;          // can't joint the thickness edge
+  var depth  = Math.max(1, Math.min(j.depth || 6, 2 * half[tAxis] - 1));
+  var width  = Math.max(1, j.width || 6);
+  var offset = Math.max(0, j.offset || 0);
+  var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+  box[tAxis] = [half[tAxis] - depth, half[tAxis]];   // cut inward from +thickness face
+  if (j.type === 'rabbet') {
+    box[A] = s > 0 ? [half[A] - width, half[A]] : [-half[A], -half[A] + width];
+  } else { // dado / groove — channel inset from the edge by offset
+    box[A] = s > 0 ? [half[A] - offset - width, half[A] - offset]
+                   : [-half[A] + offset, -half[A] + offset + width];
+  }
+  box[A][0] = Math.max(-half[A], box[A][0]);
+  box[A][1] = Math.min(half[A], box[A][1]);
+  if (box[A][0] >= box[A][1]) return null;
+  return box;
+}
+
+// box minus axis-aligned cut → up to 6 sub-boxes
+function subtractBox(b, c) {
+  var ox0 = Math.max(b.x[0], c.x[0]), ox1 = Math.min(b.x[1], c.x[1]);
+  var oy0 = Math.max(b.y[0], c.y[0]), oy1 = Math.min(b.y[1], c.y[1]);
+  var oz0 = Math.max(b.z[0], c.z[0]), oz1 = Math.min(b.z[1], c.z[1]);
+  if (ox0 >= ox1 || oy0 >= oy1 || oz0 >= oz1) return [b]; // no overlap
+  var r = [];
+  if (ox0 > b.x[0]) r.push({ x: [b.x[0], ox0], y: b.y.slice(), z: b.z.slice() });
+  if (ox1 < b.x[1]) r.push({ x: [ox1, b.x[1]], y: b.y.slice(), z: b.z.slice() });
+  if (oy0 > b.y[0]) r.push({ x: [ox0, ox1], y: [b.y[0], oy0], z: b.z.slice() });
+  if (oy1 < b.y[1]) r.push({ x: [ox0, ox1], y: [oy1, b.y[1]], z: b.z.slice() });
+  if (oz0 > b.z[0]) r.push({ x: [ox0, ox1], y: [oy0, oy1], z: [b.z[0], oz0] });
+  if (oz1 < b.z[1]) r.push({ x: [ox0, ox1], y: [oy0, oy1], z: [oz1, b.z[1]] });
+  return r;
+}
+
+function _uvFor(p, grainW, px, py, pz, nx, ny, nz) {
+  var anx = Math.abs(nx), any = Math.abs(ny), anz = Math.abs(nz), u, vv;
+  if (anx >= any && anx >= anz)      { u = (pz + p.d / 2) / TEX_MM; vv = (py + p.h / 2) / TEX_MM; }
+  else if (any >= anx && any >= anz) { u = grainW ? (pz + p.d / 2) / TEX_MM : (px + p.w / 2) / TEX_MM;
+                                       vv = grainW ? (px + p.w / 2) / TEX_MM : (pz + p.d / 2) / TEX_MM; }
+  else                               { u = (px + p.w / 2) / TEX_MM; vv = (py + p.h / 2) / TEX_MM; }
+  return [u, vv];
+}
+
+function buildJointedGeometry(p, grainW) {
+  var boxes = [{ x: [-p.w / 2, p.w / 2], y: [-p.h / 2, p.h / 2], z: [-p.d / 2, p.d / 2] }];
+  Object.keys(p.joints).forEach(function (edgeKey) {
+    var j = p.joints[edgeKey];
+    if (!j || !j.type || j.type === 'none') return;
+    var cut = jointCutAABB(p, edgeKey, j);
+    if (!cut) return;
+    var next = [];
+    boxes.forEach(function (b) { next = next.concat(subtractBox(b, cut)); });
+    boxes = next;
+  });
+  var pos = [], nor = [], uv = [];
+  boxes.forEach(function (b) {
+    var w = b.x[1] - b.x[0], h = b.y[1] - b.y[0], d = b.z[1] - b.z[0];
+    var cx = (b.x[0] + b.x[1]) / 2, cy = (b.y[0] + b.y[1]) / 2, cz = (b.z[0] + b.z[1]) / 2;
+    var g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    var pa = g.attributes.position, na = g.attributes.normal;
+    for (var i = 0; i < pa.count; i++) {
+      var x = pa.getX(i) + cx, y = pa.getY(i) + cy, z = pa.getZ(i) + cz;
+      var nx = na.getX(i), ny = na.getY(i), nz = na.getZ(i);
+      pos.push(x, y, z); nor.push(nx, ny, nz);
+      var t = _uvFor(p, grainW, x, y, z, nx, ny, nz);
+      uv.push(t[0], t[1]);
+    }
+    g.dispose();
+  });
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uv, 2));
+  return geo;
+}
+
 function buildMesh(p) {
   removeMesh(p);
   var fd = FMAT[p.material] || FMAT.custom;
@@ -1842,6 +1945,8 @@ function buildMesh(p) {
     posAttr.needsUpdate = true;
     norAttr.needsUpdate = true;
     uvAttr.needsUpdate  = true;
+  } else if (hasJoints(p)) {
+    geo = buildJointedGeometry(p, grainW);
   } else {
     // Custom flat geometry (supports mitre shifts)
     var v = panelVerts(p);
@@ -1889,7 +1994,7 @@ function buildMesh(p) {
   p.mesh.userData.pid = p.id;
   scene.add(p.mesh);
 
-  if (!p.roundedEdges) {
+  if (!p.roundedEdges && !hasJoints(p)) {
     // Edge lines follow mitre-shifted vertices
     var v2 = panelVerts(p);
     var edgePairs = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
@@ -3234,7 +3339,57 @@ function showProps(p) {
     cb.disabled = !ok;
     cb.checked  = ok && !!p['mitre'+propKey.charAt(0).toUpperCase()+propKey.slice(1)];
   });
+  renderJointsUI(p);
   propBusy = false;
+}
+
+// ── Joinery UI (Block 4) ────────────────────────────────────────
+function renderJointsUI(p) {
+  var body = document.getElementById('joints-body');
+  if (!body) return;
+  var mf = mitrableFaces(p); // the 4 in-plane edges where joints make sense
+  var edges = [['xMin','−X'],['xMax','+X'],['yMin','−Y'],['yMax','+Y'],['zMin','−Z'],['zMax','+Z']]
+    .filter(function(e){ return mf[e[0]]; });
+  body.innerHTML = edges.map(function(e) {
+    var key = e[0], j = (p.joints && p.joints[key]) || { type: 'none' }, t = j.type || 'none';
+    function opt(v, l){ return '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>'; }
+    var sel = '<select class="prop-input" style="width:84px;" onchange="setJoint(\''+key+'\',\'type\',this.value)">'
+      + opt('none','None') + opt('dado','Dado') + opt('groove','Groove') + opt('rabbet','Rabbet') + '</select>';
+    var rows = '';
+    if (t !== 'none') {
+      function inp(field, val, min){ return '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;font-size:10px;">'+field+'</span>'
+        + '<input class="prop-input" type="number" min="'+min+'" value="'+val+'" style="width:54px;" onchange="setJoint(\''+key+'\',\''+field+'\',this.value)"></div>'; }
+      rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1)
+        + (t !== 'rabbet' ? inp('offset', j.offset||0, 0) : '');
+    }
+    return '<div style="border-top:1px solid var(--bd);padding:5px 0;"><div class="prop-row">'
+      + '<span class="prop-lbl" style="width:auto;flex:1;">'+e[1]+' edge</span>'+sel+'</div>'+rows+'</div>';
+  }).join('');
+}
+
+function setJoint(edgeKey, field, value) {
+  if (!selected) return;
+  saveUndo();
+  var p = selected;
+  if (!p.joints) p.joints = {};
+  if (field === 'type') {
+    if (value === 'none') { delete p.joints[edgeKey]; }
+    else {
+      var j = p.joints[edgeKey] || { depth: 6, width: 6, offset: 0 };
+      j.type = value; p.joints[edgeKey] = j;
+      // joints & mitre are mutually exclusive on the same edge
+      var mk = 'mitre' + edgeKey.charAt(0).toUpperCase() + edgeKey.slice(1);
+      if (p[mk]) p[mk] = false;
+    }
+  } else {
+    if (!p.joints[edgeKey]) return;
+    p.joints[edgeKey][field] = Math.max(field === 'offset' ? 0 : 1, parseFloat(value) || 0);
+  }
+  buildMesh(p);
+  rebuildSelBox(p);
+  clearHandles(); buildHandles(p);
+  renderJointsUI(p);
+  refreshUI();
 }
 
 function applyProps() {

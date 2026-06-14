@@ -38,9 +38,10 @@ Factory geometry for euro hinge, telescoping drawer slide, French cleat; `attach
 **Checkpoint:** all 7 hardware types placeable; persists. *(B1 complete.)*
 **Done:** `HW_DEFS` extended with hinge (cup+arm+plate), slide (telescoping outer/inner members), cleat (45° extruded profile); added `wood` finish. All inherit the generic select/edit/snap/persist pipeline. Verified: catalog shows 7, all build with geometry, save→reload round-trip, no warnings.
 
-### Block 4 — Joint model + recess joints (A1a) ⬜
+### Block 4 — Joint model + recess joints (A1a) ✅
 Per-edge joint metadata + Properties UI; geometry for dado, groove, rabbet (recess in `buildMesh`).
 **Checkpoint:** set dado/rabbet/groove on an edge, see the recess; persists.
+**Done:** `joints` map on panels; true recesses via axis-aligned box subtraction (`jointCutAABB` + `subtractBox` + `buildJointedGeometry`, merged non-indexed with continuous UVs); Joinery properties section (`renderJointsUI`/`setJoint`) per in-plane edge with depth/width/offset; mutually exclusive with mitre. Verified: box 36→108→180 verts (real subdivision), all 3 types, save→reload preserves joints + geometry, no errors.
 
 ### Block 5 — Interlocking joints + fastener markers (A1b) ⬜
 Finger/box & dovetail profiled edges; dowel & pocket-hole markers; joints reflected in cut sheet / assembly notes.
