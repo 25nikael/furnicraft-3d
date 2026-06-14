@@ -1,0 +1,2963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FurniCraft 3D — Woodworking Designer</title>
+<style>
+/* ── Design tokens — Dark theme (default) ──────────── */
+:root{
+  --teal:#0ABAB5;--teal-dk:#089e99;--teal-lt:#3dd6d1;
+  --teal-dim:rgba(10,186,181,.14);--teal-dim2:rgba(10,186,181,.22);
+  --bg0:#0d0d0d;--bg1:#141414;--bg2:#1a1a1a;--bg3:#222;--bg4:#2a2a2a;
+  --bd:#2d2d2d;--bd2:#383838;
+  --txt:#e0e0e0;--txt2:#aaa;--txt3:#666;
+}
+/* ── Light theme overrides ─────────────────────────── */
+:root.theme-light{
+  --teal:#2a7d6f;--teal-dk:#1f6358;--teal-lt:#3a9e8d;
+  --teal-dim:rgba(42,125,111,.10);--teal-dim2:rgba(42,125,111,.20);
+  --bg0:#f5f0e8;--bg1:#faf6ee;--bg2:#f0ead8;--bg3:#e8dfc8;--bg4:#ddd4bc;
+  --bd:#d4c9b0;--bd2:#c4b898;
+  --txt:#2c2416;--txt2:#6b5a3e;--txt3:#a08060;
+}
+/* ── Settings dropdown ─────────────────────────────── */
+#settings-wrap{position:relative;}
+#settings-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--bd2);background:var(--bg3);color:var(--txt);font-size:15px;cursor:pointer;transition:all .12s;line-height:1;}
+#settings-btn:hover{background:var(--bg4);border-color:var(--teal);color:var(--teal);}
+#settings-dropdown{
+  display:none;position:absolute;top:calc(100% + 6px);right:0;
+  background:var(--bg2);border:1px solid var(--bd2);border-radius:8px;
+  width:230px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  padding:6px 0;
+}
+#settings-dropdown.open{display:block;}
+.sd-section{padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);}
+.sd-row{display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;transition:background .1s;}
+.sd-row:hover{background:var(--teal-dim);}
+.sd-row input[type=radio]{accent-color:var(--teal);cursor:pointer;}
+.sd-row label{font-size:13px;color:var(--txt);cursor:pointer;flex:1;}
+.sd-row label small{display:block;font-size:11px;color:var(--txt3);margin-top:1px;}
+.sd-divider{height:1px;background:var(--bd);margin:4px 0;}
+#fps-hint{display:none;margin:0 14px 8px;padding:8px 10px;background:var(--teal-dim);border-radius:6px;font-size:11px;color:var(--txt2);line-height:1.5;}
+#fps-crosshair{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1000;}
+#fps-crosshair::before,#fps-crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.7);}
+#fps-crosshair::before{width:16px;height:2px;top:-1px;left:-8px;}
+#fps-crosshair::after{width:2px;height:16px;top:-8px;left:-1px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:var(--txt);height:100vh;overflow:hidden;user-select:none;display:flex;flex-direction:column;}
+
+/* ── Top bar ──────────────────────────────────────── */
+#topbar{height:42px;min-height:42px;background:var(--bg0);color:#fff;display:flex;align-items:center;padding:0 14px;gap:10px;z-index:50;flex-shrink:0;border-bottom:1px solid var(--teal-dim2);}
+#topbar-logo{font-size:14px;font-weight:700;letter-spacing:.3px;white-space:nowrap;margin-right:6px;}
+#topbar-logo span{color:var(--teal);}
+#topbar-proj{flex:1;display:flex;align-items:center;gap:7px;}
+#topbar-proj-name{font-size:13px;color:var(--teal);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;}
+#topbar-right{display:flex;align-items:center;gap:7px;flex-shrink:0;}
+.tb-btn{padding:4px 11px;border-radius:5px;border:1px solid var(--bd2);background:var(--bg3);color:var(--txt);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap;}
+.tb-btn:hover{background:var(--bg4);border-color:var(--teal);color:var(--teal);}
+.tb-btn.tb-prim{background:var(--teal);border-color:var(--teal);color:#000;font-weight:600;}
+.tb-btn.tb-prim:hover{background:var(--teal-lt);border-color:var(--teal-lt);}
+#topbar-user{font-size:12px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+#app{display:flex;flex:1;overflow:hidden;}
+
+/* ── Left panel ───────────────────────────────────── */
+#left-panel{width:188px;min-width:188px;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:10;}
+.sec-title{padding:6px 10px;font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.7px;background:var(--bg0);border-bottom:1px solid var(--bd);border-top:1px solid var(--bd);flex-shrink:0;}
+.dim-block{padding:9px 10px;}
+.dim-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.dim-lbl{font-size:11px;color:var(--txt2);width:14px;font-weight:700;}
+.dim-input{width:64px;padding:3px 6px;border:1px solid var(--bd2);border-radius:3px;font-size:12px;background:var(--bg3);color:var(--txt);text-align:right;}
+.dim-unit{font-size:10px;color:var(--txt3);}
+.mat-block{padding:7px 10px;}
+.mat-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.mat-swatch{width:26px;height:26px;border-radius:3px;border:1.5px solid var(--bd2);flex-shrink:0;}
+.mat-info{font-size:11px;color:var(--txt2);}
+.mat-info small{color:var(--txt3);display:block;font-size:10px;}
+.comp-list{list-style:none;}
+.comp-item{padding:6px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:7px;transition:background .1s;color:var(--txt);}
+.comp-item:hover{background:var(--bg3);}
+.comp-item.sel{background:var(--teal-dim);border-left:3px solid var(--teal);color:#fff;}
+.comp-dot{width:11px;height:11px;border-radius:2px;flex-shrink:0;}
+.comp-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.btn-block{padding:9px;}
+.btn{width:100%;padding:6px;border:1px solid var(--bd2);border-radius:5px;background:var(--bg3);color:var(--txt);font-size:12px;cursor:pointer;margin-bottom:5px;transition:all .12s;}
+.btn:hover{background:var(--bg4);border-color:var(--teal);color:var(--teal);}
+.btn.danger{color:#e05050;border-color:#5a2222;}
+.btn.danger:hover{background:#2a1414;border-color:#e05050;}
+
+/* ── Viewport ─────────────────────────────────────── */
+#viewport{flex:1;position:relative;overflow:hidden;}
+#three-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;}
+#dim-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+
+#toolbar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:20;background:rgba(13,13,13,.94);padding:7px 12px;border-radius:22px;box-shadow:0 2px 20px rgba(0,0,0,.6);border:1px solid var(--bd2);}
+.tbtn{padding:6px 13px;border:1px solid var(--bd2);border-radius:14px;background:var(--bg3);color:var(--txt2);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap;}
+.tbtn:hover{background:var(--bg4);color:var(--txt);border-color:var(--teal);}
+.tbtn.on{background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;}
+.tbtn.prim{background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;}
+.tbtn.prim:hover{background:var(--teal-lt);border-color:var(--teal-lt);}
+
+#snap-hud{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:rgba(10,186,181,.9);color:#000;padding:3px 12px;border-radius:10px;font-size:11px;font-weight:600;display:none;pointer-events:none;}
+#info-hud{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.7);color:var(--txt2);padding:5px 10px;border-radius:8px;font-size:11px;pointer-events:none;line-height:1.65;border:1px solid var(--bd);}
+
+/* ── Right panel ──────────────────────────────────── */
+#right-panel{width:208px;min-width:208px;background:var(--bg2);border-left:1px solid var(--bd);overflow-y:auto;z-index:10;}
+#no-sel{padding:24px 12px;font-size:12px;color:var(--txt3);text-align:center;line-height:1.7;}
+#prop-panel{display:none;}
+.prop-sec{padding:9px 12px;border-bottom:1px solid var(--bd);}
+.prop-title{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;}
+.prop-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.prop-lbl{font-size:11px;color:var(--txt2);}
+.prop-input{width:82px;padding:3px 6px;border:1px solid var(--bd2);border-radius:3px;font-size:12px;text-align:right;background:var(--bg3);color:var(--txt);}
+.prop-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+.rot-btn{padding:2px 7px;font-size:11px;border:1px solid var(--bd2);border-radius:3px;background:var(--bg3);color:var(--txt2);cursor:pointer;margin-left:2px;transition:all .12s;}
+.rot-btn:hover{background:var(--teal-dim);border-color:var(--teal);color:var(--teal);}
+.name-input{width:100%;padding:4px 7px;border:1px solid var(--bd2);border-radius:3px;font-size:12px;margin-bottom:5px;background:var(--bg3);color:var(--txt);}
+.name-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+.clr{width:36px;height:26px;padding:1px 2px;border:1px solid var(--bd2);border-radius:3px;cursor:pointer;background:var(--bg3);}
+
+/* ── Cut Sheet modal ──────────────────────────────── */
+#cs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;overflow-y:auto;}
+#cs-inner{background:var(--bg2);margin:16px auto;max-width:980px;border-radius:10px;box-shadow:0 6px 40px rgba(0,0,0,.7);overflow:hidden;border:1px solid var(--bd2);}
+#cs-hdr{background:var(--bg0);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--teal-dim2);}
+#cs-hdr h2{font-size:15px;font-weight:600;color:var(--teal);}
+.cs-close{background:none;border:none;color:var(--txt2);font-size:22px;cursor:pointer;}
+.cs-close:hover{color:var(--teal);}
+#cs-body{padding:20px;background:var(--bg2);}
+.cs-sec{margin-bottom:22px;}
+.cs-sec h3{font-size:13px;font-weight:600;color:var(--teal);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd);}
+.cs-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.cs-tbl th{background:var(--bg0);padding:7px 10px;text-align:left;border-bottom:2px solid var(--teal-dim2);font-weight:600;color:var(--teal);}
+.cs-tbl td{padding:6px 10px;border-bottom:1px solid var(--bd);color:var(--txt);}
+.cs-tbl tr:nth-child(even) td{background:var(--bg3);}
+.stk-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.stk-row label{font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px;}
+.stk-row input{width:82px;padding:4px 7px;border:1px solid var(--bd2);border-radius:4px;font-size:12px;background:var(--bg3);color:var(--txt);}
+.board-lbl{font-size:11px;color:var(--txt2);margin-bottom:4px;}
+.board-cvs{border:1px solid var(--bd2);border-radius:4px;display:block;margin-bottom:12px;max-width:100%;}
+.summary{background:var(--teal-dim);border:1px solid var(--teal-dim2);border-radius:6px;padding:12px 14px;font-size:12px;color:var(--teal-lt);line-height:1.75;}
+.asm-step{display:flex;gap:14px;margin-bottom:18px;align-items:flex-start;}
+.asm-num{width:30px;height:30px;min-width:30px;border-radius:50%;background:var(--teal);color:#000;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+.asm-num.prep{background:var(--bg4);color:var(--txt2);border:1px solid var(--bd2);}
+.asm-num.done{background:#1a7a40;color:#6ee09a;}
+.asm-body{flex:1;}
+.asm-title{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px;}
+.asm-desc{font-size:12px;color:var(--txt2);line-height:1.65;}
+.asm-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.asm-tag{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--teal-dim);color:var(--teal);border:1px solid var(--teal-dim2);}
+.asm-tag.mitre{background:rgba(230,126,34,.14);color:#e6a05a;border-color:rgba(230,126,34,.3);}
+.asm-tag.group{background:rgba(39,174,96,.12);color:#5ecb8a;border-color:rgba(39,174,96,.3);}
+.cs-tabs{display:flex;border-bottom:2px solid var(--bd);margin:-20px -20px 20px;background:var(--bg0);}
+.cs-tab{padding:12px 22px;font-size:13px;cursor:pointer;color:var(--txt3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .12s;white-space:nowrap;}
+.cs-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
+.cs-pane{display:none;}.cs-pane.active{display:block;}
+#btn-export-pdf{background:var(--teal);border:none;color:#000;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:700;}
+#btn-export-pdf:hover{background:var(--teal-lt);}
+
+/* ── Auth & Project modals ─────────────────────────── */
+.overlay-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;}
+.overlay-modal.active{display:flex;}
+.modal-box{background:var(--bg2);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.7);overflow:hidden;width:100%;animation:modalIn .18s ease;border:1px solid var(--bd2);}
+@keyframes modalIn{from{transform:translateY(-18px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-hdr{background:var(--bg0);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;border-bottom:1px solid var(--teal-dim2);}
+.modal-close{background:none;border:none;color:var(--txt2);font-size:22px;line-height:1;cursor:pointer;}
+.modal-close:hover{color:var(--teal);}
+.modal-body{padding:24px 28px;background:var(--bg2);}
+.auth-tabs{display:flex;border-bottom:2px solid var(--bd);margin-bottom:20px;}
+.auth-tab{padding:8px 20px;font-size:13px;cursor:pointer;color:var(--txt3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .12s;}
+.auth-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
+.auth-form{display:none;flex-direction:column;gap:12px;}
+.auth-form.active{display:flex;}
+.auth-form label{font-size:12px;color:var(--txt2);margin-bottom:2px;display:block;}
+.auth-form input{width:100%;padding:8px 10px;border:1px solid var(--bd2);border-radius:5px;font-size:13px;background:var(--bg3);color:var(--txt);}
+.auth-form input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+.auth-err{color:#e05050;font-size:12px;min-height:16px;}
+.auth-ok{color:var(--teal);font-size:12px;min-height:16px;}
+.proj-list{max-height:340px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:14px;}
+.proj-item{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bd);gap:10px;transition:background .1s;}
+.proj-item:last-child{border-bottom:none;}
+.proj-item:hover{background:var(--bg3);}
+.proj-item-name{flex:1;font-size:13px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-item-date{font-size:11px;color:var(--txt3);white-space:nowrap;}
+.proj-item-btns{display:flex;gap:5px;flex-shrink:0;}
+.pi-btn{padding:3px 9px;border-radius:4px;border:1px solid var(--bd2);background:var(--bg3);color:var(--txt2);font-size:11px;cursor:pointer;transition:all .12s;}
+.pi-btn:hover{background:var(--teal-dim);border-color:var(--teal);color:var(--teal);}
+.pi-btn.del{border-color:#5a2222;color:#e05050;}
+.pi-btn.del:hover{background:#2a1414;border-color:#e05050;}
+.proj-save-row{display:flex;gap:8px;align-items:center;}
+.proj-save-row input{flex:1;padding:7px 10px;border:1px solid var(--bd2);border-radius:5px;font-size:13px;background:var(--bg3);color:var(--txt);}
+.proj-save-row input:focus{outline:none;border-color:var(--teal);}
+.proj-empty{text-align:center;padding:32px;color:var(--txt3);font-size:13px;}
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ─────────────────────────────────────── -->
+<div id="topbar">
+  <div id="topbar-logo">Furni<span>Craft</span> 3D</div>
+  <div id="topbar-proj">
+    <span id="topbar-proj-name">Unsaved project</span>
+  </div>
+  <div id="topbar-right">
+    <span id="topbar-user" style="display:none;"></span>
+    <button class="tb-btn tb-prim" id="tb-save" style="display:none;" onclick="saveCurrentProject()">Save</button>
+    <button class="tb-btn" id="tb-projects" style="display:none;" onclick="openProjectManager()">My Projects</button>
+    <button class="tb-btn" id="tb-signin" onclick="openAuth()">Sign In</button>
+    <button class="tb-btn" id="tb-logout" style="display:none;" onclick="logoutUser()">Sign Out</button>
+    <!-- Settings -->
+    <div id="settings-wrap">
+      <button id="settings-btn" title="Settings" onclick="toggleSettings(event)">⚙</button>
+      <div id="settings-dropdown">
+        <div class="sd-section">Theme</div>
+        <div class="sd-row" onclick="setTheme('dark')">
+          <input type="radio" name="theme" id="theme-dark" value="dark" checked>
+          <label for="theme-dark">Dark <small>Black &amp; Tiffany Blue</small></label>
+        </div>
+        <div class="sd-row" onclick="setTheme('light')">
+          <input type="radio" name="theme" id="theme-light" value="light">
+          <label for="theme-light">Light <small>Warm wood tones</small></label>
+        </div>
+        <div class="sd-divider"></div>
+        <div class="sd-section">Navigation</div>
+        <div class="sd-row" onclick="setNavMode('orbit')">
+          <input type="radio" name="navmode" id="nav-orbit" value="orbit" checked>
+          <label for="nav-orbit">Orbit <small>Click &amp; drag to rotate</small></label>
+        </div>
+        <div class="sd-row" onclick="setNavMode('fps')">
+          <input type="radio" name="navmode" id="nav-fps" value="fps">
+          <label for="nav-fps">FPS <small>WASD + free mouse look</small></label>
+        </div>
+        <div id="fps-hint">
+          <strong>WASD</strong> — move &nbsp;|&nbsp; <strong>Mouse</strong> — look<br>
+          <strong>Q/E</strong> — down/up &nbsp;|&nbsp; <strong>Shift</strong> — fast<br>
+          Press <strong>Esc</strong> to release cursor
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- FPS crosshair (shown in FPS mode) -->
+<div id="fps-crosshair"></div>
+
+<!-- ── Auth modal ────────────────────────────────────── -->
+<div class="overlay-modal" id="auth-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-hdr">
+      Account
+      <button class="modal-close" onclick="closeAuth()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</div>
+        <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Create Account</div>
+      </div>
+      <!-- Google button (both tabs) -->
+      <div id="google-btn-wrap" style="margin-bottom:12px;">
+        <button onclick="doGoogleSignIn()" style="width:100%;padding:9px 12px;background:#fff;color:#222;border:1px solid #ccc;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.5 1.2 8.9 3.2l6.6-6.6C35.5 2.5 30.1 0 24 0 14.6 0 6.6 5.5 2.7 13.5l7.7 6C12.2 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8C43.5 37.5 46.5 31.4 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 28.5A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.1.8-4.5l-7.7-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.8-6.3z"/><path fill="#34A853" d="M24 48c6.1 0 11.2-2 14.9-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.4 2.2-6.4 0-11.8-4.3-13.7-10.1l-7.8 6.3C6.7 42.5 14.7 48 24 48z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="flex:1;height:1px;background:var(--bd2);"></div>
+        <span style="font-size:11px;color:var(--txt3);">or</span>
+        <div style="flex:1;height:1px;background:var(--bd2);"></div>
+      </div>
+
+      <!-- Login -->
+      <div class="auth-form active" id="form-login">
+        <div>
+          <label>Email</label>
+          <input type="email" id="li-email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div>
+          <label>Password</label>
+          <input type="password" id="li-pass" placeholder="Password" autocomplete="current-password">
+        </div>
+        <div id="li-err" class="auth-err"></div>
+        <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doLogin()">Sign In</button>
+      </div>
+
+      <!-- Register — step 1: details -->
+      <div class="auth-form" id="form-register">
+        <div id="reg-step1">
+          <div>
+            <label>Email</label>
+            <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
+          </div>
+          <div>
+            <label>Password</label>
+            <input type="password" id="reg-pass" placeholder="At least 6 characters" autocomplete="new-password">
+          </div>
+          <div>
+            <label>Confirm Password</label>
+            <input type="password" id="reg-pass2" placeholder="Repeat password" autocomplete="new-password">
+          </div>
+          <div id="reg-err" class="auth-err"></div>
+          <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doRegisterStep1()">Send Verification Code</button>
+        </div>
+        <!-- Register — step 2: OTP -->
+        <div id="reg-step2" style="display:none;">
+          <div style="text-align:center;padding:8px 0 14px;color:var(--txt2);font-size:13px;">
+            A 6-digit code was sent to<br><strong id="reg-otp-email" style="color:var(--teal);"></strong>
+          </div>
+          <!-- DEV NOTICE: remove the box below once a real email service is wired in -->
+          <div id="reg-otp-devbox" style="background:var(--bg3);border:1px dashed var(--bd2);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--txt2);text-align:center;">
+            <span style="color:var(--txt3);font-size:11px;">DEV MODE — no email server configured</span><br>
+            Your code: <strong id="reg-otp-display" style="color:var(--teal);font-size:18px;letter-spacing:4px;"></strong>
+          </div>
+          <div>
+            <label>Verification Code</label>
+            <input type="text" id="reg-otp-input" placeholder="6-digit code" maxlength="6" autocomplete="one-time-code" style="letter-spacing:4px;font-size:16px;text-align:center;">
+          </div>
+          <div id="reg-otp-err" class="auth-err"></div>
+          <div id="reg-ok" class="auth-ok"></div>
+          <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doRegisterStep2()">Verify & Create Account</button>
+          <button class="tbtn" style="width:100%;padding:7px;margin-top:6px;font-size:12px;" onclick="cancelOTP()">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Project manager modal ─────────────────────────── -->
+<div class="overlay-modal" id="proj-modal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-hdr">
+      My Projects
+      <button class="modal-close" onclick="closeProjectManager()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="proj-list-wrap"></div>
+      <div style="margin-top:6px;">
+        <div style="font-size:11px;color:#666;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Save current design as</div>
+        <div class="proj-save-row">
+          <input type="text" id="proj-save-name" placeholder="Project name…">
+          <button class="tbtn prim" onclick="saveProjectAs()">Save</button>
+        </div>
+        <div id="proj-save-err" class="auth-err" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="left-panel">
+    <div class="sec-title">Overall Size</div>
+    <div class="dim-block">
+      <div class="dim-row"><span class="dim-lbl">W</span><input class="dim-input" id="ov-w" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
+      <div class="dim-row"><span class="dim-lbl">H</span><input class="dim-input" id="ov-h" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
+      <div class="dim-row"><span class="dim-lbl">D</span><input class="dim-input" id="ov-d" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
+    </div>
+    <div class="sec-title">Materials</div>
+    <div class="mat-block" id="mat-legend"></div>
+    <div class="sec-title">Components</div>
+    <ul class="comp-list" id="comp-list"></ul>
+    <div class="btn-block">
+      <button class="btn" id="btn-add">＋ Add Panel</button>
+      <button class="btn" id="btn-dup">⧉ Duplicate</button>
+      <button class="btn" id="btn-group">⊞ Group Selected</button>
+      <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
+      <button class="btn danger" id="btn-del">✕ Delete Selected</button>
+    </div>
+  </div>
+
+  <div id="viewport">
+    <canvas id="three-canvas"></canvas>
+    <svg id="dim-svg"></svg>
+    <div id="snap-hud">⚡ Snapped</div>
+    <div id="info-hud">
+      Orbit: drag &nbsp;|&nbsp; Zoom: scroll<br>
+      Select: click &nbsp;|&nbsp; Ctrl+click multi-select<br>
+      Resize: drag blue handles &nbsp;|&nbsp; Move: drag panel<br>
+      [G] group &nbsp;|&nbsp; [U] ungroup &nbsp;|&nbsp; [D] dup &nbsp;|&nbsp; [S] snap
+    </div>
+    <div id="toolbar">
+      <button class="tbtn" id="btn-reset">⟳ Reset View</button>
+      <button class="tbtn on" id="btn-snap">Snap ✓</button>
+      <button class="tbtn" id="btn-wire">Wireframe</button>
+      <button class="tbtn on" id="btn-dims">Dims ✓</button>
+      <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
+    </div>
+  </div>
+
+  <div id="right-panel">
+    <div class="sec-title">Properties</div>
+    <div id="no-sel">Click any panel<br>to select &amp; edit</div>
+    <div id="prop-panel">
+      <div class="prop-sec">
+        <div class="prop-title">Name</div>
+        <input class="name-input" id="p-name" type="text" placeholder="Panel name">
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Dimensions (mm)</div>
+        <div class="prop-row"><span class="prop-lbl" id="lbl-w">X</span><input class="prop-input" id="p-w" type="number" min="1"></div>
+        <div class="prop-row"><span class="prop-lbl" id="lbl-h">Y</span><input class="prop-input" id="p-h" type="number" min="1"></div>
+        <div class="prop-row"><span class="prop-lbl" id="lbl-d">Z</span><input class="prop-input" id="p-d" type="number" min="1"></div>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Position — centre (mm)</div>
+        <div class="prop-row"><span class="prop-lbl">X</span><input class="prop-input" id="p-x" type="number"></div>
+        <div class="prop-row"><span class="prop-lbl">Y</span><input class="prop-input" id="p-y" type="number"></div>
+        <div class="prop-row"><span class="prop-lbl">Z</span><input class="prop-input" id="p-z" type="number"></div>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Material</div>
+        <select id="p-mat" style="width:100%;padding:4px 6px;border:1px solid #ccc;border-radius:3px;font-size:12px;background:#fff;margin-bottom:8px;">
+          <option value="oak">🪵 Oak</option>
+          <option value="walnut">🌰 Walnut</option>
+          <option value="pine">🌲 Pine</option>
+          <option value="maple">🍁 Maple</option>
+          <option value="cherry">🍒 Cherry</option>
+          <option value="birch">🪨 Birch Plywood</option>
+          <option value="white">⬜ White Melamine</option>
+          <option value="black">⬛ Black Melamine</option>
+          <option value="grey">🔲 Grey MDF</option>
+          <option value="metal">🔩 Brushed Steel</option>
+          <option value="glass">🪟 Glass</option>
+          <option value="custom">🎨 Custom…</option>
+        </select>
+        <div id="custom-colors">
+          <div class="prop-row"><span class="prop-lbl">Panel colour</span><input type="color" class="clr" id="p-color"></div>
+          <div class="prop-row"><span class="prop-lbl">Edge colour</span><input type="color" class="clr" id="p-edge"></div>
+        </div>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Grain Direction</div>
+        <select id="p-grain" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:3px;font-size:12px;background:#fff;">
+          <option value="length">↔ Along Length (W)</option>
+          <option value="width">↕ Along Width (D)</option>
+        </select>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Rotation (°)</div>
+        <div class="prop-row" style="margin-bottom:4px;">
+          <span class="prop-lbl" style="min-width:14px;">X</span>
+          <input class="prop-input" id="r-rx" type="number" step="1" style="width:52px;">
+          <button class="rot-btn" onclick="rotatePanel('x',-90)">−90</button>
+          <button class="rot-btn" onclick="rotatePanel('x',90)">+90</button>
+          <button class="rot-btn" onclick="rotatePanel('x',180)">180</button>
+        </div>
+        <div class="prop-row" style="margin-bottom:4px;">
+          <span class="prop-lbl" style="min-width:14px;">Y</span>
+          <input class="prop-input" id="r-ry" type="number" step="1" style="width:52px;">
+          <button class="rot-btn" onclick="rotatePanel('y',-90)">−90</button>
+          <button class="rot-btn" onclick="rotatePanel('y',90)">+90</button>
+          <button class="rot-btn" onclick="rotatePanel('y',180)">180</button>
+        </div>
+        <div class="prop-row" style="margin-bottom:4px;">
+          <span class="prop-lbl" style="min-width:14px;">Z</span>
+          <input class="prop-input" id="r-rz" type="number" step="1" style="width:52px;">
+          <button class="rot-btn" onclick="rotatePanel('z',-90)">−90</button>
+          <button class="rot-btn" onclick="rotatePanel('z',90)">+90</button>
+          <button class="rot-btn" onclick="rotatePanel('z',180)">180</button>
+        </div>
+        <button class="rot-btn" style="margin-top:2px;width:100%;" onclick="resetRotation()">Reset rotation</button>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Mitre Joints</div>
+        <div class="prop-row" style="margin-bottom:7px;">
+          <span class="prop-lbl" style="min-width:46px;">Angle</span>
+          <input class="prop-input" id="m-angle" type="number" min="1" max="89" step="0.5" style="width:58px;"> <span style="font-size:11px;color:#666;">° (45 = standard)</span>
+        </div>
+        <div style="font-size:10px;color:#555;margin-bottom:6px;">Greyed faces are the largest surface — cannot be mitred</div>
+        <label id="lbl-m-xmin" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa;margin-bottom:5px;cursor:pointer;"><input type="checkbox" id="m-xmin"> Left (−X)</label>
+        <label id="lbl-m-xmax" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa;margin-bottom:5px;cursor:pointer;"><input type="checkbox" id="m-xmax"> Right (+X)</label>
+        <label id="lbl-m-ymin" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa;margin-bottom:5px;cursor:pointer;"><input type="checkbox" id="m-ymin"> Bottom (−Y)</label>
+        <label id="lbl-m-ymax" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa;margin-bottom:5px;cursor:pointer;"><input type="checkbox" id="m-ymax"> Top (+Y)</label>
+        <label id="lbl-m-zmin" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa;margin-bottom:5px;cursor:pointer;"><input type="checkbox" id="m-zmin"> Back (−Z)</label>
+        <label id="lbl-m-zmax" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#555;cursor:pointer;"><input type="checkbox" id="m-zmax"> Front (+Z)</label>
+      </div>
+      <div class="prop-sec">
+        <div class="prop-title">Appearance</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#aaa;cursor:pointer;">
+          <input type="checkbox" id="p-rounded"> Rounded edges
+        </label>
+        <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cs-modal">
+  <div id="cs-inner">
+    <div id="cs-hdr">
+      <h2>✂ Cut Sheet &amp; Assembly Guide</h2>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="btn-export-pdf" onclick="exportToPDF()">⬇ Export PDF</button>
+        <button class="cs-close" id="btn-cs-close">×</button>
+      </div>
+    </div>
+    <div id="cs-body">
+      <div class="cs-tabs">
+        <div class="cs-tab active" id="tab-cs" onclick="switchCsTab('cs')">✂ Cut Sheet</div>
+        <div class="cs-tab" id="tab-asm" onclick="switchCsTab('asm')">🔧 Assembly Guide</div>
+      </div>
+
+      <!-- Cut Sheet pane -->
+      <div class="cs-pane active" id="pane-cs">
+        <div class="cs-sec">
+          <h3>Parts List</h3>
+          <table class="cs-tbl">
+            <thead><tr><th>#</th><th>Name</th><th>Length</th><th>Width</th><th>Thickness</th><th>Mitre</th><th>L raw</th><th>W raw</th><th>Grain</th><th>Colour</th></tr></thead>
+            <tbody id="cs-tbody"></tbody>
+          </table>
+        </div>
+        <div class="cs-sec">
+          <h3>Stock Board Optimizer</h3>
+          <div class="stk-row">
+            <label>Board W: <input type="number" id="st-w" value="2440" min="100"> mm</label>
+            <label>Board H: <input type="number" id="st-h" value="1220" min="100"> mm</label>
+            <label>Kerf: <input type="number" id="st-kerf" value="3" min="0" max="20"> mm</label>
+            <button class="tbtn prim" id="btn-opt">▶ Optimize</button>
+          </div>
+          <div id="cs-boards"></div>
+          <div id="cs-summary"></div>
+        </div>
+      </div>
+
+      <!-- Assembly Guide pane -->
+      <div class="cs-pane" id="pane-asm">
+        <div class="cs-sec">
+          <h3>Assembly Order of Operations</h3>
+          <p style="font-size:12px;color:#888;margin-bottom:16px;">Steps are generated from your panel positions, names, and joint types. Name your panels (Bottom, Left Side, Top, etc.) for the most accurate guidance.</p>
+          <div id="asm-steps"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js r128 — UMD build with examples/js OrbitControls -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- Google Identity Services for Google Sign-In -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- jsPDF + autoTable for PDF export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  FurniCraft 3D  ·  1 unit = 1 mm
+// ═══════════════════════════════════════════════════════════════
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────
+var panels        = [];
+var selected      = null;
+var undoStack     = [];
+var MAX_UNDO      = 50;
+var selectedGroup = [];   // all panels in the current selection (1 or whole group)
+var snapEnabled   = true;
+var wireMode      = false;
+var dimsEnabled   = true;
+var nextId        = 1;
+var nextGroupId   = 1;
+var isResizing    = false;
+var isDragging    = false;
+var activeHandle  = null;
+var dragStart     = null;
+var panelStart    = null;
+var groupStart    = [];   // [{panel,x,y,z}] for all selected panels during drag
+var hoveredHandle = null;
+var snapTimer;
+var lastDimMs     = 0;
+var cameraMoving  = false;
+
+var GROUP_PALETTE = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
+function groupColor(gid) { return GROUP_PALETTE[(gid - 1) % GROUP_PALETTE.length]; }
+
+// ═══════════════════════════════════════════════════════════════
+//  ACCOUNTS & PROJECTS  (localStorage-backed)
+// ═══════════════════════════════════════════════════════════════
+var _currentUser    = null;   // { id, email }
+var _currentProjId  = null;   // id of the loaded/saved project, or null
+
+function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+
+async function _hashPw(pw) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
+function _getAccounts()  { return JSON.parse(localStorage.getItem('fc3d_accounts')  || '[]'); }
+function _saveAccounts(a){ localStorage.setItem('fc3d_accounts', JSON.stringify(a)); }
+function _getProjects()  { return JSON.parse(localStorage.getItem('fc3d_projects')  || '[]'); }
+function _saveProjects(a){ localStorage.setItem('fc3d_projects', JSON.stringify(a)); }
+function _getSession()   { return JSON.parse(localStorage.getItem('fc3d_session')   || 'null'); }
+function _saveSession(s) { localStorage.setItem('fc3d_session', JSON.stringify(s)); }
+
+// ── Auth ──────────────────────────────────────────────
+function openAuth() {
+  switchAuthTab('login');
+  document.getElementById('li-email').value = '';
+  document.getElementById('li-pass').value  = '';
+  document.getElementById('li-err').textContent = '';
+  // Reset OTP flow
+  _pendingOTP = null;
+  document.getElementById('reg-step1').style.display = '';
+  document.getElementById('reg-step2').style.display = 'none';
+  document.getElementById('auth-modal').classList.add('active');
+}
+function closeAuth() { document.getElementById('auth-modal').classList.remove('active'); }
+
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
+  document.getElementById('tab-register').classList.toggle('active', tab==='register');
+  document.getElementById('form-login').classList.toggle('active',    tab==='login');
+  document.getElementById('form-register').classList.toggle('active', tab==='register');
+  document.getElementById('li-err').textContent  = '';
+  document.getElementById('reg-err').textContent = '';
+  document.getElementById('reg-ok').textContent  = '';
+}
+
+// ── OTP state ─────────────────────────────────────────
+var _pendingOTP = null; // { email, pw, code }
+
+async function doRegisterStep1() {
+  var email = document.getElementById('reg-email').value.trim().toLowerCase();
+  var pw    = document.getElementById('reg-pass').value;
+  var pw2   = document.getElementById('reg-pass2').value;
+  var err   = document.getElementById('reg-err');
+  err.textContent = '';
+  if (!email || !email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
+  if (pw.length < 6)  { err.textContent = 'Password must be at least 6 characters.'; return; }
+  if (pw !== pw2)     { err.textContent = 'Passwords do not match.'; return; }
+  var accounts = _getAccounts();
+  if (accounts.find(function(a){ return a.email === email; })) { err.textContent = 'That email is already registered.'; return; }
+  var code = String(Math.floor(100000 + Math.random() * 900000));
+  _pendingOTP = { email: email, pw: pw, code: code };
+  document.getElementById('reg-otp-email').textContent   = email;
+  document.getElementById('reg-otp-display').textContent = code;
+  document.getElementById('reg-otp-input').value         = '';
+  document.getElementById('reg-otp-err').textContent     = '';
+  document.getElementById('reg-ok').textContent          = '';
+  document.getElementById('reg-step1').style.display = 'none';
+  document.getElementById('reg-step2').style.display = '';
+  // When EmailJS is configured, send code here:
+  // emailjs.send('YOUR_SERVICE', 'YOUR_TEMPLATE', { to_email: email, otp: code });
+}
+
+async function doRegisterStep2() {
+  if (!_pendingOTP) return;
+  var entered = document.getElementById('reg-otp-input').value.trim();
+  var err = document.getElementById('reg-otp-err');
+  var ok  = document.getElementById('reg-ok');
+  err.textContent = ''; ok.textContent = '';
+  if (entered !== _pendingOTP.code) { err.textContent = 'Incorrect code. Please try again.'; return; }
+  var hash    = await _hashPw(_pendingOTP.pw);
+  var account = { id: _uid(), email: _pendingOTP.email, passwordHash: hash, verified: true };
+  var accounts = _getAccounts();
+  accounts.push(account);
+  _saveAccounts(accounts);
+  _pendingOTP = null;
+  ok.textContent = 'Email verified! Signing you in…';
+  setTimeout(function(){ _setSession(account); closeAuth(); }, 800);
+}
+
+function cancelOTP() {
+  _pendingOTP = null;
+  document.getElementById('reg-step1').style.display = '';
+  document.getElementById('reg-step2').style.display = 'none';
+  document.getElementById('reg-err').textContent = '';
+}
+
+// ── Google Sign-In ────────────────────────────────────
+var GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID'; // ← replace with your Client ID from console.cloud.google.com
+
+function doGoogleSignIn() {
+  if (GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+    alert('Google Sign-In is not configured yet.\n\nTo enable it:\n1. Go to console.cloud.google.com\n2. Create an OAuth 2.0 Client ID (Web application)\n3. Replace YOUR_GOOGLE_CLIENT_ID in index.html with your Client ID');
+    return;
+  }
+  if (typeof google === 'undefined' || !google.accounts) {
+    alert('Google Identity Services failed to load. Check your internet connection.');
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: _handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true
+  });
+  google.accounts.id.prompt(function(notification) {
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      // Prompt blocked (e.g. third-party cookie policy) — fall back to popup
+      google.accounts.id.renderButton(
+        document.getElementById('google-btn-wrap'),
+        { theme: 'outline', size: 'large', width: '100%' }
+      );
+    }
+  });
+}
+
+function _decodeJWT(token) {
+  try {
+    var base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(atob(base64));
+  } catch(e) { return null; }
+}
+
+function _handleGoogleCredential(response) {
+  var payload = _decodeJWT(response.credential);
+  if (!payload || !payload.email) { alert('Google sign-in failed. Please try again.'); return; }
+  var email    = payload.email.toLowerCase();
+  var accounts = _getAccounts();
+  var account  = accounts.find(function(a){ return a.email === email; });
+  if (!account) {
+    account = { id: _uid(), email: email, googleId: payload.sub, verified: true, name: payload.name || '' };
+    accounts.push(account);
+    _saveAccounts(accounts);
+  }
+  _setSession(account);
+  closeAuth();
+}
+
+async function doLogin() {
+  var email = document.getElementById('li-email').value.trim().toLowerCase();
+  var pw    = document.getElementById('li-pass').value;
+  var err   = document.getElementById('li-err');
+  err.textContent = '';
+  if (!email || !pw) { err.textContent = 'Enter your email and password.'; return; }
+  var accounts = _getAccounts();
+  var account  = accounts.find(function(a){ return a.email === email; });
+  if (!account) { err.textContent = 'No account found for that email.'; return; }
+  var hash = await _hashPw(pw);
+  if (hash !== account.passwordHash) { err.textContent = 'Incorrect password.'; return; }
+  _setSession(account);
+  closeAuth();
+}
+
+function _setSession(account) {
+  _currentUser = { id: account.id, email: account.email };
+  _saveSession(_currentUser);
+  _updateTopbar();
+}
+
+function logoutUser() {
+  if (!confirm('Sign out of ' + _currentUser.email + '?')) return;
+  _currentUser   = null;
+  _currentProjId = null;
+  localStorage.removeItem('fc3d_session');
+  _updateTopbar();
+  document.getElementById('topbar-proj-name').textContent = 'Unsaved project';
+}
+
+// ── Settings: theme + navigation ─────────────────────
+var _currentTheme   = localStorage.getItem('fc3d_theme')   || 'dark';
+var _currentNavMode = localStorage.getItem('fc3d_navmode') || 'orbit';
+
+function toggleSettings(e) {
+  e.stopPropagation();
+  document.getElementById('settings-dropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('settings-wrap').contains(e.target))
+    document.getElementById('settings-dropdown').classList.remove('open');
+});
+
+function setTheme(theme) {
+  _currentTheme = theme;
+  localStorage.setItem('fc3d_theme', theme);
+  document.getElementById('theme-dark').checked  = theme === 'dark';
+  document.getElementById('theme-light').checked = theme === 'light';
+  document.documentElement.classList.toggle('theme-light', theme === 'light');
+  // Update 3D scene colours to match
+  if (typeof scene !== 'undefined') {
+    if (theme === 'light') {
+      scene.background = new THREE.Color(0xe8e0d0);
+      if (_floorMesh) _floorMesh.material.color.setHex(0xd8ceb8);
+      if (_gridHelper) { scene.remove(_gridHelper); _gridHelper = new THREE.GridHelper(3000, 60, 0x2a7d6f, 0xc4b898); scene.add(_gridHelper); }
+    } else {
+      scene.background = new THREE.Color(0x111111);
+      if (_floorMesh) _floorMesh.material.color.setHex(0x1a1a1a);
+      if (_gridHelper) { scene.remove(_gridHelper); _gridHelper = new THREE.GridHelper(3000, 60, 0x0abab5, 0x252525); scene.add(_gridHelper); }
+    }
+  }
+}
+
+function setNavMode(mode) {
+  _currentNavMode = mode;
+  localStorage.setItem('fc3d_navmode', mode);
+  document.getElementById('nav-orbit').checked = mode === 'orbit';
+  document.getElementById('nav-fps').checked   = mode === 'fps';
+  document.getElementById('fps-hint').style.display = mode === 'fps' ? 'block' : 'none';
+  if (mode === 'orbit') {
+    _exitFPS();
+    if (typeof orbitCtrl !== 'undefined') orbitCtrl.enabled = true;
+  } else {
+    if (typeof orbitCtrl !== 'undefined') orbitCtrl.enabled = false;
+    _enterFPS();
+  }
+}
+
+// ── FPS navigation ────────────────────────────────────
+var _fpsActive  = false;
+var _fpsKeys    = {};
+var _fpsPitch   = 0;  // radians, clamped to ±85°
+var _fpsYaw     = 0;  // radians
+
+function _enterFPS() {
+  document.getElementById('fps-crosshair').style.display = 'block';
+  // Derive initial yaw/pitch from current camera orientation
+  var dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  _fpsYaw   = Math.atan2(-dir.x, -dir.z);
+  _fpsPitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
+  canvas.requestPointerLock();
+}
+
+function _exitFPS() {
+  _fpsActive = false;
+  document.getElementById('fps-crosshair').style.display = 'none';
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
+}
+
+document.addEventListener('pointerlockchange', function() {
+  _fpsActive = (document.pointerLockElement === canvas) && _currentNavMode === 'fps';
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!_fpsActive) return;
+  var sens = 0.0018;
+  _fpsYaw   -= e.movementX * sens;
+  _fpsPitch -= e.movementY * sens;
+  _fpsPitch  = Math.max(-Math.PI * 0.47, Math.min(Math.PI * 0.47, _fpsPitch));
+});
+
+document.addEventListener('keydown', function(e) { _fpsKeys[e.code] = true; });
+document.addEventListener('keyup',   function(e) { _fpsKeys[e.code] = false; });
+
+// Called every frame from the render loop
+function _tickFPS(dt) {
+  if (!_fpsActive) return;
+  var speed  = _fpsKeys['ShiftLeft'] || _fpsKeys['ShiftRight'] ? 900 : 280; // mm/s
+  var move   = speed * dt;
+
+  // Build forward/right vectors from yaw only (no pitch in movement plane)
+  var fwd   = new THREE.Vector3(-Math.sin(_fpsYaw), 0, -Math.cos(_fpsYaw));
+  var right = new THREE.Vector3( Math.cos(_fpsYaw), 0, -Math.sin(_fpsYaw));
+  var up    = new THREE.Vector3(0, 1, 0);
+
+  if (_fpsKeys['KeyW'] || _fpsKeys['ArrowUp'])    camera.position.addScaledVector(fwd,   move);
+  if (_fpsKeys['KeyS'] || _fpsKeys['ArrowDown'])  camera.position.addScaledVector(fwd,  -move);
+  if (_fpsKeys['KeyA'] || _fpsKeys['ArrowLeft'])  camera.position.addScaledVector(right,-move);
+  if (_fpsKeys['KeyD'] || _fpsKeys['ArrowRight']) camera.position.addScaledVector(right, move);
+  if (_fpsKeys['KeyQ'])                           camera.position.addScaledVector(up,   -move);
+  if (_fpsKeys['KeyE'])                           camera.position.addScaledVector(up,    move);
+
+  // Apply look rotation
+  var qYaw   = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), _fpsYaw);
+  var qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), _fpsPitch);
+  camera.quaternion.copy(qYaw).multiply(qPitch);
+
+  // Keep orbitCtrl target in sync so switching back to orbit feels right
+  if (typeof orbitCtrl !== 'undefined') {
+    var lookAt = new THREE.Vector3(0,0,-300).applyQuaternion(camera.quaternion).add(camera.position);
+    orbitCtrl.target.copy(lookAt);
+  }
+}
+
+// Called after scene is ready (see _applyPrefs() call after floor/grid init)
+function _applyPrefs() {
+  setTheme(_currentTheme);
+  if (_currentNavMode === 'fps') setNavMode('fps');
+}
+
+// ── Topbar state ──────────────────────────────────────
+function _updateTopbar() {
+  var loggedIn = !!_currentUser;
+  document.getElementById('tb-signin').style.display   = loggedIn ? 'none' : '';
+  document.getElementById('tb-logout').style.display   = loggedIn ? ''     : 'none';
+  document.getElementById('tb-save').style.display     = loggedIn ? ''     : 'none';
+  document.getElementById('tb-projects').style.display = loggedIn ? ''     : 'none';
+  var userEl = document.getElementById('topbar-user');
+  userEl.style.display   = loggedIn ? '' : 'none';
+  userEl.textContent     = loggedIn ? _currentUser.email : '';
+}
+
+// ── Projects ──────────────────────────────────────────
+function _projectState() {
+  return { panels: panels.map(snapPanel), nextId: nextId, nextGroupId: nextGroupId };
+}
+
+function _loadProjectState(state) {
+  panels.forEach(function(p){ removeMesh(p); });
+  clearHandles();
+  nextId       = state.nextId      || 1;
+  nextGroupId  = state.nextGroupId || 1;
+  panels = state.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
+  doSelect(null);
+  refreshUI();
+}
+
+function saveCurrentProject() {
+  if (!_currentUser)   { openAuth(); return; }
+  if (!_currentProjId) { openProjectManager(); return; }
+  var projects = _getProjects();
+  var idx = projects.findIndex(function(p){ return p.id === _currentProjId; });
+  if (idx < 0) { openProjectManager(); return; }
+  projects[idx].state        = _projectState();
+  projects[idx].lastModified = new Date().toISOString();
+  _saveProjects(projects);
+  _flashSave();
+}
+
+function _flashSave() {
+  var btn = document.getElementById('tb-save');
+  var orig = btn.textContent;
+  btn.textContent = 'Saved ✓';
+  setTimeout(function(){ btn.textContent = orig; }, 1400);
+}
+
+function openProjectManager() {
+  if (!_currentUser) { openAuth(); return; }
+  _renderProjectList();
+  var pname = _currentProjId ? (_getProjects().find(function(p){ return p.id===_currentProjId; })||{}).name || '' : '';
+  document.getElementById('proj-save-name').value   = pname;
+  document.getElementById('proj-save-err').textContent = '';
+  document.getElementById('proj-modal').classList.add('active');
+}
+function closeProjectManager() { document.getElementById('proj-modal').classList.remove('active'); }
+
+function _renderProjectList() {
+  var projects = _getProjects().filter(function(p){ return p.userId === _currentUser.id; });
+  var wrap = document.getElementById('proj-list-wrap');
+  if (!projects.length) {
+    wrap.innerHTML = '<div class="proj-empty">No saved projects yet.<br>Save your current design below.</div>';
+    return;
+  }
+  projects.sort(function(a,b){ return b.lastModified.localeCompare(a.lastModified); });
+  wrap.innerHTML = '<div class="proj-list">' + projects.map(function(proj) {
+    var d   = new Date(proj.lastModified);
+    var lbl = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    var cur = proj.id === _currentProjId ? ' style="background:#f0f6ff;"' : '';
+    return '<div class="proj-item"' + cur + '>'
+      + '<div class="proj-item-name" title="'+proj.name+'">'+proj.name+(proj.id===_currentProjId?' ●':'')+'</div>'
+      + '<div class="proj-item-date">'+lbl+'</div>'
+      + '<div class="proj-item-btns">'
+      + '<button class="pi-btn" onclick="loadProject(\''+proj.id+'\')">Open</button>'
+      + '<button class="pi-btn del" onclick="deleteProject(\''+proj.id+'\')">Delete</button>'
+      + '</div></div>';
+  }).join('') + '</div>';
+}
+
+function saveProjectAs() {
+  var name = document.getElementById('proj-save-name').value.trim();
+  var err  = document.getElementById('proj-save-err');
+  if (!name) { err.textContent = 'Enter a project name.'; return; }
+  err.textContent = '';
+  var projects = _getProjects();
+  if (_currentProjId) {
+    var idx = projects.findIndex(function(p){ return p.id===_currentProjId; });
+    if (idx >= 0) { projects[idx].name = name; projects[idx].state = _projectState(); projects[idx].lastModified = new Date().toISOString(); _saveProjects(projects); _renderProjectList(); document.getElementById('topbar-proj-name').textContent = name; _flashSave(); return; }
+  }
+  var proj = { id: _uid(), userId: _currentUser.id, name: name, lastModified: new Date().toISOString(), state: _projectState() };
+  projects.push(proj);
+  _saveProjects(projects);
+  _currentProjId = proj.id;
+  document.getElementById('topbar-proj-name').textContent = name;
+  _renderProjectList();
+  _flashSave();
+}
+
+function loadProject(projId) {
+  var projects = _getProjects();
+  var proj = projects.find(function(p){ return p.id === projId; });
+  if (!proj) return;
+  if (panels.length && !confirm('Load "' + proj.name + '"? Unsaved changes will be lost.')) return;
+  _loadProjectState(proj.state);
+  _currentProjId = proj.id;
+  document.getElementById('topbar-proj-name').textContent = proj.name;
+  closeProjectManager();
+}
+
+function deleteProject(projId) {
+  var projects = _getProjects();
+  var proj = projects.find(function(p){ return p.id === projId; });
+  if (!proj) return;
+  if (!confirm('Delete "' + proj.name + '"? This cannot be undone.')) return;
+  _saveProjects(projects.filter(function(p){ return p.id !== projId; }));
+  if (_currentProjId === projId) { _currentProjId = null; document.getElementById('topbar-proj-name').textContent = 'Unsaved project'; }
+  _renderProjectList();
+}
+
+// ── Init: restore session ─────────────────────────────
+(function() {
+  var sess = _getSession();
+  if (sess) {
+    var accounts = _getAccounts();
+    var account  = accounts.find(function(a){ return a.id === sess.id; });
+    if (account) { _currentUser = { id: account.id, email: account.email }; }
+  }
+  _updateTopbar();
+})();
+function getGroupPanels(p) {
+  if (!p || !p.groupId) return p ? [p] : [];
+  return panels.filter(function(q) { return q.groupId === p.groupId; });
+}
+
+// ── Scene ──────────────────────────────────────────────────────
+var canvas = document.getElementById('three-canvas');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+var camera = new THREE.PerspectiveCamera(42, 1, 1, 20000);
+camera.position.set(680, 540, 880);
+
+var orbitCtrl = new THREE.OrbitControls(camera, canvas);
+orbitCtrl.enableDamping = true;
+orbitCtrl.dampingFactor = 0.08;
+orbitCtrl.addEventListener('change', function() { cameraMoving = true; });
+orbitCtrl.target.set(0, 155, 0);
+orbitCtrl.minDistance = 80;
+orbitCtrl.maxDistance = 5000;
+
+// ── Lights ─────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+var sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(500, 900, 600);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -700;
+sun.shadow.camera.right = sun.shadow.camera.top = 700;
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 3000;
+scene.add(sun);
+var fill = new THREE.DirectionalLight(0x0adbd5, 0.18);
+fill.position.set(-500, 200, -400); scene.add(fill);
+var fill2 = new THREE.DirectionalLight(0x0abab5, 0.12);
+fill2.position.set(200, -100, 500); scene.add(fill2);
+
+// ── Floor + Grid ───────────────────────────────────────────────
+var _floorMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(6000, 6000),
+  new THREE.MeshLambertMaterial({ color: 0x1a1a1a })
+);
+_floorMesh.rotation.x = -Math.PI / 2;
+_floorMesh.receiveShadow = true;
+scene.add(_floorMesh);
+var _gridHelper = new THREE.GridHelper(3000, 60, 0x0abab5, 0x252525);
+scene.add(_gridHelper);
+// Apply saved theme now that scene exists
+_applyPrefs();
+
+// Axis lines
+[[500,0,0,0xff4444],[0,500,0,0x44cc44],[0,0,500,0x4488ff]].forEach(function(a) {
+  var g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(a[0],a[1],a[2])]);
+  scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: a[3] })));
+});
+
+// ── Handle group ────────────────────────────────────────────────
+var handleGrp = new THREE.Group();
+scene.add(handleGrp);
+
+var HANDLE_R   = 14;
+var HANDLE_COL = 0x2c7be5;
+var HANDLE_HOV = 0xff6b35;
+var hGeo = new THREE.SphereGeometry(HANDLE_R, 10, 8);
+var FACE_AXES = [
+  {axis:'x',sign:+1},{axis:'x',sign:-1},
+  {axis:'y',sign:+1},{axis:'y',sign:-1},
+  {axis:'z',sign:+1},{axis:'z',sign:-1}
+];
+var DIM = {x:'w',y:'h',z:'d'};
+
+// ═══════════════════════════════════════════════════════════════
+//  FURNITURE MATERIAL DEFINITIONS + PROCEDURAL TEXTURES
+// ═══════════════════════════════════════════════════════════════
+var _texCache = {};
+var TEX_MM = 320; // mm per texture repeat (controls visual grain scale)
+
+function _woodTex(base, dark, count, wave) {
+  var key = 'w'+base+dark+count+wave;
+  if (_texCache[key]) return _texCache[key];
+  var sz=512, cv=document.createElement('canvas');
+  cv.width=cv.height=sz;
+  var cx=cv.getContext('2d');
+  cx.fillStyle=base; cx.fillRect(0,0,sz,sz);
+  for (var i=0; i<count; i++) {
+    var y0=Math.random()*sz*1.4-sz*0.2;
+    cx.globalAlpha=0.04+Math.random()*0.13;
+    cx.strokeStyle=dark;
+    cx.lineWidth=0.4+Math.random()*2.2;
+    cx.beginPath(); cx.moveTo(0,y0);
+    var cy=y0;
+    for (var x=0;x<=sz;x+=6){ cy+=(Math.random()-0.5)*wave; cx.lineTo(x,cy); }
+    cx.stroke();
+  }
+  cx.globalAlpha=1;
+  var t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  return (_texCache[key]=t);
+}
+
+function _flatTex(base) {
+  var key='f'+base;
+  if (_texCache[key]) return _texCache[key];
+  var sz=256, cv=document.createElement('canvas');
+  cv.width=cv.height=sz;
+  var cx=cv.getContext('2d');
+  cx.fillStyle=base; cx.fillRect(0,0,sz,sz);
+  for (var i=0;i<2000;i++){
+    cx.fillStyle='rgba(0,0,0,'+(0.008+Math.random()*0.02)+')';
+    cx.fillRect(Math.random()*sz,Math.random()*sz,1,1);
+  }
+  var t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  return (_texCache[key]=t);
+}
+
+function _metalTex() {
+  if (_texCache['metal']) return _texCache['metal'];
+  var sz=256, cv=document.createElement('canvas');
+  cv.width=cv.height=sz;
+  var cx=cv.getContext('2d');
+  var g=cx.createLinearGradient(0,0,sz,0);
+  g.addColorStop(0,'#909AA6'); g.addColorStop(0.5,'#C8D2DA'); g.addColorStop(1,'#909AA6');
+  cx.fillStyle=g; cx.fillRect(0,0,sz,sz);
+  for (var i=0;i<300;i++){
+    var y=Math.random()*sz;
+    cx.globalAlpha=0.02+Math.random()*0.06;
+    cx.strokeStyle=Math.random()>0.5?'#fff':'#555';
+    cx.lineWidth=0.3+Math.random()*0.8;
+    cx.beginPath(); cx.moveTo(0,y); cx.lineTo(sz,y); cx.stroke();
+  }
+  cx.globalAlpha=1;
+  var t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  return (_texCache['metal']=t);
+}
+
+function _glassTex() {
+  if (_texCache['glass']) return _texCache['glass'];
+  var sz=128, cv=document.createElement('canvas');
+  cv.width=cv.height=sz;
+  var cx=cv.getContext('2d');
+  cx.fillStyle='rgba(200,228,248,0.18)'; cx.fillRect(0,0,sz,sz);
+  cx.globalAlpha=0.08; cx.strokeStyle='#fff'; cx.lineWidth=1;
+  cx.beginPath(); cx.moveTo(0,0); cx.lineTo(sz,sz); cx.stroke();
+  cx.beginPath(); cx.moveTo(sz*0.3,0); cx.lineTo(sz,sz*0.7); cx.stroke();
+  cx.globalAlpha=1;
+  var t=new THREE.CanvasTexture(cv);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  return (_texCache['glass']=t);
+}
+
+var FMAT = {
+  oak:    {name:'Oak',            color:'#C8A050',edgeColor:'#7A5C1E',shininess:22, specular:'#1a1400', tex:function(){return _woodTex('#C8A050','#8B6010',120,3);}},
+  walnut: {name:'Walnut',         color:'#4A2810',edgeColor:'#221008',shininess:35, specular:'#0a0500', tex:function(){return _woodTex('#4A2810','#2E1808',100,2);}},
+  pine:   {name:'Pine',           color:'#E8CB85',edgeColor:'#B09040',shininess:12, specular:'#0a0a00', tex:function(){return _woodTex('#E8CB85','#C0A050',160,4);}},
+  maple:  {name:'Maple',          color:'#EDD9A3',edgeColor:'#C8A85A',shininess:18, specular:'#0a0a00', tex:function(){return _woodTex('#EDD9A3','#D0B070',130,2);}},
+  cherry: {name:'Cherry',         color:'#7A2E1A',edgeColor:'#3A1208',shininess:45, specular:'#150800', tex:function(){return _woodTex('#7A2E1A','#4E1C10',90,2);}},
+  birch:  {name:'Birch Plywood',  color:'#D4BA82',edgeColor:'#9A7840',shininess:10, specular:'#080800', tex:function(){return _woodTex('#D4BA82','#B09050',170,1.5);}},
+  white:  {name:'White Melamine', color:'#F4F4F0',edgeColor:'#C8C8C4',shininess:75, specular:'#444444', tex:function(){return _flatTex('#F4F4F0');}},
+  black:  {name:'Black Melamine', color:'#1A1A1A',edgeColor:'#0A0A0A',shininess:75, specular:'#555555', tex:function(){return _flatTex('#1A1A1A');}},
+  grey:   {name:'Grey MDF',       color:'#9A9A94',edgeColor:'#585852',shininess:8,  specular:'#111111', tex:function(){return _flatTex('#9A9A94');}},
+  metal:  {name:'Brushed Steel',  color:'#B0BAC4',edgeColor:'#707880',shininess:160,specular:'#999999', tex:_metalTex},
+  glass:  {name:'Glass',          color:'#C0E4F8',edgeColor:'#80C0E0',shininess:280,specular:'#cccccc', transparent:true,opacity:0.28, tex:_glassTex},
+  custom: {name:'Custom…',        color:null,     edgeColor:null,     shininess:30, specular:'#111111', tex:null}
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  PANEL FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+function mkPanel(o) {
+  return {
+    id:        nextId++,
+    name:      o.name      !== undefined ? o.name      : ('Panel ' + nextId),
+    w:         o.w         !== undefined ? o.w         : 200,
+    h:         o.h         !== undefined ? o.h         : 18,
+    d:         o.d         !== undefined ? o.d         : 200,
+    x:         o.x         !== undefined ? o.x         : 0,
+    y:         o.y         !== undefined ? o.y         : 100,
+    z:         o.z         !== undefined ? o.z         : 0,
+    material:  o.material  !== undefined ? o.material  : 'oak',
+    color:     o.color     !== undefined ? o.color     : FMAT.oak.color,
+    edgeColor: o.edgeColor !== undefined ? o.edgeColor : FMAT.oak.edgeColor,
+    grain:     o.grain     !== undefined ? o.grain     : 'length',
+    groupId:   o.groupId   !== undefined ? o.groupId   : null,
+    rx: o.rx || 0,
+    ry: o.ry || 0,
+    rz: o.rz || 0,
+    mitreXMin: o.mitreXMin || false,
+    mitreXMax: o.mitreXMax || false,
+    mitreYMin: o.mitreYMin || false,
+    mitreYMax: o.mitreYMax || false,
+    mitreZMin: o.mitreZMin || false,
+    mitreZMax: o.mitreZMax || false,
+    mitreAngle: o.mitreAngle !== undefined ? o.mitreAngle : 45,
+    roundedEdges: o.roundedEdges || false,
+    mesh:        null,
+    edges:       null,
+    selBox:      null,
+    mitreLines:  []
+  };
+}
+
+// ── Undo ──────────────────────────────────────────────────────
+function snapPanel(p) {
+  return { id:p.id, name:p.name, w:p.w, h:p.h, d:p.d, x:p.x, y:p.y, z:p.z,
+           rx:p.rx, ry:p.ry, rz:p.rz,
+           material:p.material, color:p.color, edgeColor:p.edgeColor,
+           grain:p.grain, groupId:p.groupId,
+           mitreXMin:p.mitreXMin, mitreXMax:p.mitreXMax,
+           mitreYMin:p.mitreYMin, mitreYMax:p.mitreYMax,
+           mitreZMin:p.mitreZMin, mitreZMax:p.mitreZMax,
+           mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false };
+}
+
+function saveUndo() {
+  undoStack.push({ panels: panels.map(snapPanel), nextId: nextId, nextGroupId: nextGroupId });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  var snap = undoStack.pop();
+  panels.forEach(function(p){ removeMesh(p); });
+  clearHandles();
+  nextId = snap.nextId;
+  nextGroupId = snap.nextGroupId;
+  panels = snap.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
+  doSelect(null);
+  refreshUI();
+}
+
+// Vertex index key:
+//   0=TLF  1=TRF  2=TLB  3=TRB  (top row: T=top, L/R=x, F/B=z)
+//   4=BLF  5=BRF  6=BLB  7=BRB  (bottom row)
+// For each face mitre, the "inner" corners (on the negative side of the thickness axis)
+// shift by T/tan(angle) along the face's axis direction.
+function panelVerts(p) {
+  var T = panelThickness(p);
+  var ang = ((p.mitreAngle || 45) * Math.PI) / 180;
+  var shift = T / Math.tan(ang);
+  var hw = p.w/2, hh = p.h/2, hd = p.d/2;
+  var v = [
+    [-hw, +hh, -hd],  // 0 TLF
+    [+hw, +hh, -hd],  // 1 TRF
+    [-hw, +hh, +hd],  // 2 TLB
+    [+hw, +hh, +hd],  // 3 TRB
+    [-hw, -hh, -hd],  // 4 BLF
+    [+hw, -hh, -hd],  // 5 BRF
+    [-hw, -hh, +hd],  // 6 BLB
+    [+hw, -hh, +hd],  // 7 BRB
+  ];
+  var roles = panelDimRoles(p);
+  var tk = Object.keys(roles).filter(function(k){ return roles[k]==='Thickness'; })[0];
+  if (tk === 'h') {
+    // Thickness along Y — inner = bottom (y=-hh)
+    if (p.mitreXMin) { v[4][0] += shift; v[6][0] += shift; }
+    if (p.mitreXMax) { v[5][0] -= shift; v[7][0] -= shift; }
+    if (p.mitreZMin) { v[4][2] += shift; v[5][2] += shift; }
+    if (p.mitreZMax) { v[6][2] -= shift; v[7][2] -= shift; }
+  } else if (tk === 'w') {
+    // Thickness along X — inner = XMin side (x=-hw)
+    if (p.mitreYMin) { v[4][1] += shift; v[6][1] += shift; }
+    if (p.mitreYMax) { v[0][1] -= shift; v[2][1] -= shift; }
+    if (p.mitreZMin) { v[0][2] += shift; v[4][2] += shift; }
+    if (p.mitreZMax) { v[2][2] -= shift; v[6][2] -= shift; }
+  } else {
+    // Thickness along Z — inner = ZMin side (z=-hd)
+    if (p.mitreXMin) { v[0][0] += shift; v[4][0] += shift; }
+    if (p.mitreXMax) { v[1][0] -= shift; v[5][0] -= shift; }
+    if (p.mitreYMin) { v[4][1] += shift; v[5][1] += shift; }
+    if (p.mitreYMax) { v[0][1] -= shift; v[1][1] -= shift; }
+  }
+  return v;
+}
+
+// Returns which faces can have a mitre (the 4 non-largest-surface faces)
+function mitrableFaces(p) {
+  var roles = panelDimRoles(p);
+  var tk = Object.keys(roles).filter(function(k){ return roles[k]==='Thickness'; })[0];
+  if (tk === 'h') return { xMin:true,  xMax:true,  yMin:false, yMax:false, zMin:true,  zMax:true  };
+  if (tk === 'w') return { xMin:false, xMax:false, yMin:true,  yMax:true,  zMin:true,  zMax:true  };
+  /* tk === 'd' */ return { xMin:true,  xMax:true,  yMin:true,  yMax:true,  zMin:false, zMax:false };
+}
+
+function buildMesh(p) {
+  removeMesh(p);
+  var fd = FMAT[p.material] || FMAT.custom;
+  var grainW = (p.grain === 'width');
+  var uw = p.w/TEX_MM, uh = p.h/TEX_MM, ud = p.d/TEX_MM;
+
+  var geo;
+  if (p.roundedEdges) {
+    // Inflated BoxGeometry for rounded-edge visual effect
+    var SEG = 3;
+    var rr = Math.min(3, panelThickness(p) * 0.14);
+    geo = new THREE.BoxGeometry(p.w, p.h, p.d, SEG, SEG, SEG);
+    var posAttr = geo.attributes.position;
+    var norAttr = geo.attributes.normal;
+    var uvAttr  = geo.attributes.uv;
+    var iw = p.w/2 - rr, ih = p.h/2 - rr, id2 = p.d/2 - rr;
+    for (var i = 0; i < posAttr.count; i++) {
+      var px = posAttr.getX(i), py = posAttr.getY(i), pz = posAttr.getZ(i);
+      var cx = Math.max(-iw, Math.min(iw, px));
+      var cy = Math.max(-ih, Math.min(ih, py));
+      var cz = Math.max(-id2, Math.min(id2, pz));
+      var dx = px-cx, dy = py-cy, dz = pz-cz;
+      var len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
+      var nx = dx/len, ny = dy/len, nz = dz/len;
+      posAttr.setXYZ(i, cx+nx*rr, cy+ny*rr, cz+nz*rr);
+      norAttr.setXYZ(i, nx, ny, nz);
+      // UV based on dominant normal — tile texture to match real dimensions
+      var anx=Math.abs(nx), any=Math.abs(ny), anz=Math.abs(nz);
+      var u, vv;
+      if (anx >= any && anx >= anz) {
+        u = (pz + p.d/2) / TEX_MM; vv = (py + p.h/2) / TEX_MM;
+      } else if (any >= anx && any >= anz) {
+        u = grainW ? (pz+p.d/2)/TEX_MM : (px+p.w/2)/TEX_MM;
+        vv= grainW ? (px+p.w/2)/TEX_MM : (pz+p.d/2)/TEX_MM;
+      } else {
+        u = (px + p.w/2) / TEX_MM; vv = (py + p.h/2) / TEX_MM;
+      }
+      uvAttr.setXY(i, u, vv);
+    }
+    posAttr.needsUpdate = true;
+    norAttr.needsUpdate = true;
+    uvAttr.needsUpdate  = true;
+  } else {
+    // Custom flat geometry (supports mitre shifts)
+    var v = panelVerts(p);
+    var faceData = [
+      { vi:[0,2,3,1], uvs: grainW ? [[0,0],[ud,0],[ud,uw],[0,uw]] : [[0,0],[0,ud],[uw,ud],[uw,0]] },
+      { vi:[4,5,7,6], uvs: grainW ? [[0,0],[0,uw],[ud,uw],[ud,0]] : [[0,0],[uw,0],[uw,ud],[0,ud]] },
+      { vi:[0,4,6,2], uvs:[[0,uh],[0,0],[ud,0],[ud,uh]] },
+      { vi:[1,3,7,5], uvs:[[0,uh],[ud,uh],[ud,0],[0,0]] },
+      { vi:[0,1,5,4], uvs:[[0,uh],[uw,uh],[uw,0],[0,0]] },
+      { vi:[2,6,7,3], uvs:[[0,uh],[0,0],[uw,0],[uw,uh]] },
+    ];
+    var pos = [], uvs = [];
+    faceData.forEach(function(f) {
+      var vi=f.vi, uv=f.uvs;
+      var a=v[vi[0]],b=v[vi[1]],c=v[vi[2]],d=v[vi[3]];
+      var ua=uv[0],ub=uv[1],uc=uv[2],ud2=uv[3];
+      pos.push(a[0],a[1],a[2], b[0],b[1],b[2], c[0],c[1],c[2]);
+      uvs.push(ua[0],ua[1], ub[0],ub[1], uc[0],uc[1]);
+      pos.push(a[0],a[1],a[2], c[0],c[1],c[2], d[0],d[1],d[2]);
+      uvs.push(ua[0],ua[1], uc[0],uc[1], ud2[0],ud2[1]);
+    });
+    geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+  }
+
+  var tex  = fd.tex ? fd.tex() : null;
+  var col  = tex ? '#ffffff' : (fd.color || p.color);
+  var mat  = new THREE.MeshPhongMaterial({
+    color:       new THREE.Color(col),
+    map:         tex,
+    specular:    new THREE.Color(fd.specular),
+    shininess:   fd.shininess,
+    transparent: !!fd.transparent,
+    opacity:     fd.opacity !== undefined ? fd.opacity : 1,
+    wireframe:   wireMode
+  });
+  var _rDEG = Math.PI / 180;
+  p.mesh = new THREE.Mesh(geo, mat);
+  p.mesh.position.set(p.x, p.y, p.z);
+  p.mesh.rotation.set((p.rx||0)*_rDEG, (p.ry||0)*_rDEG, (p.rz||0)*_rDEG);
+  p.mesh.castShadow = true;
+  p.mesh.receiveShadow = true;
+  p.mesh.userData.pid = p.id;
+  scene.add(p.mesh);
+
+  if (!p.roundedEdges) {
+    // Edge lines follow mitre-shifted vertices
+    var v2 = panelVerts(p);
+    var edgePairs = [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]];
+    var ePos = [];
+    edgePairs.forEach(function(e){ var a=v2[e[0]],b=v2[e[1]]; ePos.push(a[0],a[1],a[2],b[0],b[1],b[2]); });
+    var eGeo = new THREE.BufferGeometry();
+    eGeo.setAttribute('position', new THREE.Float32BufferAttribute(ePos, 3));
+    var eCol = (fd.edgeColor || p.edgeColor);
+    p.edges = new THREE.LineSegments(eGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(eCol) }));
+    p.edges.position.copy(p.mesh.position);
+    p.edges.rotation.copy(p.mesh.rotation);
+    p.edges.userData.pid = p.id;
+    scene.add(p.edges);
+  }
+
+  buildMitreLines(p);
+}
+
+function removeMesh(p) {
+  if (p.mesh)   { scene.remove(p.mesh);   p.mesh.geometry.dispose();   p.mesh   = null; }
+  if (p.edges)  { scene.remove(p.edges);  p.edges.geometry.dispose();  p.edges  = null; }
+  if (p.selBox) { scene.remove(p.selBox); p.selBox.geometry.dispose(); p.selBox = null; }
+  if (p.mitreLines) { p.mitreLines.forEach(function(l){ scene.remove(l); l.geometry.dispose(); }); p.mitreLines = []; }
+}
+
+function syncPos(p) {
+  var D = Math.PI/180, rx=(p.rx||0)*D, ry=(p.ry||0)*D, rz=(p.rz||0)*D;
+  if (p.mesh)   { p.mesh.position.set(p.x,p.y,p.z);   p.mesh.rotation.set(rx,ry,rz); }
+  if (p.edges)  { p.edges.position.set(p.x,p.y,p.z);  p.edges.rotation.set(rx,ry,rz); }
+  if (p.selBox) { p.selBox.position.set(p.x,p.y,p.z); p.selBox.rotation.set(rx,ry,rz); }
+  if (p.mitreLines) p.mitreLines.forEach(function(l){ l.position.set(p.x,p.y,p.z); l.rotation.set(rx,ry,rz); });
+}
+
+function buildMitreLines(p) {
+  if (p.mitreLines) { p.mitreLines.forEach(function(l){ scene.remove(l); l.geometry.dispose(); }); }
+  p.mitreLines = [];
+  var anyMitre = p.mitreXMin || p.mitreXMax || p.mitreYMin || p.mitreYMax || p.mitreZMin || p.mitreZMax;
+  if (!anyMitre) return;
+  // Draw orange lines around the perimeter of each mitred face — slanted edges show the cut angle.
+  var v = panelVerts(p);
+  var mat = new THREE.LineBasicMaterial({ color: 0xff6b00, linewidth: 2 });
+  var faceEdges = {
+    xMin: [[0,4],[4,6],[6,2],[2,0]],
+    xMax: [[1,5],[5,7],[7,3],[3,1]],
+    yMin: [[4,5],[5,7],[7,6],[6,4]],
+    yMax: [[0,1],[1,3],[3,2],[2,0]],
+    zMin: [[0,1],[1,5],[5,4],[4,0]],
+    zMax: [[2,3],[3,7],[7,6],[6,2]],
+  };
+  var faces = { xMin:p.mitreXMin, xMax:p.mitreXMax, yMin:p.mitreYMin, yMax:p.mitreYMax, zMin:p.mitreZMin, zMax:p.mitreZMax };
+  var seen = {};
+  Object.keys(faces).forEach(function(face) {
+    if (!faces[face]) return;
+    faceEdges[face].forEach(function(e) {
+      var key = Math.min(e[0],e[1])+'-'+Math.max(e[0],e[1]);
+      if (seen[key]) return;
+      seen[key] = true;
+      var a = v[e[0]], b = v[e[1]];
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([a[0],a[1],a[2],b[0],b[1],b[2]], 3));
+      var line = new THREE.LineSegments(geo, mat);
+      line.position.set(p.x, p.y, p.z);
+      line.rotation.set((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180);
+      scene.add(line);
+      p.mitreLines.push(line);
+    });
+  });
+}
+
+function rebuildSelBox(p) {
+  if (p.selBox) { scene.remove(p.selBox); p.selBox.geometry.dispose(); }
+  var g = new THREE.BoxGeometry(p.w+4, p.h+4, p.d+4);
+  var m = new THREE.MeshBasicMaterial({ color:0x2c7be5, wireframe:true, transparent:true, opacity:0.55 });
+  p.selBox = new THREE.Mesh(g, m);
+  p.selBox.position.set(p.x, p.y, p.z);
+  p.selBox.rotation.set((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180);
+  scene.add(p.selBox);
+}
+
+// World-space AABB half-extents for a panel with rotation (XYZ euler, degrees).
+// Uses the standard OBB→AABB projection formula.
+function panelWorldHalfExtents(rx, ry, rz, hw, hh, hd) {
+  if (!rx && !ry && !rz) return { hw:hw, hh:hh, hd:hd };
+  var D = Math.PI / 180;
+  var sx = Math.sin(rx*D), cx = Math.cos(rx*D);
+  var sy = Math.sin(ry*D), cy = Math.cos(ry*D);
+  var sz = Math.sin(rz*D), cz = Math.cos(rz*D);
+  var a = Math.abs;
+  // Row-major XYZ euler rotation matrix columns give the world directions of local axes
+  var R00=cy*cz, R01=sx*sy*cz-cx*sz, R02=cx*sy*cz+sx*sz;
+  var R10=cy*sz, R11=sx*sy*sz+cx*cz, R12=cx*sy*sz-sx*cz;
+  var R20=-sy,   R21=sx*cy,          R22=cx*cy;
+  return {
+    hw: a(R00)*hw + a(R01)*hh + a(R02)*hd,
+    hh: a(R10)*hw + a(R11)*hh + a(R12)*hd,
+    hd: a(R20)*hw + a(R21)*hh + a(R22)*hd
+  };
+}
+
+// ── Bounding box of all panels ─────────────────────────────────
+function furnitureBBox() {
+  if (!panels.length) return { minX:0,maxX:0,minY:0,maxY:0,minZ:0,maxZ:0 };
+  var minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9,minZ=1e9,maxZ=-1e9;
+  panels.forEach(function(p) {
+    var e = panelWorldHalfExtents(p.rx||0,p.ry||0,p.rz||0,p.w/2,p.h/2,p.d/2);
+    minX=Math.min(minX,p.x-e.hw); maxX=Math.max(maxX,p.x+e.hw);
+    minY=Math.min(minY,p.y-e.hh); maxY=Math.max(maxY,p.y+e.hh);
+    minZ=Math.min(minZ,p.z-e.hd); maxZ=Math.max(maxZ,p.z+e.hd);
+  });
+  return {minX:minX,maxX:maxX,minY:minY,maxY:maxY,minZ:minZ,maxZ:maxZ};
+}
+
+// ── Default furniture ──────────────────────────────────────────
+function buildNightstand() {
+  var T=18, W=450, H=311, D=381;
+  [
+    {name:'Top',          w:W,      h:T,      d:D,   x:0,          y:H-T/2,      z:0,          material:'oak'},
+    {name:'Bottom',       w:W,      h:T,      d:D,   x:0,          y:T/2,        z:0,          material:'oak'},
+    {name:'Left Side',    w:T,      h:H-T*2,  d:D,   x:-(W/2-T/2), y:H/2,        z:0,          material:'oak'},
+    {name:'Right Side',   w:T,      h:H-T*2,  d:D,   x:(W/2-T/2),  y:H/2,        z:0,          material:'oak'},
+    {name:'Back Panel',   w:W-T*2,  h:H-T*2,  d:T,   x:0,          y:H/2,        z:-(D/2-T/2), material:'birch'},
+    {name:'Middle Shelf', w:W-T*2,  h:T,      d:D-T, x:0,          y:T+155+T/2,  z:T/2,        material:'oak'},
+    {name:'Drawer Front', w:W-T*2-2,h:102,    d:T,   x:0,          y:T+155+T+51, z:D/2-T/2+1,  material:'oak'}
+  ].forEach(function(o) {
+    var p = mkPanel(o);
+    panels.push(p);
+    buildMesh(p);
+  });
+  refreshUI();
+}
+
+// ── Add / Delete / Duplicate ───────────────────────────────────
+function addPanel(o) {
+  saveUndo();
+  // Spawn above existing furniture so it never overlaps
+  var defY = 59;
+  if (panels.length) {
+    var bb = furnitureBBox();
+    defY = bb.maxY + 39; // 30mm gap + 9mm half-thickness
+  }
+  var p = mkPanel(o || {name:'Panel '+nextId, w:300, h:18, d:300, x:0, y:defY, z:0});
+  panels.push(p);
+  buildMesh(p);
+  refreshUI();
+  doSelect(p);
+  fitCamera();
+}
+
+function deleteSelected() {
+  if (!selected) return;
+  saveUndo();
+  var del = selected;
+  // If panel was in a group and only 1 will remain, disband the group
+  if (del.groupId) {
+    var remaining = panels.filter(function(p){ return p !== del && p.groupId === del.groupId; });
+    if (remaining.length === 1) remaining[0].groupId = null;
+  }
+  removeMesh(del);
+  panels = panels.filter(function(p){ return p !== del; });
+  doSelect(null);
+  clearHandles();
+  refreshUI();
+  if (panels.length) fitCamera();
+}
+
+function duplicateSelected() {
+  if (!selected) return;
+  saveUndo();
+  var s = selected;
+  var p = mkPanel({
+    name: s.name+' copy', w:s.w, h:s.h, d:s.d,
+    x:s.x+25, y:s.y, z:s.z+25,
+    rx:s.rx, ry:s.ry, rz:s.rz,
+    color:s.color, edgeColor:s.edgeColor, grain:s.grain,
+    mitreXMin:s.mitreXMin, mitreXMax:s.mitreXMax,
+    mitreYMin:s.mitreYMin, mitreYMax:s.mitreYMax,
+    mitreZMin:s.mitreZMin, mitreZMax:s.mitreZMax,
+    mitreAngle:s.mitreAngle
+  });
+  panels.push(p);
+  buildMesh(p);
+  refreshUI();
+  doSelect(p);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SELECTION
+// ═══════════════════════════════════════════════════════════════
+var ray = new THREE.Raycaster();
+
+function clearSelBoxes() {
+  selectedGroup.forEach(function(q) {
+    if (q.selBox) { scene.remove(q.selBox); q.selBox.geometry.dispose(); q.selBox = null; }
+  });
+}
+
+function doSelect(p, addToGroup) {
+  clearSelBoxes();
+  clearHandles();
+
+  if (!p) {
+    selected = null;
+    selectedGroup = [];
+    document.getElementById('no-sel').style.display     = 'block';
+    document.getElementById('prop-panel').style.display = 'none';
+    refreshCompList();
+    return;
+  }
+
+  if (addToGroup && selectedGroup.length > 0) {
+    // Ctrl+click: toggle panel into current multi-selection
+    var idx = selectedGroup.indexOf(p);
+    if (idx >= 0) {
+      selectedGroup.splice(idx, 1);
+      if (!selectedGroup.length) { doSelect(null); return; }
+      p = selectedGroup[selectedGroup.length - 1];
+    } else {
+      selectedGroup.push(p);
+      // also pull in p's whole group if it has one
+      getGroupPanels(p).forEach(function(q) {
+        if (selectedGroup.indexOf(q) < 0) selectedGroup.push(q);
+      });
+    }
+  } else {
+    selectedGroup = getGroupPanels(p);
+  }
+
+  selected = p;
+  selectedGroup.forEach(function(q) { rebuildSelBox(q); });
+  buildHandles(p);
+  showProps(p);
+  document.getElementById('no-sel').style.display     = 'none';
+  document.getElementById('prop-panel').style.display = 'block';
+  refreshCompList();
+}
+
+function panelMeshes() { return panels.map(function(p){ return p.mesh; }).filter(Boolean); }
+
+// ═══════════════════════════════════════════════════════════════
+//  HANDLES
+// ═══════════════════════════════════════════════════════════════
+function handleWorldPos(p, axis, sign) {
+  var off = new THREE.Vector3(
+    axis==='x' ? sign*p.w/2 : 0,
+    axis==='y' ? sign*p.h/2 : 0,
+    axis==='z' ? sign*p.d/2 : 0
+  );
+  off.applyEuler(new THREE.Euler((p.rx||0)*Math.PI/180,(p.ry||0)*Math.PI/180,(p.rz||0)*Math.PI/180,'XYZ'));
+  return new THREE.Vector3(p.x+off.x, p.y+off.y, p.z+off.z);
+}
+
+function buildHandles(p) {
+  FACE_AXES.forEach(function(fa) {
+    var h = new THREE.Mesh(hGeo, new THREE.MeshPhongMaterial({ color: HANDLE_COL }));
+    h.position.copy(handleWorldPos(p, fa.axis, fa.sign));
+    h.userData = { isHandle:true, axis:fa.axis, sign:fa.sign };
+    handleGrp.add(h);
+  });
+}
+
+function clearHandles() {
+  while (handleGrp.children.length) handleGrp.remove(handleGrp.children[0]);
+}
+
+function refreshHandlePos() {
+  if (!selected) return;
+  var p = selected;
+  handleGrp.children.forEach(function(h) {
+    h.position.copy(handleWorldPos(p, h.userData.axis, h.userData.sign));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MOUSE INTERACTION
+// ═══════════════════════════════════════════════════════════════
+function ndc(e) {
+  var r = canvas.getBoundingClientRect();
+  return new THREE.Vector2(
+    ((e.clientX - r.left) / r.width)  *  2 - 1,
+    ((e.clientY - r.top)  / r.height) * -2 + 1
+  );
+}
+
+var DRAG_THRESHOLD  = 5;  // px of movement before panel drag activates
+var HANDLE_HIT_PX   = 22; // px radius for screen-space handle picking
+var dragPending     = false;
+
+// Screen-space handle picking — avoids 3D raycaster matrix-update issues
+function nearestHandle(clientX, clientY) {
+  if (!selected || !handleGrp.children.length) return null;
+  var r = canvas.getBoundingClientRect();
+  var best = null, bestD = HANDLE_HIT_PX;
+  handleGrp.children.forEach(function(h) {
+    var sp = toScreen(h.position);
+    var dx = (r.left + sp.x) - clientX;
+    var dy = (r.top  + sp.y) - clientY;
+    var d  = Math.sqrt(dx*dx + dy*dy);
+    if (d < bestD) { bestD = d; best = h; }
+  });
+  return best;
+}
+
+// Use capture=true so this fires BEFORE OrbitControls' bubble-phase listener.
+// stopImmediatePropagation() on handle/panel hits prevents OC from ever seeing the event.
+canvas.addEventListener('mousedown', function(e) {
+  if (e.button !== 0) return;
+
+  // ── Handle hit — use hoveredHandle set during mousemove hover ─
+  // This avoids false positives from nearestHandle when clicking panel body.
+  if (hoveredHandle && selected) {
+    e.stopImmediatePropagation();
+    saveUndo();
+    activeHandle = hoveredHandle;
+    activeHandle.material.color.setHex(HANDLE_HOV);
+    isResizing = true;
+    dragStart  = { mx: e.clientX, my: e.clientY };
+    panelStart = { w:selected.w, h:selected.h, d:selected.d,
+                   x:selected.x, y:selected.y, z:selected.z };
+    return;
+  }
+
+  // ── Panel body hit ───────────────────────────────────────────
+  scene.updateMatrixWorld();
+  ray.setFromCamera(ndc(e), camera);
+  var ph = ray.intersectObjects(panelMeshes());
+  if (ph.length) {
+    var pid = ph[0].object.userData.pid;
+    var p   = panels.filter(function(q){ return q.id === pid; })[0];
+    if (p) {
+      e.stopImmediatePropagation();
+      var ctrl = e.ctrlKey || e.metaKey;
+      doSelect(p, ctrl);
+      saveUndo();
+      dragPending = true;
+      isDragging  = false;
+      orbitCtrl.enabled = false;
+      dragStart  = { mx: e.clientX, my: e.clientY };
+      panelStart = { x: selected.x, y: selected.y, z: selected.z };
+      groupStart = selectedGroup.map(function(q) { return { panel:q, x:q.x, y:q.y, z:q.z }; });
+    }
+    return;
+  }
+
+  doSelect(null);
+}, true); // capture phase
+
+// All move/up on document so dragging outside the canvas still works
+document.addEventListener('mousemove', function(e) {
+  // ── Activate panel drag once threshold crossed ───────────────
+  if (dragPending && !isDragging) {
+    var ddx = e.clientX - dragStart.mx, ddy = e.clientY - dragStart.my;
+    if (ddx*ddx + ddy*ddy > DRAG_THRESHOLD*DRAG_THRESHOLD) isDragging = true;
+  }
+
+  // ── Resize ──────────────────────────────────────────────────
+  if (isResizing && activeHandle && selected) {
+    var p    = selected;
+    var sp   = panelStart;
+    var axis = activeHandle.userData.axis;
+    var sign = activeHandle.userData.sign;
+
+    var _euler = new THREE.Euler((p.rx||0)*Math.PI/180,(p.ry||0)*Math.PI/180,(p.rz||0)*Math.PI/180,'XYZ');
+    var _axisLocal = new THREE.Vector3(axis==='x'?100:0, axis==='y'?100:0, axis==='z'?100:0).applyEuler(_euler);
+    var c0  = toScreen(new THREE.Vector3(sp.x, sp.y, sp.z));
+    var c1  = toScreen(new THREE.Vector3(sp.x+_axisLocal.x, sp.y+_axisLocal.y, sp.z+_axisLocal.z));
+    var axSx = c1.x - c0.x, axSy = c1.y - c0.y;
+    var axLen = Math.sqrt(axSx*axSx + axSy*axSy) || 1;
+    var dx  = e.clientX - dragStart.mx;
+    var dy  = e.clientY - dragStart.my;
+    var dot = (dx * axSx + dy * axSy) / axLen;
+    var dist = camera.position.distanceTo(orbitCtrl.target);
+    var wpx  = (2 * Math.tan(camera.fov * Math.PI / 360) * dist) / canvas.clientHeight;
+    var delta = Math.round(sign * dot * wpx);
+
+    var dk     = DIM[axis];
+    var newDim = Math.max(1, sp[dk] + delta);
+    var noRot  = !p.rx && !p.ry && !p.rz;
+    if (snapEnabled && noRot) newDim = snapDim(p, axis, sign, newDim, sp);
+
+    var _axisDir = new THREE.Vector3(axis==='x'?1:0, axis==='y'?1:0, axis==='z'?1:0).applyEuler(_euler);
+    var _hc = sign*(newDim-sp[dk])/2;
+    var propX = sp.x + _hc * _axisDir.x;
+    var propY = sp.y + _hc * _axisDir.y;
+    var propZ = sp.z + _hc * _axisDir.z;
+    var propW = axis==='x' ? newDim : p.w;
+    var propH = axis==='y' ? newDim : p.h;
+    var propD = axis==='z' ? newDim : p.d;
+
+    if (!wouldCollide(p, propX, propY, propZ, propW, propH, propD, [])) {
+      p[dk] = newDim;
+      p.x = propX; p.y = propY; p.z = propZ;
+      buildMesh(p);
+      rebuildSelBox(p);
+      refreshHandlePos();
+      showProps(p);
+    }
+    refreshOverall();
+    return;
+  }
+
+  // ── Panel drag (XZ plane) ────────────────────────────────────
+  if (isDragging && selected) {
+    var p   = selected;
+    var sp  = panelStart;
+    var plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -sp.y);
+    var r0  = canvas.getBoundingClientRect();
+
+    var startRay = new THREE.Raycaster();
+    startRay.setFromCamera(new THREE.Vector2(
+      ((dragStart.mx - r0.left) / r0.width)  *  2 - 1,
+      ((dragStart.my - r0.top)  / r0.height) * -2 + 1
+    ), camera);
+    ray.setFromCamera(new THREE.Vector2(
+      ((e.clientX - r0.left) / r0.width)  *  2 - 1,
+      ((e.clientY - r0.top)  / r0.height) * -2 + 1
+    ), camera);
+
+    var si = new THREE.Vector3(), ci = new THREE.Vector3();
+    startRay.ray.intersectPlane(plane, si);
+    ray.ray.intersectPlane(plane, ci);
+
+    if (si.lengthSq() || ci.lengthSq()) {
+      var ddx = ci.x - si.x, ddz = ci.z - si.z;
+      // Snap on primary panel, derive delta, apply to whole group
+      var nx = Math.round(sp.x + ddx), nz = Math.round(sp.z + ddz);
+      if (snapEnabled) { var sn = snapPos(p, nx, sp.y, nz); nx=sn[0]; nz=sn[1]; }
+      var fdx = nx - sp.x, fdz = nz - sp.z;
+
+      // Collision resolution: try full move, then slide along each axis, then stop
+      var groupIds = selectedGroup.map(function(g){ return g.id; });
+      function grpOK(dx, dz) {
+        return !groupStart.some(function(gs) {
+          return wouldCollide(gs.panel, Math.round(gs.x+dx), gs.panel.y,
+                              Math.round(gs.z+dz), gs.panel.w, gs.panel.h, gs.panel.d, groupIds);
+        });
+      }
+      if (!grpOK(fdx, fdz)) {
+        // Try X-only slide (snap only on X axis)
+        var nx2 = Math.round(sp.x + ddx);
+        if (snapEnabled) { var sn2 = snapPos(p, nx2, sp.y, sp.z); nx2 = sn2[0]; }
+        if (grpOK(nx2 - sp.x, 0)) { fdx = nx2 - sp.x; fdz = 0; }
+        else {
+          // Try Z-only slide (snap only on Z axis)
+          var nz3 = Math.round(sp.z + ddz);
+          if (snapEnabled) { var sn3 = snapPos(p, sp.x, sp.y, nz3); nz3 = sn3[1]; }
+          if (grpOK(0, nz3 - sp.z)) { fdx = 0; fdz = nz3 - sp.z; }
+          else { fdx = 0; fdz = 0; }
+        }
+      }
+
+      groupStart.forEach(function(gs) {
+        gs.panel.x = Math.round(gs.x + fdx);
+        gs.panel.z = Math.round(gs.z + fdz);
+        syncPos(gs.panel);
+      });
+      refreshHandlePos();
+      showProps(selected);
+      refreshOverall();
+    }
+    return;
+  }
+
+  // ── Hover (canvas only) ──────────────────────────────────────
+  if (!isResizing && !isDragging && !dragPending) {
+    var overCanvas = (e.target === canvas);
+    if (hoveredHandle) {
+      hoveredHandle.material.color.setHex(HANDLE_COL);
+      hoveredHandle = null;
+    }
+    if (overCanvas) {
+      var hh = nearestHandle(e.clientX, e.clientY);
+      if (hh) {
+        hoveredHandle = hh;
+        hoveredHandle.material.color.setHex(HANDLE_HOV);
+        canvas.style.cursor = 'grab';
+        orbitCtrl.enabled = false;
+      } else {
+        scene.updateMatrixWorld();
+        ray.setFromCamera(ndc(e), camera);
+        var overPanel = ray.intersectObjects(panelMeshes()).length > 0;
+        // Disable orbit whenever cursor is over a panel — OC.mousedown checks
+        // this flag before doing anything, so it skips when we want to drag.
+        orbitCtrl.enabled = !overPanel;
+        canvas.style.cursor = overPanel ? 'move' : 'default';
+      }
+    } else {
+      orbitCtrl.enabled = true;
+    }
+  }
+});
+
+document.addEventListener('mouseup', function() {
+  if (!isResizing && !isDragging && !dragPending) return;
+  orbitCtrl.enabled = true;
+  isResizing = isDragging = dragPending = false;
+  if (activeHandle) { activeHandle.material.color.setHex(HANDLE_COL); activeHandle = null; }
+  if (hoveredHandle) { hoveredHandle.material.color.setHex(HANDLE_COL); hoveredHandle = null; }
+  canvas.style.cursor = 'default';
+});
+
+function toScreen(v3) {
+  var v = v3.clone().project(camera);
+  return { x:(v.x+1)/2*canvas.clientWidth, y:(-v.y+1)/2*canvas.clientHeight };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SNAPPING
+// ═══════════════════════════════════════════════════════════════
+var SNAP_T = 14;        // drag snap threshold (mm)
+var SNAP_T_DIM = 16;   // resize snap threshold (mm) — more forgiving
+
+function snapDim(p, axis, sign, newDim, sp) {
+  var dk     = DIM[axis];
+  var opp    = sp[axis] - sign * sp[dk] / 2;
+  var moving = opp + sign * newDim;
+  var best   = Infinity, out = newDim;
+  var T      = SNAP_T_DIM;
+
+  // Build current AABB of p using starting dims (sp) so adjacency check is stable
+  var spBounds = {
+    minX: sp.x - sp.w/2, maxX: sp.x + sp.w/2,
+    minY: sp.y - sp.h/2, maxY: sp.y + sp.h/2,
+    minZ: sp.z - sp.d/2, maxZ: sp.z + sp.d/2
+  };
+
+  panels.forEach(function(o) {
+    if (o === p) return;
+    var oBounds = _panelWorldBounds(o);
+
+    // ── 1. Standard snap: moving face → any face of o on the resize axis ──
+    [o[axis] - o[dk]/2, o[axis] + o[dk]/2].forEach(function(f) {
+      var d = Math.abs(moving - f);
+      if (d < T && d < best) { best = d; out = sign*(f - opp); flashSnap(); }
+    });
+
+    // ── 2. Flush snap: moving face → o's far/near face on perpendicular axes ──
+    // When p is CONNECTED to o (touching on a perpendicular axis), also offer
+    // snap targets so the moving face becomes flush with o's face in the
+    // resize direction — even if those faces don't share the same axis.
+    var axes = ['x','y','z'];
+    var perpAxes = axes.filter(function(a){ return a !== axis; });
+    var touching = perpAxes.some(function(pa) {
+      var pMin = spBounds['min' + pa.toUpperCase()];
+      var pMax = spBounds['max' + pa.toUpperCase()];
+      var oMin = oBounds['min' + pa.toUpperCase()];
+      var oMax = oBounds['max' + pa.toUpperCase()];
+      var gap  = Math.max(pMin, oMin) - Math.min(pMax, oMax); // positive = no overlap
+      return gap >= -1 && gap <= T; // touching or nearly touching on this perp axis
+    });
+
+    if (touching) {
+      // Snap moving face to o's outer extent in the sign direction
+      var oFar = o[axis] + sign * o[dk] / 2;
+      var d = Math.abs(moving - oFar);
+      if (d < T && d < best) { best = d; out = sign*(oFar - opp); flashSnap(); }
+
+      // Snap so panel becomes the same size as connected panel
+      var matchDim = o[dk];
+      var matchMoving = opp + sign * matchDim;
+      d = Math.abs(moving - matchMoving);
+      if (d < T && d < best) { best = d; out = sign*(matchMoving - opp); flashSnap(); }
+    }
+  });
+
+  return Math.max(1, Math.round(out));
+}
+
+function snapPos(p, nx, ny, nz) {
+  // For each axis, find the single nearest snap candidate and apply only that one.
+  // Applying every candidate within range causes conflicts when multiple panels are nearby.
+  var bxD = Infinity, bxDelta = 0;
+  var bzD = Infinity, bzDelta = 0;
+  panels.forEach(function(o) {
+    if (o === p) return;
+    var pe = panelWorldHalfExtents(p.rx||0, p.ry||0, p.rz||0, p.w/2, p.h/2, p.d/2);
+    var oe = panelWorldHalfExtents(o.rx||0, o.ry||0, o.rz||0, o.w/2, o.h/2, o.d/2);
+    [nx - pe.hw, nx + pe.hw].forEach(function(pEdge) {
+      [o.x - oe.hw, o.x + oe.hw].forEach(function(oEdge) {
+        var d = Math.abs(pEdge - oEdge);
+        if (d < SNAP_T && d < bxD) { bxD = d; bxDelta = oEdge - pEdge; }
+      });
+    });
+    [nz - pe.hd, nz + pe.hd].forEach(function(pEdge) {
+      [o.z - oe.hd, o.z + oe.hd].forEach(function(oEdge) {
+        var d = Math.abs(pEdge - oEdge);
+        if (d < SNAP_T && d < bzD) { bzD = d; bzDelta = oEdge - pEdge; }
+      });
+    });
+  });
+  if (bxD < SNAP_T) { nx += bxDelta; flashSnap(); }
+  if (bzD < SNAP_T) { nz += bzDelta; flashSnap(); }
+  return [nx, nz];
+}
+
+// Returns true if a panel placed at (nx,ny,nz) with dims (nw,nh,nd) would overlap
+// any other panel. eps=0.5 means panels may touch (snap) but not penetrate.
+// Per-face mitre clearance: how much AABB overlap the mitred face allows.
+// Only applied for non-rotated panels (rotated panels use raw AABB).
+function mitreFaceClearance(p) {
+  var z = { xMin:0, xMax:0, yMin:0, yMax:0, zMin:0, zMax:0 };
+  if (!p || p.rx || p.ry || p.rz) return z;
+  if (!p.mitreXMin && !p.mitreXMax && !p.mitreYMin && !p.mitreYMax && !p.mitreZMin && !p.mitreZMax) return z;
+  var T = panelThickness(p);
+  var shift = T / Math.tan(((p.mitreAngle||45)*Math.PI)/180);
+  return {
+    xMin: p.mitreXMin ? shift : 0,  xMax: p.mitreXMax ? shift : 0,
+    yMin: p.mitreYMin ? shift : 0,  yMax: p.mitreYMax ? shift : 0,
+    zMin: p.mitreZMin ? shift : 0,  zMax: p.mitreZMax ? shift : 0,
+  };
+}
+
+function wouldCollide(panel, nx, ny, nz, nw, nh, nd, excludeIds) {
+  var eps = 0.5;
+  var pe = panelWorldHalfExtents(panel ? (panel.rx||0) : 0, panel ? (panel.ry||0) : 0, panel ? (panel.rz||0) : 0, nw/2, nh/2, nd/2);
+  var mc = mitreFaceClearance(panel);
+  return panels.some(function(o) {
+    if (o === panel) return false;
+    if (excludeIds && excludeIds.indexOf(o.id) >= 0) return false;
+    var oe = panelWorldHalfExtents(o.rx||0, o.ry||0, o.rz||0, o.w/2, o.h/2, o.d/2);
+    var oc = mitreFaceClearance(o);
+    // Clearance is face-directional: use the face of each panel that points toward the other
+    var xc = nx < o.x ? mc.xMax + oc.xMin : mc.xMin + oc.xMax;
+    var yc = ny < o.y ? mc.yMax + oc.yMin : mc.yMin + oc.yMax;
+    var zc = nz < o.z ? mc.zMax + oc.zMin : mc.zMin + oc.zMax;
+    return Math.abs(nx - o.x) < pe.hw + oe.hw - eps - xc &&
+           Math.abs(ny - o.y) < pe.hh + oe.hh - eps - yc &&
+           Math.abs(nz - o.z) < pe.hd + oe.hd - eps - zc;
+  });
+}
+
+function flashSnap() {
+  var el = document.getElementById('snap-hud');
+  el.style.display = 'block';
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(function(){ el.style.display='none'; }, 600);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DIMENSION SVG OVERLAY  (throttled to 10fps max)
+// ═══════════════════════════════════════════════════════════════
+var dimSvg = document.getElementById('dim-svg');
+
+function clearDims() { dimSvg.innerHTML = ''; }
+
+function svgEl(tag, attrs) {
+  var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); });
+  return el;
+}
+
+function drawDimLine(v1, v2, label, color) {
+  color = color || '#888';
+  var p1 = toScreen(v1), p2 = toScreen(v2);
+  var dx = p2.x-p1.x, dy = p2.y-p1.y;
+  var len = Math.sqrt(dx*dx+dy*dy);
+  if (len < 25) return;
+  var nx=-dy/len, ny=dx/len, T=6, AL=8, AW=3;
+  [p1,p2].forEach(function(p) {
+    dimSvg.appendChild(svgEl('line',{x1:p.x+nx*T,y1:p.y+ny*T,x2:p.x-nx*T,y2:p.y-ny*T,stroke:color,'stroke-width':1.2}));
+  });
+  dimSvg.appendChild(svgEl('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,stroke:color,'stroke-width':1.2}));
+  [[p1.x,p1.y,dx,dy],[p2.x,p2.y,-dx,-dy]].forEach(function(a) {
+    var ux=a[2]/len*AL, uy=a[3]/len*AL;
+    dimSvg.appendChild(svgEl('polygon',{points:a[0]+','+a[1]+' '+(a[0]+ux+ny*AW)+','+(a[1]+uy+nx*AW)+' '+(a[0]+ux-ny*AW)+','+(a[1]+uy-nx*AW),fill:color}));
+  });
+  var mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+  dimSvg.appendChild(svgEl('rect',{x:mx-19,y:my-17,width:38,height:13,rx:2,fill:'rgba(20,20,20,0.88)'}));
+  var txt = svgEl('text',{x:mx,y:my-7,'text-anchor':'middle','font-size':10,fill:color,'font-family':'system-ui','font-weight':'600'});
+  txt.textContent = label;
+  dimSvg.appendChild(txt);
+}
+
+function updateDims() {
+  clearDims();
+  if (!dimsEnabled || !panels.length) return;
+  var bb = furnitureBBox();
+  var minX=bb.minX,maxX=bb.maxX,minY=bb.minY,maxY=bb.maxY,minZ=bb.minZ,maxZ=bb.maxZ;
+  var OF=40;
+  drawDimLine(new THREE.Vector3(minX,minY-OF,maxZ), new THREE.Vector3(maxX,minY-OF,maxZ), ''+Math.round(maxX-minX));
+  drawDimLine(new THREE.Vector3(maxX+OF,minY,maxZ), new THREE.Vector3(maxX+OF,maxY,maxZ), ''+Math.round(maxY-minY));
+  drawDimLine(new THREE.Vector3(maxX+OF*2,minY-OF,minZ), new THREE.Vector3(maxX+OF*2,minY-OF,maxZ), ''+Math.round(maxZ-minZ));
+  if (selected) {
+    var p = selected;
+    var euler = new THREE.Euler((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180, 'XYZ');
+    var wHalf = new THREE.Vector3(p.w/2, 0, 0).applyEuler(euler);
+    var hHalf = new THREE.Vector3(0, p.h/2, 0).applyEuler(euler);
+    var dHalf = new THREE.Vector3(0, 0, p.d/2).applyEuler(euler);
+    var top = new THREE.Vector3(p.x, p.y, p.z).add(hHalf);
+    var dFront = new THREE.Vector3(p.x, p.y, p.z).add(dHalf);
+    drawDimLine(
+      top.clone().sub(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
+      top.clone().add(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
+      ''+Math.round(p.w), '#0ABAB5'
+    );
+    drawDimLine(
+      dFront.clone().sub(hHalf).add(new THREE.Vector3(OF*0.8, 0, 0)),
+      dFront.clone().add(hHalf).add(new THREE.Vector3(OF*0.8, 0, 0)),
+      ''+Math.round(p.h), '#0ABAB5'
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DIMENSION ROLE HELPER
+// ═══════════════════════════════════════════════════════════════
+// Returns {w, h, d} each labelled 'Length', 'Width', or 'Thickness'
+// Thickness = smallest dimension (the actual board/sheet thickness).
+// Length = largest, Width = middle.
+function panelDimRoles(p) {
+  var axes = [{key:'w', val:p.w}, {key:'h', val:p.h}, {key:'d', val:p.d}];
+  axes.sort(function(a, b){ return b.val - a.val; });
+  var roles = {};
+  roles[axes[0].key] = 'Length';
+  roles[axes[1].key] = 'Width';
+  roles[axes[2].key] = 'Thickness';
+  return roles;
+}
+
+// The actual material thickness regardless of orientation
+function panelThickness(p) { return Math.min(p.w, p.h, p.d); }
+
+// The two face dimensions for cut-sheet layout (largest two, mitre-adjusted)
+function panelFaceDims(p) {
+  var T = panelThickness(p);
+  var ang = ((p.mitreAngle || 45) * Math.PI) / 180;
+  var shift = T / Math.tan(ang);
+  var axes = [
+    { val: p.w, mitreExtra: shift * ((p.mitreXMin?1:0)+(p.mitreXMax?1:0)) },
+    { val: p.h, mitreExtra: shift * ((p.mitreYMin?1:0)+(p.mitreYMax?1:0)) },
+    { val: p.d, mitreExtra: shift * ((p.mitreZMin?1:0)+(p.mitreZMax?1:0)) }
+  ].filter(function(a){ return a.val > T - 0.5; }) // exclude the thickness axis
+   .sort(function(a, b){ return b.val - a.val; });  // length first
+  if (axes.length < 2) axes = [{val:p.w,mitreExtra:0},{val:p.d,mitreExtra:0}];
+  return {
+    faceL: axes[0].val,  rawL: Math.round(axes[0].val + axes[0].mitreExtra),
+    faceW: axes[1].val,  rawW: Math.round(axes[1].val + axes[1].mitreExtra)
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROPERTIES PANEL
+// ═══════════════════════════════════════════════════════════════
+var propBusy = false;
+
+function rotatePanel(axis, deg) {
+  if (!selected) return;
+  saveUndo();
+  var p = selected;
+  if (axis === 'x') p.rx = ((p.rx||0) + deg + 360) % 360;
+  if (axis === 'y') p.ry = ((p.ry||0) + deg + 360) % 360;
+  if (axis === 'z') p.rz = ((p.rz||0) + deg + 360) % 360;
+  buildMesh(p); rebuildSelBox(p); clearHandles(); buildHandles(p); showProps(p); refreshOverall();
+}
+
+function resetRotation() {
+  if (!selected) return;
+  saveUndo();
+  var p = selected;
+  p.rx = p.ry = p.rz = 0;
+  buildMesh(p); rebuildSelBox(p); clearHandles(); buildHandles(p); showProps(p); refreshOverall();
+}
+
+var AXIS_LABEL = { w: 'X', h: 'Y', d: 'Z' };
+var ROLE_COLOR = { Length: '#555', Width: '#555', Thickness: '#e67e22' };
+
+function showProps(p) {
+  propBusy = true;
+  // Update dimension labels to show consistent role (Length / Width / Thickness)
+  var roles = panelDimRoles(p);
+  ['w','h','d'].forEach(function(axis) {
+    var role = roles[axis];
+    var lbl = document.getElementById('lbl-' + axis);
+    lbl.textContent = role + ' (' + AXIS_LABEL[axis] + ')';
+    lbl.style.color      = ROLE_COLOR[role];
+    lbl.style.fontWeight = role === 'Thickness' ? '600' : '';
+  });
+  document.getElementById('p-name').value  = p.name;
+  document.getElementById('p-w').value     = Math.round(p.w);
+  document.getElementById('p-h').value     = Math.round(p.h);
+  document.getElementById('p-d').value     = Math.round(p.d);
+  document.getElementById('p-x').value     = Math.round(p.x);
+  document.getElementById('p-y').value     = Math.round(p.y);
+  document.getElementById('p-z').value     = Math.round(p.z);
+  document.getElementById('p-mat').value    = p.material || 'custom';
+  var isCustom = (p.material === 'custom' || !p.material);
+  document.getElementById('custom-colors').style.display = isCustom ? '' : 'none';
+  document.getElementById('p-color').value  = p.color;
+  document.getElementById('p-edge').value   = p.edgeColor;
+  document.getElementById('p-grain').value  = p.grain;
+  document.getElementById('r-rx').value = Math.round((p.rx||0)*10)/10;
+  document.getElementById('r-ry').value = Math.round((p.ry||0)*10)/10;
+  document.getElementById('r-rz').value = Math.round((p.rz||0)*10)/10;
+  document.getElementById('p-rounded').checked = !!p.roundedEdges;
+  document.getElementById('m-angle').value  = p.mitreAngle || 45;
+  var mf = mitrableFaces(p);
+  [['xmin','xMin'],['xmax','xMax'],['ymin','yMin'],['ymax','yMax'],['zmin','zMin'],['zmax','zMax']].forEach(function(pair) {
+    var htmlId = pair[0], propKey = pair[1];
+    var lbl = document.getElementById('lbl-m-'+htmlId);
+    var cb  = document.getElementById('m-'+htmlId);
+    var ok  = mf[propKey];
+    lbl.style.opacity = ok ? '1' : '0.35';
+    cb.disabled = !ok;
+    cb.checked  = ok && !!p['mitre'+propKey.charAt(0).toUpperCase()+propKey.slice(1)];
+  });
+  propBusy = false;
+}
+
+function applyProps() {
+  if (propBusy || !selected) return;
+  saveUndo();
+  var p = selected;
+  p.name      = document.getElementById('p-name').value;
+  p.w         = Math.max(1, parseFloat(document.getElementById('p-w').value) || p.w);
+  p.h         = Math.max(1, parseFloat(document.getElementById('p-h').value) || p.h);
+  p.d         = Math.max(1, parseFloat(document.getElementById('p-d').value) || p.d);
+  p.x         = parseFloat(document.getElementById('p-x').value) || 0;
+  p.y         = parseFloat(document.getElementById('p-y').value) || 0;
+  p.z         = parseFloat(document.getElementById('p-z').value) || 0;
+  var matKey = document.getElementById('p-mat').value;
+  p.material = matKey;
+  var fd2 = FMAT[matKey];
+  if (fd2 && matKey !== 'custom') {
+    p.color     = fd2.color;
+    p.edgeColor = fd2.edgeColor;
+    document.getElementById('p-color').value = fd2.color;
+    document.getElementById('p-edge').value  = fd2.edgeColor;
+    document.getElementById('custom-colors').style.display = 'none';
+  } else {
+    p.color     = document.getElementById('p-color').value;
+    p.edgeColor = document.getElementById('p-edge').value;
+    document.getElementById('custom-colors').style.display = '';
+  }
+  p.grain     = document.getElementById('p-grain').value;
+  p.rx = parseFloat(document.getElementById('r-rx').value) || 0;
+  p.ry = parseFloat(document.getElementById('r-ry').value) || 0;
+  p.rz = parseFloat(document.getElementById('r-rz').value) || 0;
+  p.roundedEdges = document.getElementById('p-rounded').checked;
+  p.mitreAngle = Math.min(89, Math.max(1, parseFloat(document.getElementById('m-angle').value) || 45));
+  var mf2 = mitrableFaces(p);
+  p.mitreXMin = mf2.xMin && document.getElementById('m-xmin').checked;
+  p.mitreXMax = mf2.xMax && document.getElementById('m-xmax').checked;
+  p.mitreYMin = mf2.yMin && document.getElementById('m-ymin').checked;
+  p.mitreYMax = mf2.yMax && document.getElementById('m-ymax').checked;
+  p.mitreZMin = mf2.zMin && document.getElementById('m-zmin').checked;
+  p.mitreZMax = mf2.zMax && document.getElementById('m-zmax').checked;
+  buildMesh(p);
+  rebuildSelBox(p);
+  clearHandles();
+  buildHandles(p);
+  refreshUI();
+}
+
+// Only fire on 'change' — not mid-keypress — to avoid rapid mesh rebuilds
+['p-name','p-w','p-h','p-d','p-x','p-y','p-z','p-color','p-edge','p-grain','p-mat',
+ 'r-rx','r-ry','r-rz',
+ 'p-rounded',
+ 'm-angle','m-xmin','m-xmax','m-ymin','m-ymax','m-zmin','m-zmax'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', applyProps);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  LEFT-PANEL REFRESH
+// ═══════════════════════════════════════════════════════════════
+function refreshOverall() {
+  if (!panels.length) {
+    ['ov-w','ov-h','ov-d'].forEach(function(id){ document.getElementById(id).value = 0; });
+    return;
+  }
+  var bb = furnitureBBox();
+  document.getElementById('ov-w').value = Math.round(bb.maxX-bb.minX);
+  document.getElementById('ov-h').value = Math.round(bb.maxY-bb.minY);
+  document.getElementById('ov-d').value = Math.round(bb.maxZ-bb.minZ);
+}
+
+function refreshCompList() {
+  var ul = document.getElementById('comp-list');
+  ul.innerHTML = '';
+  panels.forEach(function(p) {
+    var inSel = selectedGroup.indexOf(p) >= 0;
+    var li = document.createElement('li');
+    li.className = 'comp-item' + (inSel ? ' sel' : '');
+    var groupBadge = p.groupId
+      ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+groupColor(p.groupId)+';margin-right:4px;flex-shrink:0;" title="Group '+p.groupId+'"></span>'
+      : '<span style="display:inline-block;width:8px;height:8px;margin-right:4px;flex-shrink:0;"></span>';
+    li.innerHTML = groupBadge
+                 + '<div class="comp-dot" style="background:'+p.color+';border:1.5px solid '+p.edgeColor+';"></div>'
+                 + '<span class="comp-name" title="Double-click to rename">'+p.name+'</span>';
+    li.addEventListener('click', (function(pp){ return function(e){ doSelect(pp, e.ctrlKey||e.metaKey); }; })(p));
+    // Double-click on name to rename inline
+    li.querySelector('.comp-name').addEventListener('dblclick', (function(pp, liEl){
+      return function(e) {
+        e.stopPropagation();
+        var nameSpan = liEl.querySelector('.comp-name');
+        var cur = pp.name;
+        var inp = document.createElement('input');
+        inp.value = cur;
+        inp.style.cssText = 'flex:1;min-width:0;padding:1px 4px;border:1px solid #2c7be5;border-radius:3px;font-size:12px;background:#fff;outline:none;';
+        nameSpan.replaceWith(inp);
+        inp.focus(); inp.select();
+        function commit() {
+          var newName = inp.value.trim() || cur;
+          if (newName !== cur) {
+            saveUndo();
+            pp.name = newName;
+            if (selected === pp) document.getElementById('p-name').value = newName;
+          }
+          refreshCompList();
+        }
+        inp.addEventListener('keydown', function(ev) {
+          if (ev.key === 'Enter')  { ev.preventDefault(); commit(); }
+          if (ev.key === 'Escape') { inp.value = cur; commit(); }
+        });
+        inp.addEventListener('blur', commit);
+      };
+    })(p, li));
+    ul.appendChild(li);
+  });
+}
+
+function refreshMatLegend() {
+  var c = document.getElementById('mat-legend');
+  var seen = {};
+  panels.forEach(function(p) {
+    var k = p.color+'|'+p.edgeColor;
+    if (!seen[k]) seen[k] = { color:p.color, edge:p.edgeColor, count:0 };
+    seen[k].count++;
+  });
+  c.innerHTML = '';
+  Object.keys(seen).forEach(function(k) {
+    var s = seen[k];
+    var row = document.createElement('div');
+    row.className = 'mat-row';
+    row.innerHTML = '<div class="mat-swatch" style="background:'+s.color+';border-color:'+s.edge+';"></div>'
+                  + '<div class="mat-info">Panel<small>'+s.count+' part'+(s.count>1?'s':'')+'</small></div>';
+    c.appendChild(row);
+  });
+}
+
+function refreshUI() { refreshCompList(); refreshOverall(); refreshMatLegend(); }
+
+// ═══════════════════════════════════════════════════════════════
+//  TOOLBAR
+// ═══════════════════════════════════════════════════════════════
+function fitCamera() {
+  var cx=0, cy=155, cz=0, size=800;
+  if (panels.length) {
+    var bb = furnitureBBox();
+    cx = (bb.minX+bb.maxX)/2;
+    cy = (bb.minY+bb.maxY)/2;
+    cz = (bb.minZ+bb.maxZ)/2;
+    var maxDim = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ, 1);
+    size = maxDim * 2.5;
+  }
+  orbitCtrl.target.set(cx, cy, cz);
+  camera.position.set(cx + size*0.55, cy + size*0.45, cz + size*0.75);
+  orbitCtrl.update();
+}
+
+function resetCamera() { fitCamera(); }
+
+function toggleSnap() {
+  snapEnabled = !snapEnabled;
+  var b = document.getElementById('btn-snap');
+  b.textContent = 'Snap ' + (snapEnabled ? '✓' : '✗');
+  b.classList.toggle('on', snapEnabled);
+}
+
+function toggleWireframe() {
+  wireMode = !wireMode;
+  panels.forEach(function(p){ if (p.mesh && p.mesh.material) p.mesh.material.wireframe = wireMode; });
+  document.getElementById('btn-wire').classList.toggle('on', wireMode);
+}
+
+function toggleDims() {
+  dimsEnabled = !dimsEnabled;
+  var b = document.getElementById('btn-dims');
+  b.textContent = 'Dims ' + (dimsEnabled ? '✓' : '✗');
+  b.classList.toggle('on', dimsEnabled);
+  if (!dimsEnabled) clearDims();
+}
+
+document.getElementById('btn-add').addEventListener('click',    function(){ addPanel(); });
+document.getElementById('btn-dup').addEventListener('click',    function(){ duplicateSelected(); });
+document.getElementById('btn-group').addEventListener('click',  function(){ groupSelected(); });
+document.getElementById('btn-ungroup').addEventListener('click',function(){ ungroupSelected(); });
+document.getElementById('btn-del').addEventListener('click',    function(){ deleteSelected(); });
+document.getElementById('btn-reset').addEventListener('click', function(){ resetCamera(); });
+document.getElementById('btn-snap').addEventListener('click',  function(){ toggleSnap(); });
+document.getElementById('btn-wire').addEventListener('click',  function(){ toggleWireframe(); });
+document.getElementById('btn-dims').addEventListener('click',  function(){ toggleDims(); });
+document.getElementById('btn-cs').addEventListener('click',    function(){ showCutSheet(); });
+document.getElementById('btn-cs-close').addEventListener('click', function(){ hideCutSheet(); });
+document.getElementById('cs-modal').addEventListener('click',  function(e){ if(e.target===document.getElementById('cs-modal')) hideCutSheet(); });
+document.getElementById('btn-opt').addEventListener('click',   function(){ runOptimizer(); });
+
+document.addEventListener('keydown', function(e) {
+  if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
+  if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  if (e.key==='d'||e.key==='D') duplicateSelected();
+  if (e.key==='g'||e.key==='G') groupSelected();
+  if (e.key==='u'||e.key==='U') ungroupSelected();
+  if (e.key==='Escape') doSelect(null);
+  if (e.key==='r'||e.key==='R') resetCamera();
+  if (e.key==='w'||e.key==='W') toggleWireframe();
+  if (e.key==='s'||e.key==='S') toggleSnap();
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  GROUPING
+// ═══════════════════════════════════════════════════════════════
+function groupSelected() {
+  if (selectedGroup.length < 2) return;
+  saveUndo();
+  var gid = nextGroupId++;
+  selectedGroup.forEach(function(p) { p.groupId = gid; });
+  refreshCompList();
+}
+
+function ungroupSelected() {
+  if (!selectedGroup.length) return;
+  saveUndo();
+  selectedGroup.forEach(function(p) { p.groupId = null; });
+  // Rebuild selection as single panel only
+  var p = selected;
+  clearSelBoxes();
+  selectedGroup = [p];
+  rebuildSelBox(p);
+  refreshCompList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CUT SHEET
+// ═══════════════════════════════════════════════════════════════
+function showCutSheet() {
+  document.getElementById('cs-modal').style.display = 'block';
+  switchCsTab('cs');
+  renderAssemblyGuide();
+  var tbody = document.getElementById('cs-tbody');
+  tbody.innerHTML = '';
+  panels.forEach(function(p, i) {
+    var fd = panelFaceDims(p);
+    var thick = Math.round(panelThickness(p));
+    var mitreLabel = [];
+    if (p.mitreXMin) mitreLabel.push('−X');
+    if (p.mitreXMax) mitreLabel.push('+X');
+    if (p.mitreYMin) mitreLabel.push('−Y');
+    if (p.mitreYMax) mitreLabel.push('+Y');
+    if (p.mitreZMin) mitreLabel.push('−Z');
+    if (p.mitreZMax) mitreLabel.push('+Z');
+    var mitreTxt = mitreLabel.length
+      ? '<span style="color:#ff6b00;font-weight:600;">'+mitreLabel.join(' ')+' '+(p.mitreAngle||45)+'°</span>'
+      : '—';
+    var rawStyle = (fd.rawL > fd.faceL || fd.rawW > fd.faceW) ? 'font-weight:600;color:#c0392b;' : '';
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+(i+1)+'</td><td>'+p.name+'</td>'
+      +'<td>'+Math.round(fd.faceL)+'</td><td>'+Math.round(fd.faceW)+'</td><td>'+thick+'</td>'
+      +'<td>'+mitreTxt+'</td>'
+      +'<td style="'+rawStyle+'">'+fd.rawL+'</td><td style="'+rawStyle+'">'+fd.rawW+'</td>'
+      +'<td>'+(p.grain==='length'?'↔ Length':'↕ Width')+'</td>'
+      +'<td><span style="display:inline-block;width:13px;height:13px;background:'+p.color+';border:1px solid '+p.edgeColor+';border-radius:2px;vertical-align:middle;margin-right:5px;"></span>Panel</td>';
+    tbody.appendChild(tr);
+  });
+  runOptimizer();
+}
+
+function hideCutSheet() { document.getElementById('cs-modal').style.display = 'none'; }
+
+function runOptimizer() {
+  var bW   = parseInt(document.getElementById('st-w').value)    || 2440;
+  var bH   = parseInt(document.getElementById('st-h').value)    || 1220;
+  var kerf = parseInt(document.getElementById('st-kerf').value) || 3;
+  var byT  = {};
+  panels.forEach(function(p) {
+    var t = Math.round(panelThickness(p));
+    if (!byT[t]) byT[t] = [];
+    var fd = panelFaceDims(p);
+    byT[t].push({ name:p.name, pw:fd.rawL, ph:fd.rawW, color:p.color, edge:p.edgeColor, grain:p.grain,
+                  finW:fd.faceL, finD:fd.faceW, hasMitre: fd.rawL>fd.faceL||fd.rawW>fd.faceW });
+  });
+  var boardsDiv  = document.getElementById('cs-boards');
+  var summaryDiv = document.getElementById('cs-summary');
+  boardsDiv.innerHTML = '';
+  var totalBoards=0, totalUsed=0, totalArea=0;
+  Object.keys(byT).forEach(function(thick) {
+    var pieces = byT[thick];
+    var boards = packBoards(pieces, bW, bH, kerf);
+    totalBoards += boards.length;
+    totalArea   += boards.length * bW * bH;
+    boards.forEach(function(b){ totalUsed += b.usedArea; });
+    var sec = document.createElement('div');
+    sec.style.marginBottom = '16px';
+    var th = document.createElement('p');
+    th.style.cssText = 'font-size:13px;font-weight:600;color:#444;margin-bottom:8px;';
+    th.textContent = thick+'mm Thick → '+boards.length+' board'+(boards.length>1?'s':'')+' of '+bW+'×'+bH+'mm';
+    sec.appendChild(th);
+    boards.forEach(function(board, bi) {
+      var util = ((board.usedArea/(bW*bH))*100).toFixed(1);
+      var info = document.createElement('div');
+      info.className = 'board-lbl';
+      info.textContent = 'Board '+(bi+1)+'  —  '+util+'% utilisation  (waste: '+(100-parseFloat(util)).toFixed(1)+'%)';
+      sec.appendChild(info);
+      var cvs = document.createElement('canvas');
+      cvs.className = 'board-cvs';
+      var scale = Math.min(880/bW, 290/bH);
+      cvs.width  = Math.round(bW*scale);
+      cvs.height = Math.round(bH*scale);
+      sec.appendChild(cvs);
+      boardsDiv.appendChild(sec);
+      drawBoard(cvs, board, bW, bH, scale, kerf);
+    });
+  });
+  var wasteP = totalArea ? ((1-totalUsed/totalArea)*100).toFixed(1) : 0;
+  summaryDiv.innerHTML = '<div class="summary"><strong>Cutting Summary</strong><br>'
+    +'Total panels: '+panels.length+' &nbsp;|&nbsp; Boards required: '+totalBoards+' &nbsp;|&nbsp; Overall waste: '+wasteP+'%<br>'
+    +'Stock size: '+bW+'×'+bH+'mm &nbsp;|&nbsp; Kerf: '+kerf+'mm</div>';
+}
+
+function packBoards(pieces, bW, bH, kerf) {
+  var sorted = pieces.slice().sort(function(a,b){ return b.ph-a.ph || b.pw-a.pw; });
+  var boards = [];
+  sorted.forEach(function(pc) {
+    var pw=pc.pw, ph=pc.ph, rot=false;
+    if (pw>bW||ph>bH) { if(ph<=bW&&pw<=bH){var t=pw;pw=ph;ph=t;rot=true;} else return; }
+    var placed = false;
+    for (var i=0; i<boards.length; i++) { if (tryPlace(boards[i],pc,pw,ph,bW,bH,kerf,rot)){placed=true;break;} }
+    if (!placed) {
+      var b = { placements:[], shelves:[{x:0,y:0,rowH:0}], usedArea:0 };
+      boards.push(b);
+      tryPlace(b, pc, pw, ph, bW, bH, kerf, rot);
+    }
+  });
+  return boards;
+}
+
+function tryPlace(board, pc, pw, ph, bW, bH, kerf, rot) {
+  var kw=pw+kerf, kh=ph+kerf;
+  for (var i=0; i<board.shelves.length; i++) {
+    var shelf = board.shelves[i];
+    if (shelf.x+kw<=bW && shelf.y+kh<=bH) {
+      board.placements.push({pc:pc,x:shelf.x,y:shelf.y,w:pw,h:ph,rot:rot});
+      board.usedArea += pw*ph;
+      shelf.rowH = Math.max(shelf.rowH, kh);
+      shelf.x   += kw;
+      if (shelf.x>=bW) {
+        var ny = shelf.y+shelf.rowH;
+        if (ny<bH) board.shelves.push({x:0,y:ny,rowH:0});
+      }
+      return true;
+    }
+  }
+  var last = board.shelves[board.shelves.length-1];
+  var newY = last.y+last.rowH;
+  if (newY+kh<=bH && kw<=bW) {
+    board.shelves.push({x:0,y:newY,rowH:0});
+    return tryPlace(board,pc,pw,ph,bW,bH,kerf,rot);
+  }
+  return false;
+}
+
+function drawBoard(cvs, board, bW, bH, scale, kerf) {
+  var ctx=cvs.getContext('2d'), cw=cvs.width, ch=cvs.height;
+  ctx.fillStyle='#f5e6c2'; ctx.fillRect(0,0,cw,ch);
+  ctx.strokeStyle='rgba(130,85,35,.1)'; ctx.lineWidth=1;
+  for (var x=0;x<cw;x+=9){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ch);ctx.stroke();}
+  ctx.strokeStyle='#b8884a'; ctx.lineWidth=2; ctx.strokeRect(1,1,cw-2,ch-2);
+  board.placements.forEach(function(pl,i) {
+    var px=pl.x*scale,py=pl.y*scale,pw=pl.w*scale,ph=pl.h*scale;
+    var hue=(i*53+30)%360;
+    ctx.fillStyle='hsla('+hue+',55%,72%,.88)'; ctx.fillRect(px,py,pw,ph);
+    ctx.save(); ctx.beginPath(); ctx.rect(px+1,py+1,pw-2,ph-2); ctx.clip();
+    ctx.strokeStyle='hsla('+hue+',35%,45%,.35)'; ctx.lineWidth=1;
+    var gV = pl.rot ? pl.pc.grain!=='length' : pl.pc.grain==='length';
+    if (gV){for(var lx=px+5;lx<px+pw-2;lx+=7){ctx.beginPath();ctx.moveTo(lx,py+2);ctx.lineTo(lx,py+ph-2);ctx.stroke();}}
+    else   {for(var ly=py+5;ly<py+ph-2;ly+=7){ctx.beginPath();ctx.moveTo(px+2,ly);ctx.lineTo(px+pw-2,ly);ctx.stroke();}}
+    ctx.restore();
+    ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.strokeRect(px,py,pw,ph);
+    if(kerf>0){ctx.fillStyle='rgba(220,50,30,.12)';ctx.fillRect(px+pw,py,kerf*scale,ph+kerf*scale);ctx.fillRect(px,py+ph,pw,kerf*scale);}
+    ctx.save(); ctx.beginPath(); ctx.rect(px+2,py+2,pw-4,ph-4); ctx.clip();
+    var fs=Math.max(7,Math.min(11,pw/9,ph/2.5));
+    ctx.fillStyle='#111'; ctx.font='600 '+fs+'px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(pl.pc.name, px+pw/2, py+ph/2-fs*0.65);
+    ctx.fillStyle='#444'; ctx.font=(Math.max(6,fs-1))+'px system-ui';
+    ctx.fillText(pl.w+'×'+pl.h+(pl.rot?'↺':''), px+pw/2, py+ph/2+fs*0.7);
+    ctx.restore();
+  });
+  ctx.fillStyle='#999'; ctx.font='8px system-ui'; ctx.textAlign='center';
+  for(var m=0;m<=bW;m+=200){var sx=m*scale;ctx.fillRect(sx,0,1,5);if(m>0&&m<bW)ctx.fillText(m,sx,13);}
+  ctx.textAlign='right';
+  for(var m=0;m<=bH;m+=200){var sy=m*scale;ctx.fillRect(0,sy,5,1);if(m>0&&m<bH)ctx.fillText(m,22,sy+3);}
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESIZE RENDERER
+// ═══════════════════════════════════════════════════════════════
+function resizeRenderer() {
+  var vp = document.getElementById('viewport');
+  var w  = vp.clientWidth, h = vp.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  dimSvg.setAttribute('viewBox', '0 0 '+w+' '+h);
+}
+window.addEventListener('resize', resizeRenderer);
+resizeRenderer();
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER LOOP  (dims throttled to 10 fps)
+// ═══════════════════════════════════════════════════════════════
+var _lastFrameTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  var now = performance.now();
+  var dt  = Math.min((now - _lastFrameTime) / 1000, 0.1); // seconds, capped
+  _lastFrameTime = now;
+  _tickFPS(dt);
+  if (_currentNavMode === 'orbit') orbitCtrl.update();
+  renderer.render(scene, camera);
+  if (isDragging || isResizing || cameraMoving) {
+    updateDims();
+    cameraMoving = false;
+  } else {
+    var now = Date.now();
+    if (now - lastDimMs > 100) { updateDims(); lastDimMs = now; }
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+buildNightstand();
+fitCamera();
+animate();
+
+// ═══════════════════════════════════════════════════════════════
+//  CUT SHEET TABS
+// ═══════════════════════════════════════════════════════════════
+function switchCsTab(tab) {
+  ['cs','asm'].forEach(function(t) {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('pane-'+t).classList.toggle('active', t===tab);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ASSEMBLY GUIDE
+// ═══════════════════════════════════════════════════════════════
+function _panelWorldBounds(p) {
+  var e = panelWorldHalfExtents(p.rx||0, p.ry||0, p.rz||0, p.w/2, p.h/2, p.d/2);
+  return { minX:p.x-e.hw, maxX:p.x+e.hw, minY:p.y-e.hh, maxY:p.y+e.hh, minZ:p.z-e.hd, maxZ:p.z+e.hd };
+}
+
+function _boundsOverlap1D(aMin,aMax,bMin,bMax,tol) {
+  return aMax+tol >= bMin && bMax+tol >= aMin;
+}
+
+function _areAdjacent(a, b) {
+  var ab = _panelWorldBounds(a), bb = _panelWorldBounds(b);
+  var tol = 4;
+  var dx = Math.max(0, Math.max(ab.minX,bb.minX) - Math.min(ab.maxX,bb.maxX));
+  var dy = Math.max(0, Math.max(ab.minY,bb.minY) - Math.min(ab.maxY,bb.maxY));
+  var dz = Math.max(0, Math.max(ab.minZ,bb.minZ) - Math.min(ab.maxZ,bb.maxZ));
+  // touching: exactly one axis gap ≈ 0, other two overlap
+  var gapX = dx < tol, gapY = dy < tol, gapZ = dz < tol;
+  var ovX = _boundsOverlap1D(ab.minX,ab.maxX,bb.minX,bb.maxX,tol);
+  var ovY = _boundsOverlap1D(ab.minY,ab.maxY,bb.minY,bb.maxY,tol);
+  var ovZ = _boundsOverlap1D(ab.minZ,ab.maxZ,bb.minZ,bb.maxZ,tol);
+  return (gapX && ovY && ovZ) || (ovX && gapY && ovZ) || (ovX && ovY && gapZ);
+}
+
+function _classifyRole(p, minY, totalH) {
+  var name = p.name.toLowerCase();
+  if (/bottom|base|floor/.test(name)) return 0;
+  if (/back|rear/.test(name))         return 2;
+  if (/left|right|side/.test(name))   return 3;
+  if (/shelf|divid|mid|inner/.test(name)) return 4;
+  if (/door|drawer|front|face/.test(name)) return 6;
+  if (/top|lid|cap/.test(name))       return 7;
+  // Position fallback
+  var b = _panelWorldBounds(p);
+  var relY = totalH > 0 ? (b.minY - minY) / totalH : 0.5;
+  var roles = panelDimRoles(p);
+  var isFlat = roles.h === 'Thickness';
+  if (relY < 0.18 && isFlat)  return 0;  // bottom
+  if (relY > 0.82 && isFlat)  return 7;  // top
+  if (isFlat)                  return 4;  // shelf
+  return 3;                               // side/back
+}
+
+function _directionLabel(placed, p) {
+  if (!placed.length) return null;
+  var pb = _panelWorldBounds(p);
+  var cx = (pb.minX+pb.maxX)/2, cy = (pb.minY+pb.maxY)/2, cz = (pb.minZ+pb.maxZ)/2;
+  // Find which placed panel it neighbours and from which direction
+  var best = null, bestDist = Infinity;
+  placed.forEach(function(q) {
+    var qb = _panelWorldBounds(q);
+    var qcx=(qb.minX+qb.maxX)/2, qcy=(qb.minY+qb.maxY)/2, qcz=(qb.minZ+qb.maxZ)/2;
+    var d = Math.abs(cx-qcx)+Math.abs(cy-qcy)+Math.abs(cz-qcz);
+    if (d < bestDist) { bestDist=d; best={q:q, qb:qb}; }
+  });
+  if (!best) return null;
+  var qb=best.qb;
+  var dx=cx-((qb.minX+qb.maxX)/2), dy=cy-((qb.minY+qb.maxY)/2), dz=cz-((qb.minZ+qb.maxZ)/2);
+  var adx=Math.abs(dx), ady=Math.abs(dy), adz=Math.abs(dz);
+  if (ady>=adx && ady>=adz) return dy>0 ? 'above' : 'below';
+  if (adx>=ady && adx>=adz) return dx>0 ? 'to the right of' : 'to the left of';
+  return dz>0 ? 'in front of' : 'behind';
+}
+
+function generateAssemblySteps() {
+  if (!panels.length) return [];
+
+  // Compute overall Y range
+  var minY=Infinity, maxY=-Infinity;
+  panels.forEach(function(p){ var b=_panelWorldBounds(p); minY=Math.min(minY,b.minY); maxY=Math.max(maxY,b.maxY); });
+  var totalH = maxY - minY;
+
+  // Sort panels: by role priority, then by minY
+  var sorted = panels.slice().sort(function(a,b) {
+    var ra = _classifyRole(a,minY,totalH), rb = _classifyRole(b,minY,totalH);
+    if (ra !== rb) return ra-rb;
+    return _panelWorldBounds(a).minY - _panelWorldBounds(b).minY;
+  });
+
+  var steps = [];
+  var placed = [];
+
+  // Step 0 — prep
+  var matNames = {};
+  panels.forEach(function(p){ matNames[p.material||'custom']=true; });
+  steps.push({
+    num: 'PREP', numClass: 'prep',
+    title: 'Prepare all parts',
+    desc: 'Using the cut sheet, cut all ' + panels.length + ' panel' + (panels.length!==1?'s':'') +
+          ' to their specified dimensions using ' + Object.keys(matNames).join(', ') + '. ' +
+          'Sand all faces and edges with 120 grit then 180 grit sandpaper. ' +
+          'Dry-fit the entire assembly before applying any glue.',
+    tags: []
+  });
+
+  sorted.forEach(function(p, i) {
+    var adj = placed.filter(function(q){ return _areAdjacent(p,q); });
+    var mitre = p.mitreXMin||p.mitreXMax||p.mitreYMin||p.mitreYMax||p.mitreZMin||p.mitreZMax;
+    var tags = [];
+    if (mitre) tags.push({ label: (p.mitreAngle||45)+'° mitre', cls:'mitre' });
+    if (p.groupId) tags.push({ label:'Group '+p.groupId, cls:'group' });
+    tags.push({ label: Math.round(p.w)+'×'+Math.round(p.h)+'×'+Math.round(p.d)+' mm', cls:'' });
+
+    var title, desc;
+    if (placed.length === 0) {
+      title = 'Place ' + p.name + ' as the starting piece';
+      desc  = 'Lay the <strong>' + p.name + '</strong> on a flat, level work surface. ' +
+              'This is your reference piece — ensure it is square before proceeding.';
+    } else {
+      var adjNames = adj.map(function(q){ return '<strong>'+q.name+'</strong>'; });
+      var dir = _directionLabel(placed, p);
+      var posStr = dir ? ' (' + dir + ' the existing assembly)' : '';
+      title = 'Attach ' + p.name;
+      desc  = 'Position the <strong>' + p.name + '</strong>' + posStr + '.';
+      if (adjNames.length) desc += ' It joins against ' + adjNames.join(' and ') + '.';
+      desc += ' Secure with glue and appropriate fasteners (pocket screws, dowels, or biscuits). Check for square before the glue sets.';
+      if (mitre) desc += ' <em>This joint has a ' + (p.mitreAngle||45) + '° mitre — align the cut edges carefully before clamping.</em>';
+    }
+
+    steps.push({ num: steps.length, numClass:'', title:title, desc:desc, tags:tags });
+    placed.push(p);
+  });
+
+  steps.push({
+    num: '✓', numClass: 'done',
+    title: 'Final checks and finishing',
+    desc: 'Check all joints are square using a try square. Remove any squeeze-out glue with a damp cloth before it sets. ' +
+          'Once fully cured, sand all external surfaces to 220 grit. Apply your chosen finish (oil, varnish, or paint) following the manufacturer\'s instructions.',
+    tags: []
+  });
+
+  return steps;
+}
+
+function renderAssemblyGuide() {
+  var steps = generateAssemblySteps();
+  var container = document.getElementById('asm-steps');
+  if (!steps.length) { container.innerHTML = '<p style="color:#aaa;font-size:13px;">Add panels to the design to generate assembly instructions.</p>'; return; }
+  container.innerHTML = steps.map(function(s) {
+    var tags = s.tags.map(function(t){ return '<span class="asm-tag '+t.cls+'">'+t.label+'</span>'; }).join('');
+    return '<div class="asm-step">'
+      + '<div class="asm-num '+s.numClass+'">'+s.num+'</div>'
+      + '<div class="asm-body">'
+      + '<div class="asm-title">'+s.title+'</div>'
+      + '<div class="asm-desc">'+s.desc+'</div>'
+      + (tags ? '<div class="asm-tags">'+tags+'</div>' : '')
+      + '</div></div>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PDF EXPORT
+// ═══════════════════════════════════════════════════════════════
+function exportToPDF() {
+  if (!window.jspdf) { alert('PDF library not loaded yet — please wait a moment and try again.'); return; }
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
+  var pw = doc.internal.pageSize.getWidth();
+  var ph = doc.internal.pageSize.getHeight();
+  var margin = 16;
+  var projName = document.getElementById('topbar-proj-name').textContent || 'FurniCraft 3D Design';
+  var dateStr  = new Date().toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' });
+
+  function header(pageLabel) {
+    doc.setFillColor(30,42,58);
+    doc.rect(0,0,pw,14,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text('FurniCraft 3D', margin, 9.5);
+    doc.setFont('helvetica','normal');
+    doc.text(projName, pw/2, 9.5, {align:'center'});
+    doc.text(pageLabel, pw-margin, 9.5, {align:'right'});
+    doc.setTextColor(50,50,50);
+  }
+
+  // ── Page 1: Cover ──────────────────────────────────────────
+  header('Cover');
+  doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(30,42,58);
+  doc.text(projName, pw/2, 60, {align:'center'});
+  doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.setTextColor(100,100,100);
+  doc.text('Woodworking Design Package', pw/2, 70, {align:'center'});
+  doc.text(dateStr, pw/2, 78, {align:'center'});
+
+  var bb = panels.length ? furnitureBBox() : null;
+  if (bb) {
+    var W=Math.round(bb.maxX-bb.minX), H=Math.round(bb.maxY-bb.minY), D=Math.round(bb.maxZ-bb.minZ);
+    doc.setFontSize(11); doc.setTextColor(50,50,50);
+    doc.setFont('helvetica','bold');
+    doc.text('Overall Dimensions', pw/2, 96, {align:'center'});
+    doc.setFont('helvetica','normal');
+    doc.text('W '+W+' mm  ×  H '+H+' mm  ×  D '+D+' mm', pw/2, 104, {align:'center'});
+    doc.text(panels.length+' panels', pw/2, 111, {align:'center'});
+  }
+
+  doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+  doc.line(margin, 120, pw-margin, 120);
+  doc.setFontSize(9); doc.setTextColor(150,150,150);
+  doc.text('Generated by FurniCraft 3D  ·  furnicraft3d.app', pw/2, 127, {align:'center'});
+
+  // ── Page 2: Parts List ────────────────────────────────────
+  doc.addPage();
+  header('Cut Sheet — Parts List');
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(30,42,58);
+  doc.text('Parts List', margin, 24);
+
+  var rows = panels.map(function(p,i) {
+    var fd = panelFaceDims(p);
+    var thick = Math.round(panelThickness(p));
+    var mitreLabel = [];
+    if (p.mitreXMin) mitreLabel.push('−X'); if (p.mitreXMax) mitreLabel.push('+X');
+    if (p.mitreYMin) mitreLabel.push('−Y'); if (p.mitreYMax) mitreLabel.push('+Y');
+    if (p.mitreZMin) mitreLabel.push('−Z'); if (p.mitreZMax) mitreLabel.push('+Z');
+    var mitre = mitreLabel.length ? mitreLabel.join(' ')+'  '+(p.mitreAngle||45)+'°' : '—';
+    return [i+1, p.name, Math.round(fd.faceL), Math.round(fd.faceW), thick,
+            mitre, fd.rawL, fd.rawW, p.grain==='length'?'Length':'Width', p.material||'custom'];
+  });
+
+  doc.autoTable({
+    startY: 28,
+    head: [['#','Name','Length','Width','Thick','Mitre','L raw','W raw','Grain','Material']],
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor:[30,42,58], fontSize:8, halign:'center' },
+    bodyStyles: { fontSize:8 },
+    columnStyles: { 0:{halign:'center',cellWidth:8}, 2:{halign:'right'}, 3:{halign:'right'},
+                    4:{halign:'right'}, 6:{halign:'right'}, 7:{halign:'right'} },
+    margin: { left:margin, right:margin }
+  });
+
+  var afterTable = doc.lastAutoTable.finalY + 6;
+  doc.setFontSize(8); doc.setTextColor(120,120,120); doc.setFont('helvetica','italic');
+  doc.text('All dimensions in mm. Raw dimensions include mitre overhang allowance.', margin, afterTable);
+
+  // ── Page 3+: Board optimizer layouts ──────────────────────
+  var canvases = document.querySelectorAll('.board-cvs');
+  if (canvases.length) {
+    doc.addPage();
+    header('Cut Sheet — Board Layouts');
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(30,42,58);
+    doc.text('Stock Board Layouts', margin, 24);
+    var cy2 = 30;
+    canvases.forEach(function(cvs, bi) {
+      var imgData = cvs.toDataURL('image/jpeg', 0.92);
+      var maxW = pw - margin*2, maxH = 80;
+      var ratio = Math.min(maxW/cvs.width, maxH/cvs.height);
+      var iw = cvs.width*ratio, ih = cvs.height*ratio;
+      if (cy2 + ih > ph - 20) { doc.addPage(); header('Cut Sheet — Board Layouts'); cy2 = 20; }
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(50,50,50);
+      doc.text('Board '+(bi+1), margin, cy2+4);
+      doc.addImage(imgData,'JPEG', margin, cy2+7, iw, ih);
+      cy2 += ih + 16;
+    });
+    var summEl = document.getElementById('cs-summary');
+    if (summEl && summEl.textContent.trim()) {
+      if (cy2 + 20 > ph-20) { doc.addPage(); header('Cut Sheet — Board Layouts'); cy2=20; }
+      doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+      var lines = doc.splitTextToSize(summEl.textContent.trim(), pw-margin*2);
+      doc.text(lines, margin, cy2+6);
+    }
+  }
+
+  // ── Assembly Guide pages ───────────────────────────────────
+  var steps = generateAssemblySteps();
+  if (steps.length) {
+    doc.addPage();
+    header('Assembly Guide');
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(30,42,58);
+    doc.text('Assembly Order of Operations', margin, 24);
+    doc.setFontSize(8); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
+    doc.text('Name your panels (Bottom, Left Side, Top…) in the designer for the most accurate guidance.', margin, 30);
+
+    var ay = 38;
+    steps.forEach(function(s) {
+      var circleR = 5;
+      var textX    = margin + circleR*2 + 3;
+      var textW    = pw - textX - margin;
+
+      // Strip HTML tags for PDF
+      var cleanDesc = s.desc.replace(/<[^>]+>/g,'');
+      var titleLines = doc.splitTextToSize(s.title, textW);
+      var descLines  = doc.splitTextToSize(cleanDesc, textW);
+      var blockH = 3 + titleLines.length*4.5 + descLines.length*3.8 + 5;
+
+      if (ay + blockH > ph - 16) {
+        doc.addPage();
+        header('Assembly Guide');
+        ay = 22;
+      }
+
+      // Circle
+      var circFill = s.numClass==='prep' ? [120,130,141] : s.numClass==='done' ? [39,174,96] : [30,42,58];
+      doc.setFillColor(circFill[0],circFill[1],circFill[2]);
+      doc.circle(margin+circleR, ay+circleR+1, circleR, 'F');
+      doc.setTextColor(255,255,255); doc.setFontSize(6.5); doc.setFont('helvetica','bold');
+      var numStr = String(s.num);
+      doc.text(numStr, margin+circleR, ay+circleR+1+2, {align:'center'});
+
+      // Title
+      doc.setTextColor(30,42,58); doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(titleLines, textX, ay+5);
+
+      // Desc
+      doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text(descLines, textX, ay+5+titleLines.length*4.5);
+
+      // Tags as small chips
+      if (s.tags && s.tags.length) {
+        var tagY = ay+5+titleLines.length*4.5+descLines.length*3.8+1;
+        var tx = textX;
+        s.tags.forEach(function(t) {
+          var lbl = t.label;
+          doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+          var tw = doc.getTextWidth(lbl)+4;
+          var fc = t.cls==='mitre' ? [245,195,155] : t.cls==='group' ? [178,221,184] : [204,220,245];
+          doc.setFillColor(fc[0],fc[1],fc[2]);
+          doc.roundedRect(tx, tagY-2.5, tw, 4.5, 1, 1, 'F');
+          doc.setTextColor(60,60,60);
+          doc.text(lbl, tx+2, tagY+1);
+          tx += tw+2;
+        });
+      }
+
+      // Divider
+      doc.setDrawColor(230,230,230); doc.setLineWidth(0.2);
+      doc.line(margin, ay+blockH-1, pw-margin, ay+blockH-1);
+      ay += blockH + 2;
+    });
+  }
+
+  // Page numbers
+  var totalPages = doc.internal.getNumberOfPages();
+  for (var pg=1; pg<=totalPages; pg++) {
+    doc.setPage(pg);
+    doc.setFontSize(8); doc.setTextColor(180,180,180); doc.setFont('helvetica','normal');
+    doc.text('Page '+pg+' of '+totalPages, pw-margin, ph-6, {align:'right'});
+  }
+
+  var safeName = projName.replace(/[^a-z0-9_\-]/gi,'_').toLowerCase() || 'furnicraft';
+  doc.save(safeName+'_design_package.pdf');
+}
+</script>
+</body>
+</html>

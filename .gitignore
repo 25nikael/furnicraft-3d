@@ -1,0 +1,14 @@
+# Node / serve
+node_modules/
+.npm/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Claude Code internals
+.claude/
