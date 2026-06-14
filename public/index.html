@@ -198,6 +198,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 #ai-gen-btn:disabled{opacity:.5;cursor:not-allowed;}
 #ai-prompt:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
 
+/* ── Hardware catalog ─────────────────────────────── */
+.hw-catalog-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.hw-cat-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;color:var(--txt);cursor:pointer;transition:all .12s;}
+.hw-cat-btn:hover{border-color:var(--teal);background:var(--teal-dim);color:var(--teal);}
+.hw-cat-icon{font-size:26px;line-height:1;}
+.hw-cat-label{font-size:12px;font-weight:600;}
+
 /* ── Cut Sheet modal ──────────────────────────────── */
 #cs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;overflow-y:auto;}
 #cs-inner{background:var(--bg2);margin:16px auto;max-width:980px;border-radius:10px;box-shadow:0 6px 40px rgba(0,0,0,.7);overflow:hidden;border:1px solid var(--bd2);}
@@ -455,6 +462,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
       <button class="btn danger" id="btn-del">✕ Delete Selected</button>
     </div>
+    <div class="sec-title">Hardware</div>
+    <ul class="comp-list" id="hw-list"></ul>
+    <div class="btn-block">
+      <button class="btn" id="btn-add-hw" onclick="openHwCatalog()">＋ Add Hardware</button>
+    </div>
   </div>
 
   <div id="viewport">
@@ -571,6 +583,20 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         </label>
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Hardware catalog modal ────────────────────────── -->
+<div class="overlay-modal" id="hw-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-hdr">
+      Add Hardware
+      <button class="modal-close" onclick="closeHwCatalog()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;">Choose a part to add to your design. You can reposition it after placing.</div>
+      <div id="hw-catalog-grid" class="hw-catalog-grid"></div>
     </div>
   </div>
 </div>
@@ -755,6 +781,8 @@ var wireMode      = false;
 var dimsEnabled   = true;
 var nextId        = 1;
 var nextGroupId   = 1;
+var hardware      = [];   // placeable hardware items (knobs, handles, legs, shelf pins, …)
+var nextHwId      = 1;
 var isResizing    = false;
 var isDragging    = false;
 var activeHandle  = null;
@@ -1324,15 +1352,22 @@ function _updateTopbar() {
 
 // ── Projects ──────────────────────────────────────────
 function _projectState() {
-  return { panels: panels.map(snapPanel), nextId: nextId, nextGroupId: nextGroupId };
+  return {
+    panels: panels.map(snapPanel),
+    hardware: hardware.map(snapHardware),
+    nextId: nextId, nextGroupId: nextGroupId, nextHwId: nextHwId
+  };
 }
 
 function _loadProjectState(state) {
   panels.forEach(function(p){ removeMesh(p); });
+  clearAllHardware();
   clearHandles();
   nextId       = state.nextId      || 1;
   nextGroupId  = state.nextGroupId || 1;
+  nextHwId     = state.nextHwId    || 1;
   panels = state.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
+  hardware = (state.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
   doSelect(null);
   refreshUI();
 }
@@ -1686,7 +1721,11 @@ function snapPanel(p) {
 }
 
 function saveUndo() {
-  undoStack.push({ panels: panels.map(snapPanel), nextId: nextId, nextGroupId: nextGroupId });
+  undoStack.push({
+    panels: panels.map(snapPanel),
+    hardware: hardware.map(snapHardware),
+    nextId: nextId, nextGroupId: nextGroupId, nextHwId: nextHwId
+  });
   if (undoStack.length > MAX_UNDO) undoStack.shift();
 }
 
@@ -1694,10 +1733,13 @@ function undo() {
   if (!undoStack.length) return;
   var snap = undoStack.pop();
   panels.forEach(function(p){ removeMesh(p); });
+  clearAllHardware();
   clearHandles();
   nextId = snap.nextId;
   nextGroupId = snap.nextGroupId;
+  nextHwId = snap.nextHwId || 1;
   panels = snap.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
+  hardware = (snap.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
   doSelect(null);
   refreshUI();
 }
@@ -2028,6 +2070,234 @@ function duplicateSelected() {
   buildMesh(p);
   refreshUI();
   doSelect(p);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HARDWARE  (Block 1: catalog, geometry, render, persistence)
+// ═══════════════════════════════════════════════════════════════
+var _rad = Math.PI / 180;
+
+// Metal finishes for hardware
+var HW_FINISH = {
+  steel:  { name:'Brushed Steel', color:0xB6BCC4, specular:0x9aa0a8, shininess:120 },
+  chrome: { name:'Chrome',        color:0xD8DEE6, specular:0xffffff, shininess:220 },
+  brass:  { name:'Brass',         color:0xC9A24B, specular:0xe8d9a0, shininess:140 },
+  black:  { name:'Matte Black',   color:0x2A2A2E, specular:0x444448, shininess:40  }
+};
+
+function _hwMaterial(finishKey) {
+  var f = HW_FINISH[finishKey] || HW_FINISH.steel;
+  return new THREE.MeshPhongMaterial({
+    color: new THREE.Color(f.color),
+    specular: new THREE.Color(f.specular),
+    shininess: f.shininess,
+    wireframe: wireMode
+  });
+}
+
+// Small helpers for building procedural parts (Three.js cylinders are Y-up by default)
+function _cyl(rTop, rBot, len, axis) {
+  var g = new THREE.CylinderGeometry(rTop, rBot, len, 20);
+  if (axis === 'x') g.rotateZ(Math.PI / 2);
+  else if (axis === 'z') g.rotateX(Math.PI / 2);
+  return g;
+}
+
+// ── Catalog definitions ────────────────────────────────────────
+// Each type: label, default finish, default params, and a build(params) that
+// returns an array of THREE.Mesh (assembled into a Group by buildHardwareMesh).
+// Convention: items that mount on a vertical face point outward along +Z;
+// legs extend downward along -Y from the anchor point.
+var HW_DEFS = {
+  knob: {
+    label: 'Knob', icon: '⬤', finish: 'steel',
+    params: { dia: 28, projection: 26 },
+    build: function (pr) {
+      var capR = pr.dia / 2;
+      var stemR = Math.max(2, capR * 0.28);
+      var stemLen = pr.projection - capR;
+      var meshes = [];
+      var stem = new THREE.Mesh(_cyl(stemR, stemR, Math.max(2, stemLen), 'z'));
+      stem.position.z = stemLen / 2;
+      meshes.push(stem);
+      var cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 20, 16));
+      cap.position.z = stemLen + capR * 0.4;
+      cap.scale.z = 0.8;
+      meshes.push(cap);
+      return meshes;
+    }
+  },
+  handle: {
+    label: 'Bar Handle', icon: '▭', finish: 'steel',
+    params: { length: 128, projection: 32, bar: 6 },
+    build: function (pr) {
+      var L = pr.length, proj = pr.projection, r = pr.bar / 2;
+      var meshes = [];
+      var bar = new THREE.Mesh(_cyl(r, r, L, 'x'));
+      bar.position.z = proj;
+      meshes.push(bar);
+      [-1, 1].forEach(function (s) {
+        var post = new THREE.Mesh(_cyl(r, r, proj, 'z'));
+        post.position.set(s * (L / 2 - r), 0, proj / 2);
+        meshes.push(post);
+      });
+      return meshes;
+    }
+  },
+  leg: {
+    label: 'Leg', icon: '▮', finish: 'black',
+    params: { height: 110, top: 38, bottom: 24 },
+    build: function (pr) {
+      // Tapered leg extending downward from the anchor (y = 0 at top)
+      var leg = new THREE.Mesh(_cyl(pr.top / 2, pr.bottom / 2, pr.height, 'y'));
+      leg.position.y = -pr.height / 2;
+      return [leg];
+    }
+  },
+  shelfpin: {
+    label: 'Shelf Pin', icon: '•', finish: 'steel',
+    params: { dia: 5, depth: 12, ledge: 14 },
+    build: function (pr) {
+      var r = pr.dia / 2;
+      var meshes = [];
+      // Pin going into the panel (along -Z)
+      var pin = new THREE.Mesh(_cyl(r, r, pr.depth, 'z'));
+      pin.position.z = -pr.depth / 2;
+      meshes.push(pin);
+      // Small support ledge sitting proud of the face
+      var ledge = new THREE.Mesh(new THREE.BoxGeometry(pr.dia * 1.6, pr.dia * 0.8, pr.ledge));
+      ledge.position.z = pr.ledge / 2;
+      meshes.push(ledge);
+      return meshes;
+    }
+  }
+};
+
+function hwLabel(type) { return (HW_DEFS[type] || {}).label || type; }
+
+function mkHardware(o) {
+  o = o || {};
+  var def = HW_DEFS[o.type] || HW_DEFS.knob;
+  var type = HW_DEFS[o.type] ? o.type : 'knob';
+  // Deep-copy default params, then overlay any saved params
+  var params = JSON.parse(JSON.stringify(def.params));
+  if (o.params) Object.keys(o.params).forEach(function (k) { params[k] = o.params[k]; });
+  return {
+    id:       o.id !== undefined ? o.id : nextHwId++,
+    type:     type,
+    name:     o.name !== undefined ? o.name : (def.label + ' ' + nextHwId),
+    x:        o.x || 0,
+    y:        o.y !== undefined ? o.y : 100,
+    z:        o.z || 0,
+    rx:       o.rx || 0,
+    ry:       o.ry || 0,
+    rz:       o.rz || 0,
+    params:   params,
+    finish:   o.finish || def.finish || 'steel',
+    attachedTo: o.attachedTo !== undefined ? o.attachedTo : null, // reserved for Block 2/3
+    mesh:     null
+  };
+}
+
+function snapHardware(hw) {
+  return {
+    id: hw.id, type: hw.type, name: hw.name,
+    x: hw.x, y: hw.y, z: hw.z, rx: hw.rx, ry: hw.ry, rz: hw.rz,
+    params: JSON.parse(JSON.stringify(hw.params)),
+    finish: hw.finish, attachedTo: hw.attachedTo
+  };
+}
+
+function buildHardwareMesh(hw) {
+  removeHardwareMesh(hw);
+  var def = HW_DEFS[hw.type] || HW_DEFS.knob;
+  var mat = _hwMaterial(hw.finish);
+  var group = new THREE.Group();
+  def.build(hw.params).forEach(function (m) {
+    m.material = mat;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    m.userData.hwid = hw.id;
+    group.add(m);
+  });
+  group.position.set(hw.x, hw.y, hw.z);
+  group.rotation.set((hw.rx || 0) * _rad, (hw.ry || 0) * _rad, (hw.rz || 0) * _rad);
+  group.userData.hwid = hw.id;
+  hw.mesh = group;
+  scene.add(group);
+}
+
+function removeHardwareMesh(hw) {
+  if (hw.mesh) {
+    hw.mesh.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+    scene.remove(hw.mesh);
+    hw.mesh = null;
+  }
+}
+
+function syncHwPos(hw) {
+  if (!hw.mesh) return;
+  hw.mesh.position.set(hw.x, hw.y, hw.z);
+  hw.mesh.rotation.set((hw.rx || 0) * _rad, (hw.ry || 0) * _rad, (hw.rz || 0) * _rad);
+}
+
+function addHardware(type) {
+  saveUndo();
+  // Spawn near the top of the current design so it's visible
+  var y = 120;
+  if (panels.length) { var bb = furnitureBBox(); y = bb.maxY + 30; }
+  var hw = mkHardware({ type: type, x: 0, y: y, z: 0 });
+  hardware.push(hw);
+  buildHardwareMesh(hw);
+  refreshHwList();
+  fitCamera();
+  closeHwCatalog();
+}
+
+function deleteHardware(id) {
+  var hw = hardware.filter(function (h) { return String(h.id) === String(id); })[0];
+  if (!hw) return;
+  saveUndo();
+  removeHardwareMesh(hw);
+  hardware = hardware.filter(function (h) { return h !== hw; });
+  refreshHwList();
+}
+
+function rebuildAllHardware() {
+  hardware.forEach(function (hw) { buildHardwareMesh(hw); });
+}
+
+function clearAllHardware() {
+  hardware.forEach(function (hw) { removeHardwareMesh(hw); });
+  hardware = [];
+}
+
+// ── Hardware catalog UI ─────────────────────────────────────────
+function openHwCatalog() {
+  var grid = document.getElementById('hw-catalog-grid');
+  grid.innerHTML = Object.keys(HW_DEFS).map(function (type) {
+    var d = HW_DEFS[type];
+    return '<button class="hw-cat-btn" onclick="addHardware(\'' + type + '\')">'
+      + '<span class="hw-cat-icon">' + d.icon + '</span>'
+      + '<span class="hw-cat-label">' + d.label + '</span></button>';
+  }).join('');
+  document.getElementById('hw-modal').classList.add('active');
+}
+function closeHwCatalog() { document.getElementById('hw-modal').classList.remove('active'); }
+
+function refreshHwList() {
+  var wrap = document.getElementById('hw-list');
+  if (!wrap) return;
+  if (!hardware.length) {
+    wrap.innerHTML = '<div style="padding:8px 10px;font-size:11px;color:var(--txt3);">No hardware added yet.</div>';
+    return;
+  }
+  wrap.innerHTML = hardware.map(function (hw) {
+    return '<li class="comp-item" style="justify-content:space-between;">'
+      + '<span class="comp-name" title="' + hw.name + '">' + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
+      + '<button class="pi-btn del" onclick="deleteHardware(\'' + hw.id + '\')" style="flex:0 0 auto;">✕</button>'
+      + '</li>';
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2854,7 +3124,7 @@ function refreshMatLegend() {
   });
 }
 
-function refreshUI() { refreshCompList(); refreshOverall(); refreshMatLegend(); }
+function refreshUI() { refreshCompList(); refreshOverall(); refreshMatLegend(); refreshHwList(); }
 
 // ═══════════════════════════════════════════════════════════════
 //  TOOLBAR

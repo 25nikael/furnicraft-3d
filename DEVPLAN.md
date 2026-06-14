@@ -23,9 +23,10 @@ Three selected features, built in dependency order across uniform work blocks.
 
 ## Blocks
 
-### Block 1 — Hardware foundation + simple catalog (B1a) ⬜
+### Block 1 — Hardware foundation + simple catalog (B1a) ✅
 Data model + persistence wiring; procedural factory for knob, handle, leg, shelf-pin; "Hardware" catalog UI to add an item.
 **Checkpoint:** add a knob/handle/leg/shelf-pin; save & reload preserves them.
+**Done:** `hardware[]` + `nextHwId` state; `mkHardware`/`snapHardware`/`buildHardwareMesh`/`removeHardwareMesh`; `HW_DEFS` factory (knob, handle, leg, shelf-pin) + `HW_FINISH` metals; catalog modal + left-panel Hardware list; wired into `_projectState`/`_loadProjectState`, `saveUndo`/`undo`, `refreshUI`. Verified: add all 4, render, save→reload round-trip, undo.
 
 ### Block 2 — Hardware selection, placement & editing (B1b) ⬜
 Select / move / duplicate / delete hardware; properties panel (position, rotation, size); snap-to-panel-face.
