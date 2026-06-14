@@ -645,6 +645,37 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       </div>
       <div id="ai-err" class="auth-err" style="margin-top:8px;"></div>
 
+      <!-- Manual mode fallback (shown when direct API call is blocked) -->
+      <div id="ai-manual" style="display:none;margin-top:4px;">
+        <div style="background:rgba(108,61,224,.12);border:1px solid rgba(108,61,224,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:700;color:#a078f0;margin-bottom:6px;">⚡ Manual Mode — direct API call was blocked by browser security</div>
+          <div style="font-size:11px;color:var(--txt2);line-height:1.6;">
+            1. Click <strong>Copy Prompt</strong> below<br>
+            2. Open <a href="https://claude.ai" target="_blank" style="color:var(--teal);">claude.ai</a> and paste it into a new chat<br>
+            3. Copy Claude's entire JSON response<br>
+            4. Paste it below and click <strong>Apply Response</strong>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+            <label style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">Generated Prompt</label>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('manual-prompt-text').value).then(function(){ this.textContent='Copied!'; }.bind(this))"
+              style="font-size:11px;padding:3px 10px;background:var(--teal);border:none;border-radius:4px;color:#000;cursor:pointer;font-weight:600;">Copy Prompt</button>
+          </div>
+          <textarea id="manual-prompt-text" readonly rows="4"
+            style="width:100%;padding:8px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--txt3);font-size:11px;resize:none;line-height:1.4;cursor:text;"></textarea>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;">Paste Claude's JSON Response</label>
+          <textarea id="manual-paste-area" rows="5" placeholder='{"name":"…","panels":[…]}'
+            style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:12px;resize:vertical;line-height:1.4;font-family:monospace;"></textarea>
+        </div>
+        <button onclick="applyManualResponse()"
+          style="width:100%;padding:10px;border-radius:7px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+          Apply Response
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -838,6 +869,23 @@ function fillPrompt(btn) {
   document.getElementById('ai-prompt').value = btn.textContent.trim();
 }
 
+function _buildFullPrompt(userPrompt) {
+  return AI_SYSTEM_PROMPT + '\n\nUser request: ' + userPrompt + '\n\nRespond with ONLY the JSON object.';
+}
+
+function _parseAndShowDesign(raw) {
+  raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'');
+  var design = JSON.parse(raw);
+  if (!design.panels || !Array.isArray(design.panels) || design.panels.length === 0)
+    throw new Error('No panels found. Make sure you copied the full JSON response.');
+  _aiDesignResult = design;
+  document.getElementById('ai-res-name').textContent  = design.name || 'Untitled';
+  document.getElementById('ai-res-desc').textContent  = design.description || '';
+  document.getElementById('ai-res-notes').textContent = '📋 ' + (design.assembly_notes || '');
+  document.getElementById('ai-result').style.display  = 'block';
+  document.getElementById('ai-manual').style.display  = 'none';
+}
+
 async function generateAIDesign() {
   var key    = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
   var prompt = document.getElementById('ai-prompt').value.trim();
@@ -848,22 +896,26 @@ async function generateAIDesign() {
 
   errEl.textContent = '';
   resEl.style.display = 'none';
+  document.getElementById('ai-manual').style.display = 'none';
 
-  if (!key) { errEl.textContent = 'Enter your Anthropic API key above first.'; return; }
   if (!prompt) { errEl.textContent = 'Describe the furniture you want to design.'; return; }
+
+  // If no API key, go straight to manual mode
+  if (!key) { _showManualMode(prompt); return; }
 
   btn.disabled = true;
   btn.textContent = '⏳ Designing…';
   statEl.style.display = 'block';
-  statEl.textContent = 'Consulting Claude for the best woodworking design…';
+  statEl.textContent = 'Consulting Claude…';
 
   try {
     var resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      mode: 'cors',
       headers: {
-        'Content-Type':                   'application/json',
-        'x-api-key':                      key,
-        'anthropic-version':              '2023-06-01',
+        'Content-Type':                      'application/json',
+        'x-api-key':                         key,
+        'anthropic-version':                 '2023-06-01',
         'anthropic-dangerous-allow-browser': 'true'
       },
       body: JSON.stringify({
@@ -880,28 +932,40 @@ async function generateAIDesign() {
     }
 
     var data = await resp.json();
-    var raw  = data.content[0].text.trim();
-
-    // Strip markdown code fences if model wrapped it anyway
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'');
-
-    var design = JSON.parse(raw);
-    if (!design.panels || !Array.isArray(design.panels) || design.panels.length === 0)
-      throw new Error('Claude returned no panels. Try rephrasing your description.');
-
-    _aiDesignResult = design;
     statEl.style.display = 'none';
-    document.getElementById('ai-res-name').textContent  = design.name || 'Untitled';
-    document.getElementById('ai-res-desc').textContent  = design.description || '';
-    document.getElementById('ai-res-notes').textContent = '📋 ' + (design.assembly_notes || '');
-    resEl.style.display = 'block';
+    _parseAndShowDesign(data.content[0].text);
 
   } catch(err) {
     statEl.style.display = 'none';
-    errEl.textContent = '⚠ ' + err.message;
+    // CORS / network error — offer manual mode instead
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+      _showManualMode(prompt);
+    } else {
+      errEl.textContent = '⚠ ' + err.message;
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = '✦ Generate Design';
+  }
+}
+
+function _showManualMode(prompt) {
+  var fullPrompt = _buildFullPrompt(prompt);
+  document.getElementById('manual-prompt-text').value = fullPrompt;
+  document.getElementById('manual-paste-area').value  = '';
+  document.getElementById('ai-manual').style.display  = 'block';
+  document.getElementById('ai-err').textContent       = '';
+}
+
+function applyManualResponse() {
+  var raw   = document.getElementById('manual-paste-area').value.trim();
+  var errEl = document.getElementById('ai-err');
+  errEl.textContent = '';
+  if (!raw) { errEl.textContent = 'Paste Claude\'s JSON response above first.'; return; }
+  try {
+    _parseAndShowDesign(raw);
+  } catch(e) {
+    errEl.textContent = '⚠ Could not parse response: ' + e.message;
   }
 }
 
