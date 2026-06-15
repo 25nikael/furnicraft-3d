@@ -144,7 +144,30 @@ Toggles coexist; mobile/theme; regression; README + DEVPLAN.
 **Done:** README "Visualization" section; new toolbar buttons in the scrollable mobile toolbar; settings Rendering toggle themed. Regression verified: PBR Standard↔Phong, explode + room coexist, custom texture applies, cut sheet renders, light theme + mobile drawer, full round-trip preserves textureURL, no errors.
 
 ---
-**G-SERIES COMPLETE** — all five G features shipped (G1–G5 + integration) across commits 91f13c9 → (G-block 6).
+**G-SERIES COMPLETE** — all five G features shipped (G1–G5 + integration) across commits 91f13c9 → 7749a77.
+
+---
+
+# Development Plan 4 — J-Series (UX & Productivity)
+
+All four J features. Same cadence: one block per work unit, each ending in a
+commit. Commit messages stay quote-free (PS here-string quirk).
+
+### J-Block 1 — Keyboard shortcuts + cheatsheet (J1) ✅
+Consolidated shortcuts + `?`-toggled cheatsheet overlay + Help button; guarded against typing/FPS.
+**Done:** expanded keydown handler (undo/redo, delete, dup, group/ungroup, arrow-nudge with ⇧=50mm, snap/wire/measure/explode/fit/reset, Esc, ?); guarded against inputs + FPS; cheatsheet modal + `?` Help button. Verified: 13 shortcut rows, m/x/arrow shortcuts fire, nudge 1mm, input-typing guard holds, no errors.
+
+### J-Block 2 — Undo/redo + history panel (J4) ⬜
+Add redo; snapshot/restore helpers; history panel with click-to-jump; toolbar undo/redo.
+
+### J-Block 3 — Snap/grid settings UI (J3) ⬜
+Snap on/off, snap distance, grid increment (round positions); persisted.
+
+### J-Block 4 — Onboarding + sample projects (J2) ⬜
+First-visit welcome modal, tips, one-click samples (templates), Help reopen.
+
+### J-Block 5 — Integration, polish & docs ⬜
+Coexist with FPS/measure; mobile/theme; regression; README + DEVPLAN.
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).

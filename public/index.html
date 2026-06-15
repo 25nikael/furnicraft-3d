@@ -210,6 +210,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .hw-cat-icon{font-size:26px;line-height:1;}
 .hw-cat-label{font-size:12px;font-weight:600;}
 
+/* ── Cheatsheet ───────────────────────────────────── */
+.cheat-grid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;align-items:center;}
+.cheat-grid kbd{justify-self:start;background:var(--bg3);border:1px solid var(--bd2);border-bottom-width:2px;border-radius:5px;padding:2px 8px;font-size:11px;font-family:monospace;color:var(--teal);white-space:nowrap;}
+.cheat-grid span{font-size:12px;color:var(--txt2);}
+
 /* ── Align & distribute ───────────────────────────── */
 .arr-grid{display:grid;grid-template-columns:14px repeat(4,1fr);gap:4px;align-items:center;}
 .arr-axis{font-size:11px;font-weight:700;color:var(--teal);text-align:center;}
@@ -304,6 +309,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <button class="tb-btn" id="tb-projects" style="display:none;" onclick="openProjectManager()">My Projects</button>
     <button class="tb-btn" id="tb-signin" onclick="openAuth()">Sign In</button>
     <button class="tb-btn" id="tb-logout" style="display:none;" onclick="logoutUser()">Sign Out</button>
+    <button class="tb-btn" id="tb-help" title="Shortcuts & help (?)" onclick="toggleCheatsheet()">?</button>
     <!-- Settings -->
     <div id="settings-wrap">
       <button id="settings-btn" title="Settings" onclick="toggleSettings(event)">⚙</button>
@@ -669,6 +675,31 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Keyboard cheatsheet modal ─────────────────────── -->
+<div class="overlay-modal" id="cheatsheet-modal">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-hdr">Keyboard Shortcuts<button class="modal-close" onclick="closeCheatsheet()">×</button></div>
+    <div class="modal-body">
+      <div class="cheat-grid">
+        <kbd>Ctrl/⌘ Z</kbd><span>Undo</span>
+        <kbd>Ctrl/⌘ ⇧ Z</kbd><span>Redo</span>
+        <kbd>Del</kbd><span>Delete selected</span>
+        <kbd>D</kbd><span>Duplicate</span>
+        <kbd>G / U</kbd><span>Group / Ungroup</span>
+        <kbd>Arrows</kbd><span>Nudge (⇧ = 50mm)</span>
+        <kbd>S</kbd><span>Toggle snap</span>
+        <kbd>W</kbd><span>Toggle wireframe</span>
+        <kbd>M</kbd><span>Measure mode</span>
+        <kbd>X</kbd><span>Exploded view</span>
+        <kbd>F / R</kbd><span>Fit / Reset view</span>
+        <kbd>Esc</kbd><span>Deselect / close</span>
+        <kbd>?</kbd><span>This cheatsheet</span>
+      </div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:10px;">Shortcuts are disabled while typing in a field or in FPS navigation.</div>
     </div>
   </div>
 </div>
@@ -4442,16 +4473,43 @@ document.getElementById('btn-opt').addEventListener('click',   function(){ runOp
 
 document.addEventListener('keydown', function(e) {
   if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
-  if ((e.ctrlKey||e.metaKey) && e.key==='z') { e.preventDefault(); undo(); return; }
-  if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
-  if (e.key==='d'||e.key==='D') duplicateSelected();
-  if (e.key==='g'||e.key==='G') groupSelected();
-  if (e.key==='u'||e.key==='U') ungroupSelected();
-  if (e.key==='Escape') doSelect(null);
-  if (e.key==='r'||e.key==='R') resetCamera();
-  if (e.key==='w'||e.key==='W') toggleWireframe();
-  if (e.key==='s'||e.key==='S') toggleSnap();
+  if (typeof _fpsActive !== 'undefined' && _fpsActive) return; // FPS mode owns WASD
+  var k = e.key;
+  if (k === '?') { e.preventDefault(); toggleCheatsheet(); return; }
+  // Undo / redo
+  if ((e.ctrlKey||e.metaKey) && (k==='z'||k==='Z')) {
+    e.preventDefault();
+    if (e.shiftKey) { if (typeof redo === 'function') redo(); } else undo();
+    return;
+  }
+  if ((e.ctrlKey||e.metaKey) && (k==='y'||k==='Y')) { e.preventDefault(); if (typeof redo === 'function') redo(); return; }
+  // Arrow-key nudge of the selection (Shift = coarse)
+  if (selected && (k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown')) {
+    e.preventDefault();
+    var step = e.shiftKey ? 50 : (typeof _gridSize !== 'undefined' ? _gridSize : 1);
+    var dx = (k==='ArrowLeft'?-step:(k==='ArrowRight'?step:0));
+    var dz = (k==='ArrowUp'?-step:(k==='ArrowDown'?step:0));
+    saveUndo();
+    selectedGroup.forEach(function(p){ p.x = Math.round(p.x+dx); p.z = Math.round(p.z+dz); syncPos(p); rebuildSelBox(p); });
+    refreshHandlePos(); showProps(selected); refreshOverall();
+    return;
+  }
+  if (k==='Delete'||k==='Backspace') { deleteSelected(); return; }
+  else if (k==='d'||k==='D') duplicateSelected();
+  else if (k==='g'||k==='G') groupSelected();
+  else if (k==='u'||k==='U') ungroupSelected();
+  else if (k==='Escape') { doSelect(null); closeCheatsheet(); }
+  else if (k==='r'||k==='R') resetCamera();
+  else if (k==='f'||k==='F') fitCamera();
+  else if (k==='w'||k==='W') toggleWireframe();
+  else if (k==='s'||k==='S') toggleSnap();
+  else if (k==='m'||k==='M') toggleMeasure();
+  else if (k==='x'||k==='X') toggleExplode();
 });
+
+// ── Cheatsheet overlay (J-series J1) ────────────────────
+function toggleCheatsheet() { document.getElementById('cheatsheet-modal').classList.toggle('active'); }
+function closeCheatsheet()  { document.getElementById('cheatsheet-modal').classList.remove('active'); }
 
 // ═══════════════════════════════════════════════════════════════
 //  GROUPING
