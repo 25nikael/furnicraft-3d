@@ -655,6 +655,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <input type="checkbox" id="p-rounded"> Rounded edges
         </label>
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
+        <label class="btn" style="display:block;text-align:center;cursor:pointer;margin:8px 0 0;">📷 Upload texture
+          <input type="file" accept="image/*" style="display:none;" id="p-tex-file" onchange="uploadPanelTexture(this)">
+        </label>
+        <button class="btn" id="p-tex-clear" style="margin-top:4px;display:none;" onclick="clearPanelTexture()">Remove texture</button>
       </div>
       <div class="prop-sec">
         <div class="prop-title">Function</div>
@@ -1956,6 +1960,7 @@ function mkPanel(o) {
     roundedEdges: o.roundedEdges || false,
     joints:      o.joints ? JSON.parse(JSON.stringify(o.joints)) : {},
     func:        o.func ? JSON.parse(JSON.stringify(o.func)) : null,
+    textureURL:  o.textureURL || null,
     mesh:        null,
     edges:       null,
     selBox:      null,
@@ -1976,7 +1981,8 @@ function snapPanel(p) {
            mitreAngle:p.mitreAngle, roundedEdges:p.roundedEdges||false,
            joints: JSON.parse(JSON.stringify(p.joints||{})),
            func: p.func ? { kind:p.func.kind, hingeSide:p.func.hingeSide, angle:p.func.angle,
-                            travel:p.func.travel, slide:p.func.slide, clearance:p.func.clearance, open:p.func.open } : null };
+                            travel:p.func.travel, slide:p.func.slide, clearance:p.func.clearance, open:p.func.open } : null,
+           textureURL: p.textureURL || null };
 }
 
 function saveUndo() {
@@ -2308,8 +2314,20 @@ function buildMesh(p) {
     geo.computeVertexNormals();
   }
 
-  var tex  = fd.tex ? fd.tex() : null;
-  var col  = tex ? '#ffffff' : (fd.color || p.color);
+  var tex, col;
+  if (p.textureURL) {
+    // Custom uploaded texture (G5) — cached per panel, tiles via existing UVs
+    if (!p._uploadedTex || p._uploadedTexURL !== p.textureURL) {
+      p._uploadedTex = new THREE.TextureLoader().load(p.textureURL);
+      p._uploadedTex.wrapS = p._uploadedTex.wrapT = THREE.RepeatWrapping;
+      p._uploadedTex.encoding = THREE.sRGBEncoding;
+      p._uploadedTexURL = p.textureURL;
+    }
+    tex = p._uploadedTex; col = '#ffffff';
+  } else {
+    tex = fd.tex ? fd.tex() : null;
+    col = tex ? '#ffffff' : (fd.color || p.color);
+  }
   var mat;
   if (_pbr) {
     var sp = _pbrSpec(p.material);
@@ -4080,6 +4098,27 @@ function resetRotation() {
 var AXIS_LABEL = { w: 'X', h: 'Y', d: 'Z' };
 var ROLE_COLOR = { Length: '#555', Width: '#555', Thickness: '#e67e22' };
 
+// ── Custom texture upload (G-series G5) ─────────────────
+function uploadPanelTexture(input) {
+  if (!selected || !input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    saveUndo();
+    selected.textureURL = reader.result;
+    selected._uploadedTex = null;
+    buildMesh(selected); refreshUI(); showProps(selected);
+  };
+  reader.readAsDataURL(input.files[0]);
+  input.value = '';
+}
+function clearPanelTexture() {
+  if (!selected) return;
+  saveUndo();
+  if (selected._uploadedTex) { selected._uploadedTex.dispose(); selected._uploadedTex = null; }
+  selected.textureURL = null;
+  buildMesh(selected); refreshUI(); showProps(selected);
+}
+
 function showProps(p) {
   propBusy = true;
   // Update dimension labels to show consistent role (Length / Width / Thickness)
@@ -4121,6 +4160,8 @@ function showProps(p) {
   });
   renderJointsUI(p);
   renderFuncUI(p);
+  var tc = document.getElementById('p-tex-clear');
+  if (tc) tc.style.display = p.textureURL ? 'block' : 'none';
   propBusy = false;
 }
 

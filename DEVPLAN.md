@@ -131,8 +131,9 @@ Explode slider/toggle moves panels outward from the design centre, animated.
 Toggle adds floor + walls to scale; places the piece; hides grid.
 **Done:** `🏠 Room` toolbar toggle; `buildRoom` adds a finished floor + back/left walls (MeshStandard, shadow-receiving) at `_room` W/H/D; hides grid + design floor while active; Room HUD with unit-aware W/H/D inputs (`_applyRoomDims` rebuilds). Verified: 3 surfaces build, grid/floor hidden, resize to 6000 keeps 3 walls, toggle off clears + restores grid, no errors.
 
-### G-Block 4 — Custom texture upload (G5) ⬜
+### G-Block 4 — Custom texture upload (G5) ✅
 Per-panel image upload (data URL) applied as the material map; persisted.
+**Done:** panel `textureURL` (data URL); `buildMesh` loads/caches it as the map (white base, RepeatWrapping, sRGB) overriding the procedural texture; Upload/Remove controls in Appearance; persisted in snapPanel/project state. Verified: upload applies map, clear button shows, save→reload keeps texture + map, remove reverts to wood, no errors.
 
 ### G-Block 5 — AR view / WebXR (G4) ⬜
 View-in-AR via renderer.xr + ARButton; graceful fallback. Needs HTTPS + device.
