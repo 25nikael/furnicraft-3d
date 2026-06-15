@@ -4017,7 +4017,11 @@ document.addEventListener('mousemove', function(e) {
       var ddx = ci.x - si.x, ddz = ci.z - si.z;
       // Snap on primary panel, derive delta, apply to whole group
       var nx = Math.round(sp.x + ddx), nz = Math.round(sp.z + ddz);
-      if (snapEnabled) { var sn = snapPos(p, nx, sp.y, nz); nx=sn[0]; nz=sn[1]; }
+      if (_altDown) {
+        var sn = magnetSnapPos(p, nx, sp.y, nz); nx=sn[0]; nz=sn[1];
+      } else if (snapEnabled) {
+        var sn = snapPos(p, nx, sp.y, nz); nx=sn[0]; nz=sn[1];
+      }
       var fdx = nx - sp.x, fdz = nz - sp.z;
 
       // Collision resolution: try full move, then slide along each axis, then stop
@@ -4029,14 +4033,14 @@ document.addEventListener('mousemove', function(e) {
         });
       }
       if (!grpOK(fdx, fdz)) {
-        // Try X-only slide (snap only on X axis)
         var nx2 = Math.round(sp.x + ddx);
-        if (snapEnabled) { var sn2 = snapPos(p, nx2, sp.y, sp.z); nx2 = sn2[0]; }
+        if (_altDown) { var sn2 = magnetSnapPos(p, nx2, sp.y, sp.z); nx2=sn2[0]; }
+        else if (snapEnabled) { var sn2 = snapPos(p, nx2, sp.y, sp.z); nx2=sn2[0]; }
         if (grpOK(nx2 - sp.x, 0)) { fdx = nx2 - sp.x; fdz = 0; }
         else {
-          // Try Z-only slide (snap only on Z axis)
           var nz3 = Math.round(sp.z + ddz);
-          if (snapEnabled) { var sn3 = snapPos(p, sp.x, sp.y, nz3); nz3 = sn3[1]; }
+          if (_altDown) { var sn3 = magnetSnapPos(p, sp.x, sp.y, nz3); nz3=sn3[1]; }
+          else if (snapEnabled) { var sn3 = snapPos(p, sp.x, sp.y, nz3); nz3=sn3[1]; }
           if (grpOK(0, nz3 - sp.z)) { fdx = 0; fdz = nz3 - sp.z; }
           else { fdx = 0; fdz = 0; }
         }
@@ -4242,11 +4246,79 @@ function wouldCollide(panel, nx, ny, nz, nw, nh, nd, excludeIds) {
   });
 }
 
-function flashSnap() {
+function flashSnap(label) {
   var el = document.getElementById('snap-hud');
+  el.textContent = label || '⚡ Snapped';
   el.style.display = 'block';
   clearTimeout(snapTimer);
   snapTimer = setTimeout(function(){ el.style.display='none'; }, 600);
+}
+
+// ── Alt-key magnetic face snap ────────────────────────────
+var _altDown = false;
+
+// Returns the count of face-plane pairs that become coplanar when p is at (nx,ny,nz)
+function _countFlushFaces(p, nx, ny, nz) {
+  var eps = 1.5;
+  var pf = { xMin: nx-p.w/2, xMax: nx+p.w/2, yMin: ny-p.h/2, yMax: ny+p.h/2, zMin: nz-p.d/2, zMax: nz+p.d/2 };
+  var count = 0;
+  panels.forEach(function(o) {
+    if (o === p) return;
+    var of = { xMin: o.x-o.w/2, xMax: o.x+o.w/2, yMin: o.y-o.h/2, yMax: o.y+o.h/2, zMin: o.z-o.d/2, zMax: o.z+o.d/2 };
+    ['xMin','xMax','yMin','yMax','zMin','zMax'].forEach(function(f) {
+      if (Math.abs(pf[f] - of[f]) < eps) count++;
+    });
+  });
+  return count;
+}
+
+// Magnetic snap: snap p from (nx,ny,nz) to the candidate that maximises flush faces.
+// Only adjusts X and Z (Y is fixed during drag).
+function magnetSnapPos(p, nx, ny, nz) {
+  var RANGE = 80; // mm — magnetic pull distance
+  var eps   = 0.5;
+  var pw = p.w, pd = p.d;
+
+  // Collect all X and Z snap candidates from face contacts with every other panel
+  var xCands = [nx];
+  var zCands = [nz];
+  panels.forEach(function(o) {
+    if (o === p) return;
+    // Face-to-face contact X
+    xCands.push(o.x + o.w/2 + pw/2);  // p left  → o right
+    xCands.push(o.x - o.w/2 - pw/2);  // p right → o left
+    // Flush alignment X
+    xCands.push(o.x - o.w/2 + pw/2);  // p.xMin flush with o.xMin
+    xCands.push(o.x + o.w/2 - pw/2);  // p.xMax flush with o.xMax
+    // Face-to-face contact Z
+    zCands.push(o.z + o.d/2 + pd/2);  // p front → o back
+    zCands.push(o.z - o.d/2 - pd/2);  // p back  → o front
+    // Flush alignment Z
+    zCands.push(o.z - o.d/2 + pd/2);  // p.zMin flush with o.zMin
+    zCands.push(o.z + o.d/2 - pd/2);  // p.zMax flush with o.zMax
+  });
+
+  // Only keep candidates within magnetic range
+  xCands = xCands.filter(function(x) { return Math.abs(x - nx) <= RANGE; });
+  zCands = zCands.filter(function(z) { return Math.abs(z - nz) <= RANGE; });
+
+  var best = null, bestScore = -Infinity;
+  xCands.forEach(function(cx) {
+    zCands.forEach(function(cz) {
+      var dist = Math.sqrt((cx-nx)*(cx-nx) + (cz-nz)*(cz-nz));
+      if (dist > RANGE) return;
+      var flush = _countFlushFaces(p, cx, ny, cz);
+      // Flush count wins; ties broken by closeness
+      var score = flush * 10000 - dist;
+      if (score > bestScore) { bestScore = score; best = [cx, cz]; }
+    });
+  });
+
+  if (best && (Math.abs(best[0]-nx) > eps || Math.abs(best[1]-nz) > eps)) {
+    flashSnap('🧲 Magnetic');
+    return [Math.round(best[0]), Math.round(best[1])];
+  }
+  return [Math.round(nx), Math.round(nz)];
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4732,6 +4804,7 @@ document.getElementById('cs-modal').addEventListener('click',  function(e){ if(e
 document.getElementById('btn-opt').addEventListener('click',   function(){ runOptimizer(); });
 
 document.addEventListener('keydown', function(e) {
+  if (e.key === 'Alt') { _altDown = true; e.preventDefault(); return; }
   if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
   if (typeof _fpsActive !== 'undefined' && _fpsActive) return; // FPS mode owns WASD
   var k = e.key;
@@ -4765,6 +4838,9 @@ document.addEventListener('keydown', function(e) {
   else if (k==='s'||k==='S') toggleSnap();
   else if (k==='m'||k==='M') toggleMeasure();
   else if (k==='x'||k==='X') toggleExplode();
+});
+document.addEventListener('keyup', function(e) {
+  if (e.key === 'Alt') _altDown = false;
 });
 
 // ── Cheatsheet overlay (J-series J1) ────────────────────
