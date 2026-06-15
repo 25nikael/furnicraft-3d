@@ -1024,6 +1024,20 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         </button>
       </div>
 
+      <!-- Refine & advise (I1, I3, I4) -->
+      <div style="border-top:1px solid var(--bd);margin-top:14px;padding-top:12px;">
+        <div class="prop-title">Refine current design</div>
+        <div style="display:flex;gap:7px;">
+          <input id="ai-refine" placeholder="e.g. make it 200mm taller, add a drawer" style="flex:1;padding:8px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;">
+          <button class="tbtn prim" style="padding:8px 12px;border-radius:6px;" onclick="aiRefine()">Refine</button>
+        </div>
+        <div style="display:flex;gap:7px;margin-top:10px;">
+          <button class="btn" style="flex:1;margin:0;" onclick="aiAdvise('joinery')">🔩 Joinery &amp; hardware</button>
+          <button class="btn" style="flex:1;margin:0;" onclick="aiAdvise('cost')">💡 Cost &amp; material</button>
+        </div>
+        <pre id="ai-advice" style="display:none;white-space:pre-wrap;font-family:inherit;font-size:12px;color:var(--txt2);background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;padding:10px;margin-top:10px;max-height:200px;overflow:auto;"></pre>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1269,9 +1283,54 @@ function _parseAndShowDesign(raw) {
   document.getElementById('ai-manual').style.display  = 'none';
 }
 
-async function generateAIDesign() {
+async function generateAIDesign() { _aiRun(document.getElementById('ai-prompt').value.trim()); }
+
+// Compact current design for AI refine/advise prompts
+function _currentDesignForAI() {
+  return {
+    name: document.getElementById('topbar-proj-name').textContent || 'Design',
+    panels: panels.map(function (p) {
+      return { name: p.name, w: Math.round(p.w), h: Math.round(p.h), d: Math.round(p.d),
+               x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z), material: p.material };
+    })
+  };
+}
+// Conversational refine (I1) — reuses the design generation pipeline
+function aiRefine() {
+  var instr = document.getElementById('ai-refine').value.trim();
+  if (!instr) { document.getElementById('ai-err').textContent = 'Describe the change you want (e.g. make it taller, add a drawer).'; return; }
+  if (!panels.length) { document.getElementById('ai-err').textContent = 'Nothing to refine — generate or open a design first.'; return; }
+  _aiRun('Here is the current furniture design as JSON:\n' + JSON.stringify(_currentDesignForAI())
+    + '\n\nApply this change: ' + instr + '\n\nReturn the COMPLETE updated design as a single JSON object in the same schema.');
+}
+// Joinery/hardware (I3) and cost/material (I4) advice — plain-text response
+async function aiAdvise(kind) {
+  var key = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
+  var out = document.getElementById('ai-advice');
+  var ask = kind === 'joinery'
+    ? 'Suggest appropriate joinery and hardware for this furniture design. Be specific and concise — short bullet points.'
+    : 'Suggest ways to reduce material waste and cost for this design, plus any sensible material substitutions. Concise bullet points.';
+  var prompt = 'Design JSON:\n' + JSON.stringify(_currentDesignForAI()) + '\n\n' + ask;
+  out.style.display = 'block';
+  if (!key) { out.textContent = 'Add your Anthropic API key above for inline advice, or paste this prompt into claude.ai:\n\n' + prompt; return; }
+  out.textContent = 'Thinking…';
+  try {
+    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', mode: 'cors',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!resp.ok) { var e = await resp.json().catch(function () { return {}; }); throw new Error(e.error ? e.error.message : ('API error ' + resp.status)); }
+    var data = await resp.json();
+    out.textContent = data.content[0].text;
+  } catch (err) {
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') out.textContent = 'Direct API blocked here. Paste this prompt into claude.ai:\n\n' + prompt;
+    else out.textContent = '⚠ ' + err.message;
+  }
+}
+
+async function _aiRun(prompt) {
   var key    = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
-  var prompt = document.getElementById('ai-prompt').value.trim();
   var errEl  = document.getElementById('ai-err');
   var statEl = document.getElementById('ai-status');
   var resEl  = document.getElementById('ai-result');

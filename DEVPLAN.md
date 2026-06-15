@@ -201,7 +201,8 @@ JSON export/import of project state (`exportProjectJSON`/`importProjectJSON`) in
 `recordVersion` snapshots state on every create/update (keeps latest 20); `GET /:id/versions` + `POST /:id/versions/:vid/restore`. Frontend: History button per project → versions modal with Restore. Verified: functions/modal/History button present, route syntax-clean (full flow runs on Render Postgres).
 ### R9 — Share token + public gallery (H3, H4, backend) ✅
 Backend: `POST /:id/share` (generates share_token), `POST /:id/publish` (is_public toggle), new unauthenticated `routes/public.js` (`GET /gallery`, `GET /:token`) mounted at `/api/public`. Frontend: Share modal (read-only `?share=` link + publish checkbox), Gallery modal (browse → open read-only), `_loadSharedFromQuery` on load. Verified: functions/modals/Share button present, all server files syntax-clean (runs on Render).
-### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ⬜
+### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ✅
+Factored `_aiRun(prompt)` (generate delegates); `aiRefine` embeds the current design + instruction and re-runs the JSON pipeline; `aiAdvise('joinery'|'cost')` returns plain-text advice (inline with key, prompt-to-copy without). Refine input + advice buttons + output area in the AI modal. Verified: functions wired, 7-panel context, advice shows prompt without key, refine guards empty input, no errors.
 ### R11 — AI design from image/sketch (I2) ⬜
 ### R12 — Integration, polish & docs ⬜
 
