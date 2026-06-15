@@ -702,6 +702,32 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   </div>
 </div>
 
+<!-- ── Share / publish modal ─────────────────────────── -->
+<div class="overlay-modal" id="pubshare-modal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-hdr">Share design<button class="modal-close" onclick="closeShare()">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:6px;">Anyone with this link can view (read-only) the current saved design:</div>
+      <div style="display:flex;gap:6px;">
+        <input id="pubshare-link" readonly style="flex:1;padding:7px 9px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:12px;">
+        <button class="btn" style="width:auto;margin:0;" onclick="copyShareLink()">Copy</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt2);cursor:pointer;margin-top:12px;">
+        <input type="checkbox" id="pubshare-public" onchange="togglePublish(this)"> List in the public gallery
+      </label>
+      <button class="btn" style="margin-top:12px;" onclick="openGallery()">🌐 Browse public gallery</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Public gallery modal ──────────────────────────── -->
+<div class="overlay-modal" id="gallery-modal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-hdr">Public Gallery<button class="modal-close" onclick="closeGallery()">×</button></div>
+    <div class="modal-body"><div id="gallery-body"></div></div>
+  </div>
+</div>
+
 <!-- ── Versions modal ────────────────────────────────── -->
 <div class="overlay-modal" id="versions-modal">
   <div class="modal-box" style="max-width:360px;">
@@ -1802,6 +1828,55 @@ async function restoreVersion(vid) {
   } catch (e) { alert('Could not restore: ' + e.message); }
 }
 
+// ── Share token + public gallery (R9 / H3, H4) ──────────
+var _shareProjId = null;
+async function openShare(projId) {
+  _shareProjId = projId;
+  document.getElementById('pubshare-modal').classList.add('active');
+  document.getElementById('pubshare-link').value = 'Creating link…';
+  try {
+    var res = await api('/projects/' + projId + '/share', { method: 'POST' });
+    document.getElementById('pubshare-link').value = location.origin + location.pathname + '?share=' + res.token;
+    document.getElementById('pubshare-public').checked = !!res.isPublic;
+  } catch (e) { document.getElementById('pubshare-link').value = 'Error: ' + e.message; }
+}
+function closeShare() { document.getElementById('pubshare-modal').classList.remove('active'); }
+function copyShareLink() { var i = document.getElementById('pubshare-link'); i.select(); if (navigator.clipboard) navigator.clipboard.writeText(i.value); }
+async function togglePublish(cb) {
+  if (!_shareProjId) return;
+  try { await api('/projects/' + _shareProjId + '/publish', { method: 'POST', body: { public: cb.checked } }); }
+  catch (e) { alert('Could not update: ' + e.message); cb.checked = !cb.checked; }
+}
+
+async function openGallery() {
+  document.getElementById('gallery-modal').classList.add('active');
+  var body = document.getElementById('gallery-body');
+  body.innerHTML = '<div class="proj-empty">Loading…</div>';
+  try {
+    var res = await api('/public/gallery');
+    if (!res.projects.length) { body.innerHTML = '<div class="proj-empty">No public designs yet. Publish one via Share!</div>'; return; }
+    body.innerHTML = '<div class="welcome-grid" style="grid-template-columns:repeat(3,1fr);">' + res.projects.map(function (p) {
+      var th = p.thumb ? '<img src="' + p.thumb + '" style="width:100%;height:60px;object-fit:cover;border-radius:6px 6px 0 0;">' : '<div style="height:60px;background:var(--bg3);border-radius:6px 6px 0 0;"></div>';
+      return '<button class="hw-cat-btn" style="padding:0;overflow:hidden;" onclick="openPublic(\'' + p.token + '\')">' + th + '<span class="hw-cat-label" style="padding:6px;">' + p.name + '</span></button>';
+    }).join('') + '</div>';
+  } catch (e) { body.innerHTML = '<div class="proj-empty">Could not load gallery.<br>' + e.message + '</div>'; }
+}
+function closeGallery() { document.getElementById('gallery-modal').classList.remove('active'); }
+async function openPublic(token) {
+  try {
+    var res = await api('/public/' + token);
+    _loadProjectState(res.state);
+    _currentProjId = null;
+    document.getElementById('topbar-proj-name').textContent = (res.name || 'Shared design') + ' (view)';
+    closeGallery(); closeShare(); closeProjectManager();
+  } catch (e) { alert('Could not open shared design: ' + e.message); }
+}
+function _loadSharedFromQuery() {
+  var m = location.search.match(/[?&]share=([^&]+)/);
+  if (m) { openPublic(decodeURIComponent(m[1])); return true; }
+  return false;
+}
+
 async function _refreshProjectList() {
   var wrap = document.getElementById('proj-list-wrap');
   try {
@@ -1835,6 +1910,7 @@ function _renderProjectList() {
       + '<div class="proj-item-btns">'
       + '<button class="pi-btn" onclick="loadProject(\''+proj.id+'\')">Open</button>'
       + '<button class="pi-btn" onclick="openVersions(\''+proj.id+'\')">History</button>'
+      + '<button class="pi-btn" onclick="openShare(\''+proj.id+'\')">Share</button>'
       + '<button class="pi-btn del" onclick="deleteProject(\''+proj.id+'\')">Delete</button>'
       + '</div></div>';
   }).join('') + '</div>';
@@ -5508,7 +5584,8 @@ function animate() {
 
 // ── INIT ───────────────────────────────────────────────────────
 buildNightstand();
-_loadSharedFromHash();   // if opened via a shared link, load that design instead
+_loadSharedFromHash();    // self-contained #d= link
+_loadSharedFromQuery();   // server-backed ?share= link (read-only)
 fitCamera();
 renderer.setAnimationLoop(animate);  // XR-compatible loop (works without XR too)
 if (!localStorage.getItem('fc3d_seen')) setTimeout(openWelcome, 400);  // first-visit onboarding

@@ -9,6 +9,7 @@ const cors = require('cors');
 const db = require('./db');
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
+const publicRoutes = require('./routes/public');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +20,7 @@ app.use(express.json({ limit: '5mb' })); // project state can be large
 // ── API routes ──────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, dbReady: db.isReady() });

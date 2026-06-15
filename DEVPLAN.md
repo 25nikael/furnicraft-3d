@@ -199,7 +199,8 @@ Loaded GLTF/OBJ/STL exporters (CDN); `exportModel` clones panels+hardware into a
 JSON export/import of project state (`exportProjectJSON`/`importProjectJSON`) in Export modal; `_captureThumb` (downscaled JPEG) sent on save; thumbnails shown in My Projects. Backend: `thumb` column (+ ALTER) + thumb in create/update/list. Also pre-added `is_public`/`share_token`/`project_versions` schema for R8/R9. Verified: thumb 3KB JPEG, JSON 2.7KB round-trip, list shows img; server syntax-clean.
 ### R8 — Version history / restore (H2, backend) ✅
 `recordVersion` snapshots state on every create/update (keeps latest 20); `GET /:id/versions` + `POST /:id/versions/:vid/restore`. Frontend: History button per project → versions modal with Restore. Verified: functions/modal/History button present, route syntax-clean (full flow runs on Render Postgres).
-### R9 — Share token + public gallery (H3, H4, backend) ⬜
+### R9 — Share token + public gallery (H3, H4, backend) ✅
+Backend: `POST /:id/share` (generates share_token), `POST /:id/publish` (is_public toggle), new unauthenticated `routes/public.js` (`GET /gallery`, `GET /:token`) mounted at `/api/public`. Frontend: Share modal (read-only `?share=` link + publish checkbox), Gallery modal (browse → open read-only), `_loadSharedFromQuery` on load. Verified: functions/modals/Share button present, all server files syntax-clean (runs on Render).
 ### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ⬜
 ### R11 — AI design from image/sketch (I2) ⬜
 ### R12 — Integration, polish & docs ⬜

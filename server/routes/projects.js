@@ -1,8 +1,11 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+
+function genToken() { return crypto.randomBytes(9).toString('hex'); }
 
 const router = express.Router();
 
@@ -54,7 +57,7 @@ router.get('/:id', async (req, res) => {
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found.' });
     const row = result.rows[0];
-    res.json({ project: { ...meta(row), state: row.state } });
+    res.json({ project: { ...meta(row), state: row.state, isPublic: row.is_public, shareToken: row.share_token } });
   } catch (err) {
     console.error('[projects/get]', err);
     res.status(500).json({ error: 'Could not load project.' });
@@ -132,6 +135,35 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('[projects/delete]', err);
     res.status(500).json({ error: 'Could not delete project.' });
+  }
+});
+
+// ── Share token + publish to gallery (H3, H4) ───────────────────────────
+router.post('/:id/share', async (req, res) => {
+  try {
+    const owned = await db.query('SELECT share_token, is_public FROM projects WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (owned.rowCount === 0) return res.status(404).json({ error: 'Project not found.' });
+    var token = owned.rows[0].share_token;
+    if (!token) { token = genToken(); await db.query('UPDATE projects SET share_token = $1 WHERE id = $2', [token, req.params.id]); }
+    res.json({ token: token, isPublic: owned.rows[0].is_public });
+  } catch (err) {
+    console.error('[projects/share]', err);
+    res.status(500).json({ error: 'Could not create share link.' });
+  }
+});
+
+router.post('/:id/publish', async (req, res) => {
+  try {
+    const pub = !!req.body.public;
+    const owned = await db.query('SELECT share_token FROM projects WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (owned.rowCount === 0) return res.status(404).json({ error: 'Project not found.' });
+    var token = owned.rows[0].share_token;
+    if (pub && !token) token = genToken();
+    await db.query('UPDATE projects SET is_public = $1, share_token = COALESCE($2, share_token) WHERE id = $3', [pub, token, req.params.id]);
+    res.json({ isPublic: pub, token: token });
+  } catch (err) {
+    console.error('[projects/publish]', err);
+    res.status(500).json({ error: 'Could not update sharing.' });
   }
 });
 
