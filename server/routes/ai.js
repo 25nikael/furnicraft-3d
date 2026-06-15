@@ -85,7 +85,6 @@ router.post('/design', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 6000,
-        thinking: { type: 'adaptive' },
         system: AI_SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userContent }]
       })
