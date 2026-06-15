@@ -702,6 +702,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   </div>
 </div>
 
+<!-- ── Versions modal ────────────────────────────────── -->
+<div class="overlay-modal" id="versions-modal">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-hdr">Version History<button class="modal-close" onclick="closeVersions()">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;">Up to 20 recent saves. ★ = latest.</div>
+      <div id="versions-body" style="max-height:50vh;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Export modal ──────────────────────────────────── -->
 <div class="overlay-modal" id="export-modal">
   <div class="modal-box" style="max-width:380px;">
@@ -1761,6 +1772,36 @@ async function openProjectManager() {
 }
 function closeProjectManager() { document.getElementById('proj-modal').classList.remove('active'); }
 
+// ── Version history (R8 / H2) ───────────────────────────
+var _versionsProjId = null;
+async function openVersions(projId) {
+  _versionsProjId = projId;
+  var body = document.getElementById('versions-body');
+  body.innerHTML = '<div class="proj-empty">Loading…</div>';
+  document.getElementById('versions-modal').classList.add('active');
+  try {
+    var res = await api('/projects/' + projId + '/versions');
+    if (!res.versions.length) { body.innerHTML = '<div class="proj-empty">No saved versions yet.</div>'; return; }
+    body.innerHTML = res.versions.map(function (v, i) {
+      var d = new Date(v.createdAt);
+      var lbl = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return '<div class="hist-row" style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<span>' + (i === 0 ? '★ ' : '') + lbl + '</span>'
+        + '<button class="pi-btn" onclick="restoreVersion(\'' + v.id + '\')">Restore</button></div>';
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="proj-empty">Could not load versions.<br>' + e.message + '</div>'; }
+}
+function closeVersions() { document.getElementById('versions-modal').classList.remove('active'); }
+async function restoreVersion(vid) {
+  try {
+    var res = await api('/projects/' + _versionsProjId + '/versions/' + vid + '/restore', { method: 'POST' });
+    _loadProjectState(res.state);
+    _currentProjId = _versionsProjId;
+    closeVersions(); closeProjectManager();
+    _flashSave();
+  } catch (e) { alert('Could not restore: ' + e.message); }
+}
+
 async function _refreshProjectList() {
   var wrap = document.getElementById('proj-list-wrap');
   try {
@@ -1793,6 +1834,7 @@ function _renderProjectList() {
       + '<div class="proj-item-date">'+lbl+'</div></div>'
       + '<div class="proj-item-btns">'
       + '<button class="pi-btn" onclick="loadProject(\''+proj.id+'\')">Open</button>'
+      + '<button class="pi-btn" onclick="openVersions(\''+proj.id+'\')">History</button>'
       + '<button class="pi-btn del" onclick="deleteProject(\''+proj.id+'\')">Delete</button>'
       + '</div></div>';
   }).join('') + '</div>';

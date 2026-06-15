@@ -197,7 +197,8 @@ Loaded GLTF/OBJ/STL exporters (CDN); `exportModel` clones panels+hardware into a
 `_panelLayout` arranges panel faces in rows; `exportDXF` (LINE entities) + `exportSVG` (rects, mm units); `shareLink` encodes state to a `#d=` URL (copied to clipboard), `_loadSharedFromHash` loads it on startup. Verified: DXF 1.2KB, SVG 1.4KB, link round-trips 7 panels + loads as "Shared design", no errors.
 ### R7 — JSON import/export + project thumbnails (H5, H1) ✅
 JSON export/import of project state (`exportProjectJSON`/`importProjectJSON`) in Export modal; `_captureThumb` (downscaled JPEG) sent on save; thumbnails shown in My Projects. Backend: `thumb` column (+ ALTER) + thumb in create/update/list. Also pre-added `is_public`/`share_token`/`project_versions` schema for R8/R9. Verified: thumb 3KB JPEG, JSON 2.7KB round-trip, list shows img; server syntax-clean.
-### R8 — Version history / restore (H2, backend) ⬜
+### R8 — Version history / restore (H2, backend) ✅
+`recordVersion` snapshots state on every create/update (keeps latest 20); `GET /:id/versions` + `POST /:id/versions/:vid/restore`. Frontend: History button per project → versions modal with Restore. Verified: functions/modal/History button present, route syntax-clean (full flow runs on Render Postgres).
 ### R9 — Share token + public gallery (H3, H4, backend) ⬜
 ### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ⬜
 ### R11 — AI design from image/sketch (I2) ⬜
