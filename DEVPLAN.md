@@ -189,7 +189,8 @@ sheet). Remaining, in build order (one block per commit, quote-free messages):
 `# Labels` toolbar toggle draws numbered badges over each panel (in updateDims, follows live mesh position); board-layout pieces carry `num` and show `#n name`. Verified: 7 badges on/off, button state, layout renders, no errors.
 ### R3 — Material cost DB + currency (D1, D3) ✅
 Per-material price (per sheet) editable in cut sheet; `projectMaterialCost` (sheets×price per material); `_currency` setting + `fmtMoney`; Material Cost section. Verified: 2 lines total $160→$270 on edit, £ currency, no errors.
-### R4 — Quote generator PDF (D2) ⬜
+### R4 — Quote generator PDF (D2) ✅
+Quote modal: materials + hardware (`projectHardwareCost`, per-type prices) + labour (hours×rate) + markup%; live breakdown; `exportQuotePDF` via jsPDF/autoTable. Verified: mat 270 + hw 11 + labour 140 ×1.2 = $505, 6 rows, PDF lib ready, no errors.
 ### R5 — 3D export GLTF/OBJ/STL + high-res render (E2, E3) ⬜
 ### R6 — DXF/SVG per-panel + shareable link (E1, E4) ⬜
 ### R7 — JSON import/export + project thumbnails (H5, H1) ⬜
