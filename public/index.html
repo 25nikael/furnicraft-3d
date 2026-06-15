@@ -552,6 +552,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn" id="btn-measure" onclick="toggleMeasure()">📏 Measure</button>
       <button class="tbtn" id="btn-explode" onclick="toggleExplode()">💥 Explode</button>
       <button class="tbtn" id="btn-room" onclick="toggleRoom()">🏠 Room</button>
+      <button class="tbtn" id="btn-ar" onclick="viewInAR()">📱 View in AR</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
@@ -4840,8 +4841,41 @@ function _applyRoomDims() {
   buildRoom();
 }
 
+// ── AR view / WebXR (G-series G4) ───────────────────────
+var _arPrev = null;
+function viewInAR() {
+  if (!navigator.xr) { alert('WebXR is not available here. Open the site in Chrome on a recent Android phone (over HTTPS) to view in AR.'); return; }
+  navigator.xr.isSessionSupported('immersive-ar').then(function (ok) {
+    if (!ok) { alert('Immersive AR is not supported on this device/browser. It needs an AR-capable phone (e.g. Chrome on Android) over HTTPS.'); return; }
+    renderer.xr.enabled = true;
+    navigator.xr.requestSession('immersive-ar', { optionalFeatures: ['local-floor','dom-overlay'] })
+      .then(_enterAR)
+      .catch(function (e) { alert('Could not start AR: ' + e.message); });
+  });
+}
+function _enterAR(session) {
+  _arPrev = { scale: scene.scale.clone(), pos: scene.position.clone(), bg: scene.background,
+              grid: _gridHelper ? _gridHelper.visible : true, floor: _floorMesh ? _floorMesh.visible : true };
+  scene.background = null;                 // camera passthrough
+  if (_gridHelper) _gridHelper.visible = false;
+  if (_floorMesh)  _floorMesh.visible  = false;
+  scene.scale.setScalar(0.001);            // mm -> metres (real-world scale)
+  scene.position.set(0, 0, -2);            // ~2 m in front of the viewer
+  renderer.xr.setReferenceSpaceType('local');
+  renderer.xr.setSession(session);
+  session.addEventListener('end', _exitAR);
+}
+function _exitAR() {
+  if (!_arPrev) return;
+  scene.scale.copy(_arPrev.scale);
+  scene.position.copy(_arPrev.pos);
+  scene.background = _arPrev.bg;
+  if (_gridHelper) _gridHelper.visible = _arPrev.grid;
+  if (_floorMesh)  _floorMesh.visible  = _arPrev.floor;
+  _arPrev = null;
+}
+
 function animate() {
-  requestAnimationFrame(animate);
   var now = performance.now();
   var dt  = Math.min((now - _lastFrameTime) / 1000, 0.1); // seconds, capped
   _lastFrameTime = now;
@@ -4862,7 +4896,7 @@ function animate() {
 // ── INIT ───────────────────────────────────────────────────────
 buildNightstand();
 fitCamera();
-animate();
+renderer.setAnimationLoop(animate);  // XR-compatible loop (works without XR too)
 
 // ═══════════════════════════════════════════════════════════════
 //  CUT SHEET TABS

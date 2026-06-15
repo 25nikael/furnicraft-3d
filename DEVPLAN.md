@@ -135,8 +135,9 @@ Toggle adds floor + walls to scale; places the piece; hides grid.
 Per-panel image upload (data URL) applied as the material map; persisted.
 **Done:** panel `textureURL` (data URL); `buildMesh` loads/caches it as the map (white base, RepeatWrapping, sRGB) overriding the procedural texture; Upload/Remove controls in Appearance; persisted in snapPanel/project state. Verified: upload applies map, clear button shows, save→reload keeps texture + map, remove reverts to wood, no errors.
 
-### G-Block 5 — AR view / WebXR (G4) ⬜
+### G-Block 5 — AR view / WebXR (G4) ✅
 View-in-AR via renderer.xr + ARButton; graceful fallback. Needs HTTPS + device.
+**Done:** render loop switched to `renderer.setAnimationLoop` (XR-compatible, verified 21 frames rendering); `viewInAR` checks `navigator.xr` + `isSessionSupported('immersive-ar')` with graceful alerts; `_enterAR` scales scene mm→m (0.001), places it ~2m ahead, passthrough bg, hides grid/floor; `_exitAR` restores; `📱 View in AR` toolbar button. Verified: loop renders, functions wired, no errors. (Live AR needs an AR phone over HTTPS — not testable on desktop.)
 
 ### G-Block 6 — Integration, polish & docs ⬜
 Toggles coexist; mobile/theme; regression; README + DEVPLAN.
