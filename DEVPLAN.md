@@ -169,8 +169,12 @@ Snap on/off, snap distance, grid increment (round positions); persisted.
 First-visit welcome modal, tips, one-click samples (templates), Help reopen.
 **Done:** welcome modal (tips + 4 one-click samples via `loadSample` reusing templates + Start blank + Don't-show-again); auto-shows on first visit (`fc3d_seen` flag); reopen from the cheatsheet (Show welcome guide). Verified: 4 sample buttons, loading Table replaces with 5 panels, seen flag persists, reopen + don't-show work, no errors.
 
-### J-Block 5 — Integration, polish & docs ⬜
+### J-Block 5 — Integration, polish & docs ✅
 Coexist with FPS/measure; mobile/theme; regression; README + DEVPLAN.
+**Done:** README "Productivity" section; toolbar undo/redo + topbar Help fit the scrollable/mobile UI; modals themed. Regression verified: nudge + Ctrl+Z/Ctrl+⇧Z chain, ? cheatsheet, grid 25 snaps 140→150, welcome + history modals, cut sheet, light theme, mobile drawer, full round-trip — no errors.
+
+---
+**J-SERIES COMPLETE** — all four J features shipped (J1–J4 + integration) across commits 790b611 → (J-block 5).
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).

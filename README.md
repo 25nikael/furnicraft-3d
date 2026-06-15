@@ -27,6 +27,9 @@ guides, export to PDF, and save your projects to your account in the cloud.
   texture upload per panel, and view-in-AR on supported phones (WebXR)
 - **Output** — auto cut sheet with board-nesting optimizer, assembly guide, PDF export
 - **AI Designer** — describe furniture in plain language and generate a starting design
+- **Productivity** — keyboard shortcuts with a `?` cheatsheet, undo/redo with a
+  history panel, configurable snap distance & grid step, and a first-run
+  onboarding guide with one-click sample projects
 
 ---
 
