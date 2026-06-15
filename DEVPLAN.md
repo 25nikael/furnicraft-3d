@@ -83,8 +83,9 @@ in read-only displays; settings selector. (Built first so later tools display un
 Multi-select align min/center/max per axis + distribute evenly.
 **Done:** `alignPanels(axis,mode)` (min/center/max via world bounds) + `distributePanels(axis)` (even centre spacing); Arrange section in left panel with X/Y/Z rows. Verified: align min → all 0, distribute → even gaps [0,450,900], no errors.
 
-### F-Block 3 — Mirror & array (F4) ⬜
+### F-Block 3 — Mirror & array (F4) ✅
 Mirror across X/Y/Z; linear array (count+spacing) and radial array (count+angle).
+**Done:** `_clonePanelData` (id-less clone preserving joints/func); `mirrorPanels(axis)` (reflect across origin + negate cross-axis rotations); `arrayLinear(axis,count,spacing)`; `arrayRadial(count,angle)` about Y through selection centre; Mirror/Array modal opened from Arrange. Verified: mirror X→-200, linear [150,300], radial 4× last at ry 270, no errors.
 
 ### F-Block 4 — Measurement & annotation (F5) ⬜
 Measure mode: two-point distance (+ angle); persistent annotation overlay; uses unit formatter.

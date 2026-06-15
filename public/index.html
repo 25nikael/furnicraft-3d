@@ -502,6 +502,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <button class="arr-btn" onclick="alignPanels('z','max')">Max</button>
         <button class="arr-btn" title="Distribute evenly" onclick="distributePanels('z')">⇿</button>
       </div>
+      <button class="btn" style="margin-top:6px;" onclick="openArrayModal()">⊞ Mirror / Array…</button>
     </div>
     <div class="sec-title">Hardware</div>
     <ul class="comp-list" id="hw-list"></ul>
@@ -637,6 +638,30 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mirror & Array modal ──────────────────────────── -->
+<div class="overlay-modal" id="array-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-hdr">Mirror &amp; Array<button class="modal-close" onclick="closeArrayModal()">×</button></div>
+    <div class="modal-body">
+      <div class="prop-title">Mirror across origin</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <button class="btn" style="flex:1;margin:0;" onclick="mirrorPanels('x');closeArrayModal()">Mirror X</button>
+        <button class="btn" style="flex:1;margin:0;" onclick="mirrorPanels('y');closeArrayModal()">Mirror Y</button>
+        <button class="btn" style="flex:1;margin:0;" onclick="mirrorPanels('z');closeArrayModal()">Mirror Z</button>
+      </div>
+      <div class="prop-title">Linear array</div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Axis</span><select class="prop-input" id="arr-lin-axis" style="width:72px;"><option value="x">X</option><option value="y">Y</option><option value="z">Z</option></select></div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Count</span><input class="prop-input" id="arr-lin-count" type="number" min="2" value="3" style="width:72px;"></div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Spacing</span><input class="prop-input" id="arr-lin-space" type="number" value="200" style="width:72px;"></div>
+      <button class="btn" style="margin:4px 0 14px;" onclick="doLinearArray()">Create linear array</button>
+      <div class="prop-title">Radial array (about Y)</div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Count</span><input class="prop-input" id="arr-rad-count" type="number" min="2" value="6" style="width:72px;"></div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Total angle°</span><input class="prop-input" id="arr-rad-angle" type="number" value="360" style="width:72px;"></div>
+      <button class="btn" style="margin-top:4px;" onclick="doRadialArray()">Create radial array</button>
     </div>
   </div>
 </div>
@@ -2412,6 +2437,85 @@ function distributePanels(axis) {
   });
   refreshHandlePos(); refreshUI();
   if (selected) showProps(selected);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MIRROR & ARRAY  (F-series F4)
+// ═══════════════════════════════════════════════════════════════
+// Clone a panel's data (no id/mesh) with optional overrides
+function _clonePanelData(p, over) {
+  var d = snapPanel(p);
+  delete d.id;
+  if (over) Object.keys(over).forEach(function (k) { d[k] = over[k]; });
+  return d;
+}
+
+// Mirror selection across the world origin plane of an axis (x=0 / y=0 / z=0)
+function mirrorPanels(axis) {
+  if (!selectedGroup.length) return;
+  saveUndo();
+  var made = [];
+  selectedGroup.slice().forEach(function (p) {
+    var over = {}; over[axis] = Math.round(-p[axis]); over.name = p.name + ' (mir)';
+    if (axis === 'x')      { over.ry = -(p.ry || 0); over.rz = -(p.rz || 0); }
+    else if (axis === 'y') { over.rx = -(p.rx || 0); over.rz = -(p.rz || 0); }
+    else                   { over.rx = -(p.rx || 0); over.ry = -(p.ry || 0); }
+    var n = mkPanel(_clonePanelData(p, over)); panels.push(n); buildMesh(n); made.push(n);
+  });
+  refreshUI();
+  if (made.length) doSelect(made[0]);
+}
+
+function arrayLinear(axis, count, spacing) {
+  if (!selectedGroup.length || count < 2) return;
+  saveUndo();
+  var base = selectedGroup.slice();
+  for (var k = 1; k < count; k++) {
+    base.forEach(function (p) {
+      var over = {}; over[axis] = Math.round(p[axis] + spacing * k); over.name = p.name + ' ' + (k + 1);
+      var n = mkPanel(_clonePanelData(p, over)); panels.push(n); buildMesh(n);
+    });
+  }
+  refreshUI();
+}
+
+// Radial array about the vertical (Y) axis through the selection centre
+function arrayRadial(count, totalAngle) {
+  if (!selectedGroup.length || count < 2) return;
+  saveUndo();
+  var base = selectedGroup.slice();
+  var cx = 0, cz = 0;
+  base.forEach(function (p) { cx += p.x; cz += p.z; });
+  cx /= base.length; cz /= base.length;
+  var stepDeg = totalAngle / count;
+  for (var k = 1; k < count; k++) {
+    var ang = stepDeg * k * Math.PI / 180;
+    base.forEach(function (p) {
+      var dx = p.x - cx, dz = p.z - cz;
+      var nx = cx + dx * Math.cos(ang) - dz * Math.sin(ang);
+      var nz = cz + dx * Math.sin(ang) + dz * Math.cos(ang);
+      var over = { x: Math.round(nx), z: Math.round(nz), ry: (p.ry || 0) + stepDeg * k, name: p.name + ' ' + (k + 1) };
+      var n = mkPanel(_clonePanelData(p, over)); panels.push(n); buildMesh(n);
+    });
+  }
+  refreshUI();
+}
+
+function openArrayModal() {
+  if (!selectedGroup.length) { alert('Select at least one panel first.'); return; }
+  document.getElementById('array-modal').classList.add('active');
+}
+function closeArrayModal() { document.getElementById('array-modal').classList.remove('active'); }
+function doLinearArray() {
+  var ax = document.getElementById('arr-lin-axis').value;
+  var c  = parseInt(document.getElementById('arr-lin-count').value) || 2;
+  var sp = parseLen(document.getElementById('arr-lin-space').value) || 100;
+  arrayLinear(ax, c, sp); closeArrayModal();
+}
+function doRadialArray() {
+  var c = parseInt(document.getElementById('arr-rad-count').value) || 2;
+  var a = parseFloat(document.getElementById('arr-rad-angle').value) || 360;
+  arrayRadial(c, a); closeArrayModal();
 }
 
 // ═══════════════════════════════════════════════════════════════
