@@ -3716,10 +3716,34 @@ canvas.addEventListener('mousedown', function(e) {
     return;
   }
 
-  // ── Panel body hit ───────────────────────────────────────────
+  // ── Pick the nearest object under the cursor: panel vs hardware ──
   scene.updateMatrixWorld();
   ray.setFromCamera(ndc(e), camera);
-  var ph = ray.intersectObjects(panelMeshes());
+  var ph    = ray.intersectObjects(panelMeshes());
+  var hwHit = ray.intersectObjects(hwMeshList(), true);
+  // Hardware wins when it's closer than the nearest panel (it usually sits
+  // in FRONT of a panel — knobs on doors, handles on drawers, etc.)
+  var hwFirst = hwHit.length && (!ph.length || hwHit[0].distance < ph[0].distance);
+
+  if (hwFirst) {
+    var hwid = hwHit[0].object.userData.hwid;
+    var hw = hardware.filter(function(h){ return String(h.id) === String(hwid); })[0];
+    if (hw) {
+      e.stopImmediatePropagation();
+      var alreadyHw = (selectedHw === hw);
+      selectHardware(hw);
+      if (alreadyHw) {
+        saveUndo();
+        dragPendingHw = true; isDraggingHw = false;
+        orbitCtrl.enabled = false;
+        dragStart = { mx: e.clientX, my: e.clientY };
+        hwStart   = { x: hw.x, y: hw.y, z: hw.z };
+      }
+      return;
+    }
+  }
+
+  // ── Panel body hit ───────────────────────────────────────────
   if (ph.length) {
     var pid = ph[0].object.userData.pid;
     var p   = panels.filter(function(q){ return q.id === pid; })[0];
@@ -3744,26 +3768,6 @@ canvas.addEventListener('mousedown', function(e) {
       }
     }
     return;
-  }
-
-  // ── Hardware hit ─────────────────────────────────────────────
-  var hwHit = ray.intersectObjects(hwMeshList(), true);
-  if (hwHit.length) {
-    var hwid = hwHit[0].object.userData.hwid;
-    var hw = hardware.filter(function(h){ return String(h.id) === String(hwid); })[0];
-    if (hw) {
-      e.stopImmediatePropagation();
-      var alreadyHw = (selectedHw === hw);
-      selectHardware(hw);
-      if (alreadyHw) {
-        saveUndo();
-        dragPendingHw = true; isDraggingHw = false;
-        orbitCtrl.enabled = false;
-        dragStart = { mx: e.clientX, my: e.clientY };
-        hwStart   = { x: hw.x, y: hw.y, z: hw.z };
-      }
-      return;
-    }
   }
 
   doSelect(null);
@@ -3925,7 +3929,7 @@ document.addEventListener('mousemove', function(e) {
         scene.updateMatrixWorld();
         ray.setFromCamera(ndc(e), camera);
         var overPanel = ray.intersectObjects(panelMeshes()).length > 0;
-        var overHw = !overPanel && ray.intersectObjects(hwMeshList(), true).length > 0;
+        var overHw = ray.intersectObjects(hwMeshList(), true).length > 0;
         // Disable orbit whenever cursor is over a panel or hardware — OC.mousedown
         // checks this flag before doing anything, so it skips when we want to drag.
         orbitCtrl.enabled = !(overPanel || overHw);
