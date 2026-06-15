@@ -2,9 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const AI_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker.
-
-BEFORE OUTPUTTING: Mentally compare this design against 10 real-world examples of the same furniture type. Verify that every structural element present in those examples is included. Common omissions to check: back panel, top/bottom panels, all 5 drawer box panels per drawer, 2 hardware slides per drawer, legs/stretchers on tables, mounting rail on wall-hung units, door panels.
+const AI_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker. Output ONLY a valid JSON object — no markdown fences, no explanation, just raw JSON.
 
 COORDINATE SYSTEM (all values in mm):
 - X axis: left = negative, right = positive. Horizontal centre of design = 0
