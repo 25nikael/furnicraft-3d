@@ -1248,41 +1248,52 @@ function applyAIDesign(replace) {
   if (replace && panels.length > 0) {
     if (!confirm('Replace the current design with "' + design.name + '"?\nThis cannot be undone.')) return;
     saveUndo();
-    // Remove all existing meshes and panels
-    panels.slice().forEach(function(p) {
-      if (p.mesh)   scene.remove(p.mesh);
-      if (p.edges)  scene.remove(p.edges);
-      if (p.selBox) scene.remove(p.selBox);
-      (p.mitreLines || []).forEach(function(l){ scene.remove(l); });
-    });
+    panels.slice().forEach(function(p) { removeMesh(p); });
     panels.length = 0;
+    clearAllHardware();
     doSelect(null);
   } else {
     saveUndo();
   }
 
-  var mat  = design.panels[0] ? (design.panels[0].material || 'oak') : 'oak';
-  var fmat = FMAT[mat] || FMAT.oak;
-
+  var groupMap = {};
   design.panels.forEach(function(pd) {
-    var m    = FMAT[pd.material] || FMAT.oak;
+    var data = Object.assign({}, pd);
+    if (data._g) {
+      if (!groupMap[data._g]) {
+        var gid = nextGroupId++;
+        groupMeta[gid] = { name: data._gname || ('Group ' + gid), parent: null };
+        groupMap[data._g] = gid;
+      }
+      data.groupId = groupMap[data._g];
+      delete data._g; delete data._gname;
+    }
+    var m = FMAT[data.material] || FMAT.oak;
     var p = mkPanel({
-      name:      pd.name      || 'Panel',
-      w:         Math.max(1, pd.w || 18),
-      h:         Math.max(1, pd.h || 18),
-      d:         Math.max(1, pd.d || 18),
-      x:         pd.x || 0,
-      y:         pd.y || 9,
-      z:         pd.z || 0,
-      rx:        pd.rx || 0,
-      ry:        pd.ry || 0,
-      rz:        pd.rz || 0,
-      material:  pd.material || 'oak',
+      name:      data.name     || 'Panel',
+      w:         Math.max(1, data.w || 18),
+      h:         Math.max(1, data.h || 18),
+      d:         Math.max(1, data.d || 18),
+      x:         data.x || 0,
+      y:         data.y || 9,
+      z:         data.z || 0,
+      rx:        data.rx || 0,
+      ry:        data.ry || 0,
+      rz:        data.rz || 0,
+      material:  data.material || 'oak',
       color:     m.color,
-      edgeColor: m.edgeColor
+      edgeColor: m.edgeColor,
+      groupId:   data.groupId || null,
+      func:      data.func ? JSON.parse(JSON.stringify(data.func)) : null
     });
     panels.push(p);
     buildMesh(p);
+  });
+
+  (design.hardware || []).forEach(function(hd) {
+    var hw = mkHardware(hd);
+    hardware.push(hw);
+    buildHardwareMesh(hw);
   });
 
   refreshUI();

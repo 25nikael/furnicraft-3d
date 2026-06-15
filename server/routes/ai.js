@@ -17,7 +17,26 @@ WOODWORKING CONSTRUCTION RULES:
 4. Top & bottom panels fit BETWEEN sides: w = total_width - 36
    - Bottom: y = 9 (sits on floor), Top: y = total_height - 9
 5. Shelves fit between sides: w = total_width - 36, d = depth - 12 (clear of back)
-6. Drawers: front panel only (face frame), positioned flush with cabinet front
+6. DRAWERS — each drawer is a group of 5 panels + 2 hardware slides:
+   - Variables: T=18 (thickness), clr=12.5 (slide clearance each side)
+   - Drawer opening height dh = available_inner_height / number_of_drawers
+   - boxW = cabinet_width - 2*T - 2*clr  (box outer width, inside the slides)
+   - boxH = dh - 24  (box height, leave gap top/bottom)
+   - boxD = cabinet_depth - 40  (box depth, clear of back)
+   - cz = 0  (box centred in depth; front face will protrude forward)
+   - yc = bottom_of_opening + dh*(i+0.5)  (vertical centre of this drawer slot)
+   - groupKey "_g": use a unique string per drawer e.g. "d0", "d1" — ALL 5 panels of one drawer share the same _g value
+   - "_gname": human label e.g. "Drawer 1"
+   - Panel list for drawer i:
+     a) Drawer Front: w=cabinet_width-2*T-4, h=dh-6, d=T, x=0, y=yc, z=cabinet_depth/2-T/2
+        Add "func":{"kind":"drawer","travel":cabinet_depth-30,"slide":"sidemount","clearance":12.5,"open":false}
+     b) Left side:    w=T, h=boxH, d=boxD, x=-(boxW/2-T/2), y=yc, z=cz
+     c) Right side:   w=T, h=boxH, d=boxD, x=+(boxW/2-T/2), y=yc, z=cz
+     d) Back:         w=boxW-2*T, h=boxH, d=T, x=0, y=yc, z=cz-boxD/2+T/2
+     e) Bottom:       w=boxW-2*T, h=T, d=boxD-2*T, x=0, y=yc-boxH/2+T/2, z=cz
+   - Hardware slides (2 per drawer) — add to the "hardware" array:
+     { "type":"slide", "x": +(boxW/2+clr/2), "y": yc, "z": cz, "params":{"length":boxD,"height":45} }
+     { "type":"slide", "x": -(boxW/2+clr/2), "y": yc, "z": cz, "params":{"length":boxD,"height":45} }
 7. Doors: single panel per door opening, d=18, z = depth/2 + 9 (proud of cabinet)
 8. Wall-mounted units MUST include a mounting rail: h=75, d=18, positioned at back-top inside cabinet
 9. For desks with legs: use 4 leg panels, w=50, d=50, h=leg_height, positioned at corners
@@ -25,8 +44,8 @@ WOODWORKING CONSTRUCTION RULES:
 
 MATERIALS — use ONLY these exact keys: oak, walnut, pine, maple, cherry, birch, white, black, grey, metal, glass
 - Structural carcass: oak / birch / pine / white
-- Visible faces / doors: oak / walnut / cherry / maple
-- Back panels: birch
+- Visible faces / doors / drawer fronts: oak / walnut / cherry / maple
+- Drawer box internals, back panels: birch
 - Painted/modern look: white or black
 - MDF painted: grey
 - Steel frame / legs: metal
@@ -40,18 +59,33 @@ OUTPUT JSON FORMAT:
   "panels": [
     {
       "name": "Left Side",
-      "w": 18,
-      "h": 800,
-      "d": 400,
-      "x": -241,
-      "y": 400,
-      "z": 0,
+      "w": 18, "h": 800, "d": 400,
+      "x": -241, "y": 400, "z": 0,
       "material": "oak"
+    },
+    {
+      "name": "Drawer Front 1",
+      "w": 422, "h": 94, "d": 18,
+      "x": 0, "y": 109, "z": 191,
+      "material": "oak",
+      "func": { "kind": "drawer", "travel": 370, "slide": "sidemount", "clearance": 12.5, "open": false },
+      "_g": "d0", "_gname": "Drawer 1"
+    },
+    {
+      "name": "Drawer 1 L",
+      "w": 18, "h": 76, "d": 360,
+      "x": -189, "y": 109, "z": 0,
+      "material": "birch",
+      "_g": "d0"
     }
+  ],
+  "hardware": [
+    { "type": "slide", "x": 202, "y": 109, "z": 0, "params": { "length": 360, "height": 45 } },
+    { "type": "slide", "x": -202, "y": 109, "z": 0, "params": { "length": 360, "height": 45 } }
   ]
 }
 
-Always include ALL structural panels needed to build the piece. Ensure panels touch correctly at joints. Minimise off-cuts by using standard sheet sizes where possible.`;
+Always include ALL structural panels. For every drawer opening output all 5 drawer panels plus 2 hardware slides. Ensure panels touch correctly at joints.`;
 
 router.post('/design', async (req, res) => {
   const { prompt, currentDesign } = req.body || {};
