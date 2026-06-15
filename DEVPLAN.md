@@ -191,7 +191,8 @@ sheet). Remaining, in build order (one block per commit, quote-free messages):
 Per-material price (per sheet) editable in cut sheet; `projectMaterialCost` (sheets×price per material); `_currency` setting + `fmtMoney`; Material Cost section. Verified: 2 lines total $160→$270 on edit, £ currency, no errors.
 ### R4 — Quote generator PDF (D2) ✅
 Quote modal: materials + hardware (`projectHardwareCost`, per-type prices) + labour (hours×rate) + markup%; live breakdown; `exportQuotePDF` via jsPDF/autoTable. Verified: mat 270 + hw 11 + labour 140 ×1.2 = $505, 6 rows, PDF lib ready, no errors.
-### R5 — 3D export GLTF/OBJ/STL + high-res render (E2, E3) ⬜
+### R5 — 3D export GLTF/OBJ/STL + high-res render (E2, E3) ✅
+Loaded GLTF/OBJ/STL exporters (CDN); `exportModel` clones panels+hardware into a group and downloads .glb/.obj/.stl; `exportRender` 2× PNG (renderer `preserveDrawingBuffer:true`); Export modal + toolbar button. Verified: OBJ 14.7KB, STL 10.5KB, GLB parses, PNG data:image/png 45KB, no errors.
 ### R6 — DXF/SVG per-panel + shareable link (E1, E4) ⬜
 ### R7 — JSON import/export + project thumbnails (H5, H1) ⬜
 ### R8 — Version history / restore (H2, backend) ⬜

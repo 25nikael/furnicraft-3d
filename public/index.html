@@ -581,6 +581,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn" id="btn-explode" onclick="toggleExplode()">💥 Explode</button>
       <button class="tbtn" id="btn-room" onclick="toggleRoom()">🏠 Room</button>
       <button class="tbtn" id="btn-ar" onclick="viewInAR()">📱 View in AR</button>
+      <button class="tbtn" id="btn-export" onclick="openExport()">⬇ Export</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
@@ -697,6 +698,25 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Export modal ──────────────────────────────────── -->
+<div class="overlay-modal" id="export-modal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-hdr">Export<button class="modal-close" onclick="closeExport()">×</button></div>
+    <div class="modal-body">
+      <div class="prop-title">3D model</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="btn" style="flex:1;margin:0;" onclick="exportModel('glb')">GLB</button>
+        <button class="btn" style="flex:1;margin:0;" onclick="exportModel('obj')">OBJ</button>
+        <button class="btn" style="flex:1;margin:0;" onclick="exportModel('stl')">STL</button>
+      </div>
+      <div class="prop-title">Image</div>
+      <button class="btn" onclick="exportRender()">🖼 High-res PNG render</button>
+      <div class="prop-title" style="margin-top:12px;">CNC / 2D</div>
+      <div id="export-cnc"></div>
     </div>
   </div>
 </div>
@@ -1026,6 +1046,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 <!-- Three.js r128 — UMD build with examples/js OrbitControls -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- 3D exporters (E2) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 <!-- Google Identity Services for Google Sign-In -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <!-- jsPDF + autoTable for PDF export -->
@@ -1844,7 +1868,7 @@ function getGroupPanels(p) {
 
 // ── Scene ──────────────────────────────────────────────────────
 var canvas = document.getElementById('three-canvas');
-var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -4957,6 +4981,50 @@ function exportQuotePDF() {
   doc.text('Total: ' + fmtMoney(q.total), margin, y);
   doc.save((name || 'quote') + '-quote.pdf');
 }
+
+// ── 3D model & image export (R5 / E2, E3) ───────────────
+function _downloadBlob(data, filename, type) {
+  var blob = (data instanceof Blob) ? data : new Blob([data], { type: type || 'application/octet-stream' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+function _projName() { return (document.getElementById('topbar-proj-name').textContent || 'furnicraft').replace(/[^\w.-]+/g, '_'); }
+function _exportGroup() {
+  var g = new THREE.Group();
+  panels.forEach(function (p) { if (p.mesh) g.add(p.mesh.clone()); });
+  hardware.forEach(function (h) { if (h.mesh) g.add(h.mesh.clone()); });
+  return g;
+}
+function exportModel(fmt) {
+  var g = _exportGroup();
+  if (!g.children.length) { alert('Nothing to export — add some panels first.'); return; }
+  var nm = _projName();
+  if (fmt === 'glb') {
+    if (typeof THREE.GLTFExporter === 'undefined') { alert('GLTF exporter still loading — try again in a moment.'); return; }
+    new THREE.GLTFExporter().parse(g, function (res) {
+      _downloadBlob(res instanceof ArrayBuffer ? res : JSON.stringify(res), nm + '.glb', 'model/gltf-binary');
+    }, { binary: true });
+  } else if (fmt === 'obj') {
+    if (typeof THREE.OBJExporter === 'undefined') { alert('OBJ exporter still loading — try again in a moment.'); return; }
+    _downloadBlob(new THREE.OBJExporter().parse(g), nm + '.obj', 'text/plain');
+  } else if (fmt === 'stl') {
+    if (typeof THREE.STLExporter === 'undefined') { alert('STL exporter still loading — try again in a moment.'); return; }
+    _downloadBlob(new THREE.STLExporter().parse(g), nm + '.stl', 'text/plain');
+  }
+  closeExport();
+}
+function exportRender() {
+  var w = canvas.clientWidth || canvas.width, h = canvas.clientHeight || canvas.height, scale = 2;
+  renderer.setSize(w * scale, h * scale, false);
+  renderer.render(scene, camera);
+  var url = canvas.toDataURL('image/png');
+  renderer.setSize(w, h, false);
+  var a = document.createElement('a'); a.href = url; a.download = _projName() + '.png'; a.click();
+  closeExport();
+}
+function openExport()  { document.getElementById('export-modal').classList.add('active'); }
+function closeExport() { document.getElementById('export-modal').classList.remove('active'); }
 
 // ── CSV export (R1 / C4) ────────────────────────────────
 function _csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
