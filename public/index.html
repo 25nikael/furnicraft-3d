@@ -716,7 +716,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <div class="prop-title">Image</div>
       <button class="btn" onclick="exportRender()">🖼 High-res PNG render</button>
       <div class="prop-title" style="margin-top:12px;">CNC / 2D</div>
-      <div id="export-cnc"></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn" style="flex:1;margin:0;" onclick="exportDXF()">DXF</button>
+        <button class="btn" style="flex:1;margin:0;" onclick="exportSVG()">SVG</button>
+      </div>
+      <div class="prop-title" style="margin-top:12px;">Share</div>
+      <button class="btn" onclick="shareLink()">🔗 Copy read-only link</button>
+      <div id="share-msg" style="font-size:11px;color:var(--txt3);margin-top:4px;"></div>
     </div>
   </div>
 </div>
@@ -5026,6 +5032,68 @@ function exportRender() {
 function openExport()  { document.getElementById('export-modal').classList.add('active'); }
 function closeExport() { document.getElementById('export-modal').classList.remove('active'); }
 
+// ── DXF / SVG per-panel + share link (R6 / E1, E4) ──────
+// Lay out each panel's face rectangle in rows (mm units) for 2D/CNC export
+function _panelLayout() {
+  var gap = 20, maxW = 2400, x = 0, y = 0, rowH = 0, out = [];
+  panels.forEach(function (p) {
+    var fd = panelFaceDims(p), w = fd.faceL, h = fd.faceW;
+    if (x + w > maxW && x > 0) { x = 0; y += rowH + gap; rowH = 0; }
+    out.push({ p: p, x: x, y: y, w: w, h: h });
+    x += w + gap; rowH = Math.max(rowH, h);
+  });
+  return out;
+}
+function exportSVG() {
+  var L = _panelLayout();
+  if (!L.length) { alert('Nothing to export — add some panels first.'); return; }
+  var maxX = 0, maxY = 0;
+  L.forEach(function (it) { maxX = Math.max(maxX, it.x + it.w); maxY = Math.max(maxY, it.y + it.h); });
+  var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + maxX + 'mm" height="' + maxY + 'mm" viewBox="0 0 ' + maxX + ' ' + maxY + '">';
+  L.forEach(function (it, i) {
+    s += '<rect x="' + it.x + '" y="' + it.y + '" width="' + it.w + '" height="' + it.h + '" fill="none" stroke="black" stroke-width="1"/>';
+    s += '<text x="' + (it.x + it.w / 2) + '" y="' + (it.y + it.h / 2) + '" font-size="' + Math.max(10, Math.min(it.w, it.h) / 8) + '" text-anchor="middle" fill="#888">#' + (i + 1) + ' ' + it.p.name + '</text>';
+  });
+  s += '</svg>';
+  _downloadBlob(s, _projName() + '.svg', 'image/svg+xml');
+  closeExport();
+}
+function exportDXF() {
+  var L = _panelLayout();
+  if (!L.length) { alert('Nothing to export — add some panels first.'); return; }
+  var d = '0\nSECTION\n2\nENTITIES\n';
+  function ln(x1, y1, x2, y2) { d += '0\nLINE\n8\nPANELS\n10\n' + x1 + '\n20\n' + y1 + '\n11\n' + x2 + '\n21\n' + y2 + '\n'; }
+  L.forEach(function (it) {
+    var x = it.x, y = it.y, w = it.w, h = it.h;
+    ln(x, y, x + w, y); ln(x + w, y, x + w, y + h); ln(x + w, y + h, x, y + h); ln(x, y + h, x, y);
+  });
+  d += '0\nENDSEC\n0\nEOF\n';
+  _downloadBlob(d, _projName() + '.dxf', 'application/dxf');
+  closeExport();
+}
+function shareLink() {
+  try {
+    var b64 = btoa(unescape(encodeURIComponent(JSON.stringify(_projectState()))));
+    var url = location.origin + location.pathname + '#d=' + b64;
+    if (navigator.clipboard) navigator.clipboard.writeText(url);
+    var msg = document.getElementById('share-msg');
+    if (msg) msg.textContent = (url.length > 8000 ? '⚠ Link is large (' + url.length + ' chars) — may not work everywhere. ' : '✓ Link copied to clipboard! ');
+    return url;
+  } catch (e) { alert('Could not create link: ' + e.message); }
+}
+function _loadSharedFromHash() {
+  var h = location.hash;
+  if (h && h.indexOf('#d=') === 0) {
+    try {
+      var st = JSON.parse(decodeURIComponent(escape(atob(h.slice(3)))));
+      _loadProjectState(st);
+      document.getElementById('topbar-proj-name').textContent = 'Shared design';
+      return true;
+    } catch (e) { /* ignore malformed link */ }
+  }
+  return false;
+}
+
 // ── CSV export (R1 / C4) ────────────────────────────────
 function _csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function exportCutSheetCSV() {
@@ -5359,6 +5427,7 @@ function animate() {
 
 // ── INIT ───────────────────────────────────────────────────────
 buildNightstand();
+_loadSharedFromHash();   // if opened via a shared link, load that design instead
 fitCamera();
 renderer.setAnimationLoop(animate);  // XR-compatible loop (works without XR too)
 if (!localStorage.getItem('fc3d_seen')) setTimeout(openWelcome, 400);  // first-visit onboarding
