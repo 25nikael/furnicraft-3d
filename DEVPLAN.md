@@ -174,7 +174,28 @@ Coexist with FPS/measure; mobile/theme; regression; README + DEVPLAN.
 **Done:** README "Productivity" section; toolbar undo/redo + topbar Help fit the scrollable/mobile UI; modals themed. Regression verified: nudge + Ctrl+Z/Ctrl+⇧Z chain, ? cheatsheet, grid 25 snaps 140→150, welcome + history modals, cut sheet, light theme, mobile drawer, full round-trip — no errors.
 
 ---
-**J-SERIES COMPLETE** — all four J features shipped (J1–J4 + integration) across commits 790b611 → (J-block 5).
+**J-SERIES COMPLETE** — all four J features shipped (J1–J4 + integration) across commits 790b611 → deaea8b.
+
+---
+
+# Development Plan 5 — Remaining features (C / D / E / H / I)
+
+Already shipped earlier: **C1** sheet-nesting optimizer + **C2** kerf (in the cut
+sheet). Remaining, in build order (one block per commit, quote-free messages):
+
+### R1 — Edge-banding totals + CSV export (C3, C4) ✅
+`_bandingTotals` (face perimeter per material) + Edge Banding section in cut sheet; `exportCutSheetCSV` downloads parts + hardware + banding as CSV; CSV button in cut-sheet header. Verified: 2 materials/9.91m, 454-byte text/csv blob, no errors.
+### R2 — Part labels/numbers in 3D + layout (C5) ⬜
+### R3 — Material cost DB + currency (D1, D3) ⬜
+### R4 — Quote generator PDF (D2) ⬜
+### R5 — 3D export GLTF/OBJ/STL + high-res render (E2, E3) ⬜
+### R6 — DXF/SVG per-panel + shareable link (E1, E4) ⬜
+### R7 — JSON import/export + project thumbnails (H5, H1) ⬜
+### R8 — Version history / restore (H2, backend) ⬜
+### R9 — Share token + public gallery (H3, H4, backend) ⬜
+### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ⬜
+### R11 — AI design from image/sketch (I2) ⬜
+### R12 — Integration, polish & docs ⬜
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).

@@ -267,8 +267,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .cs-tab{padding:12px 22px;font-size:13px;cursor:pointer;color:var(--txt3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .12s;white-space:nowrap;}
 .cs-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
 .cs-pane{display:none;}.cs-pane.active{display:block;}
-#btn-export-pdf{background:var(--teal);border:none;color:#000;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:700;}
+#btn-export-pdf,#btn-export-csv{background:var(--teal);border:none;color:#000;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:700;}
+#btn-export-csv{background:var(--bg4);color:var(--txt);}
 #btn-export-pdf:hover{background:var(--teal-lt);}
+#btn-export-csv:hover{background:var(--bg3);}
 
 /* ── Auth & Project modals ─────────────────────────── */
 .overlay-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;}
@@ -946,6 +948,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <div id="cs-hdr">
       <h2>✂ Cut Sheet &amp; Assembly Guide</h2>
       <div style="display:flex;align-items:center;gap:8px;">
+        <button id="btn-export-csv" onclick="exportCutSheetCSV()">⬇ CSV</button>
         <button id="btn-export-pdf" onclick="exportToPDF()">⬇ Export PDF</button>
         <button class="cs-close" id="btn-cs-close">×</button>
       </div>
@@ -968,6 +971,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div class="cs-sec" id="cs-hw-sec">
           <h3>Hardware</h3>
           <div id="cs-hardware"></div>
+        </div>
+        <div class="cs-sec" id="cs-band-sec">
+          <h3>Edge Banding</h3>
+          <div id="cs-banding"></div>
         </div>
         <div class="cs-sec">
           <h3>Stock Board Optimizer</h3>
@@ -4782,6 +4789,61 @@ function _hwGroups() {
   return groups;
 }
 
+// ── Edge-banding totals (R1 / C3) ───────────────────────
+// Estimate banding as the perimeter of each panel's face, grouped by material.
+function _bandingTotals() {
+  var byMat = {};
+  panels.forEach(function (p) {
+    var fd = panelFaceDims(p);
+    var perim = 2 * (fd.faceL + fd.faceW);
+    var key = p.material || 'custom';
+    byMat[key] = (byMat[key] || 0) + perim;
+  });
+  return byMat;
+}
+function renderBanding() {
+  var el = document.getElementById('cs-banding');
+  if (!el) return;
+  var t = _bandingTotals(), keys = Object.keys(t);
+  if (!keys.length) { el.innerHTML = '<p style="font-size:12px;color:#888;">No panels.</p>'; return; }
+  var total = 0;
+  var rows = keys.map(function (k) {
+    total += t[k];
+    var name = (FMAT[k] && FMAT[k].name) || k;
+    return '<tr><td>' + name + '</td><td>' + (t[k] / 1000).toFixed(2) + ' m</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="cs-tbl"><thead><tr><th>Material</th><th>Banding length</th></tr></thead><tbody>'
+    + rows + '<tr style="font-weight:700;"><td>Total</td><td>' + (total / 1000).toFixed(2) + ' m</td></tr></tbody></table>'
+    + '<p style="font-size:11px;color:#888;margin-top:4px;">Assumes all four edges of each panel are banded — adjust for your design.</p>';
+}
+
+// ── CSV export (R1 / C4) ────────────────────────────────
+function _csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportCutSheetCSV() {
+  var rows = [];
+  rows.push(['#','Name','Length(mm)','Width(mm)','Thickness(mm)','Joinery','L raw(mm)','W raw(mm)','Grain','Material']);
+  panels.forEach(function (p, i) {
+    var fd = panelFaceDims(p);
+    rows.push([i + 1, p.name, Math.round(fd.faceL), Math.round(fd.faceW), Math.round(panelThickness(p)),
+               _jointSummary(p, false), fd.rawL, fd.rawW, p.grain === 'length' ? 'Length' : 'Width', p.material || 'custom']);
+  });
+  if (hardware.length) {
+    rows.push([]); rows.push(['Hardware','Finish','Qty']);
+    var g = _hwGroups();
+    Object.keys(g).forEach(function (k) { rows.push([hwLabel(g[k].type), (HW_FINISH[g[k].finish] ? HW_FINISH[g[k].finish].name : g[k].finish), g[k].count]); });
+  }
+  var bt = _bandingTotals();
+  rows.push([]); rows.push(['Edge banding (m)','']);
+  Object.keys(bt).forEach(function (k) { rows.push([(FMAT[k] && FMAT[k].name) || k, (bt[k] / 1000).toFixed(2)]); });
+  var csv = rows.map(function (r) { return r.map(_csvCell).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (document.getElementById('topbar-proj-name').textContent || 'furnicraft') + '-cutsheet.csv';
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+
 function renderHardwareBOM() {
   var el = document.getElementById('cs-hardware');
   if (!el) return;
@@ -4799,6 +4861,7 @@ function showCutSheet() {
   switchCsTab('cs');
   renderAssemblyGuide();
   renderHardwareBOM();
+  renderBanding();
   var tbody = document.getElementById('cs-tbody');
   tbody.innerHTML = '';
   panels.forEach(function(p, i) {
