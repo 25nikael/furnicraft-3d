@@ -22,6 +22,9 @@ guides, export to PDF, and save your projects to your account in the cloud.
   mirror & linear/radial array, two-point measure annotations, parametric
   templates (bookcase, wardrobe, cabinet, table, drawer unit), named
   sub-assemblies, and parametric overall resize (edit W/H/D to rescale)
+- **Visualization** — PBR realistic rendering (reflections, tone mapping),
+  exploded-view animation, room context (floor + walls to scale), custom
+  texture upload per panel, and view-in-AR on supported phones (WebXR)
 - **Output** — auto cut sheet with board-nesting optimizer, assembly guide, PDF export
 - **AI Designer** — describe furniture in plain language and generate a starting design
 

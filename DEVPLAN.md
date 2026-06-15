@@ -139,8 +139,12 @@ Per-panel image upload (data URL) applied as the material map; persisted.
 View-in-AR via renderer.xr + ARButton; graceful fallback. Needs HTTPS + device.
 **Done:** render loop switched to `renderer.setAnimationLoop` (XR-compatible, verified 21 frames rendering); `viewInAR` checks `navigator.xr` + `isSessionSupported('immersive-ar')` with graceful alerts; `_enterAR` scales scene mm→m (0.001), places it ~2m ahead, passthrough bg, hides grid/floor; `_exitAR` restores; `📱 View in AR` toolbar button. Verified: loop renders, functions wired, no errors. (Live AR needs an AR phone over HTTPS — not testable on desktop.)
 
-### G-Block 6 — Integration, polish & docs ⬜
+### G-Block 6 — Integration, polish & docs ✅
 Toggles coexist; mobile/theme; regression; README + DEVPLAN.
+**Done:** README "Visualization" section; new toolbar buttons in the scrollable mobile toolbar; settings Rendering toggle themed. Regression verified: PBR Standard↔Phong, explode + room coexist, custom texture applies, cut sheet renders, light theme + mobile drawer, full round-trip preserves textureURL, no errors.
+
+---
+**G-SERIES COMPLETE** — all five G features shipped (G1–G5 + integration) across commits 91f13c9 → (G-block 6).
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).
