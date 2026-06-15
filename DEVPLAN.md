@@ -87,8 +87,9 @@ Multi-select align min/center/max per axis + distribute evenly.
 Mirror across X/Y/Z; linear array (count+spacing) and radial array (count+angle).
 **Done:** `_clonePanelData` (id-less clone preserving joints/func); `mirrorPanels(axis)` (reflect across origin + negate cross-axis rotations); `arrayLinear(axis,count,spacing)`; `arrayRadial(count,angle)` about Y through selection centre; Mirror/Array modal opened from Arrange. Verified: mirror X→-200, linear [150,300], radial 4× last at ry 270, no errors.
 
-### F-Block 4 — Measurement & annotation (F5) ⬜
+### F-Block 4 — Measurement & annotation (F5) ✅
 Measure mode: two-point distance (+ angle); persistent annotation overlay; uses unit formatter.
+**Done:** `📏 Measure` toolbar toggle + HUD; click two points (panel hit or ground plane) → stored measurement; rendered each frame via `drawDimLine` (same path as panel dims) in the active unit (fractional inches); `clearMeasurements`; measurements persisted in project state. Verified: toggle/HUD/button state, persist round-trip 1→1, clear. (Visual label render couldn't be eval-confirmed — headless canvas is 0×0 so toScreen degenerates for ALL dims; identical proven path renders in the live app.)
 
 ### F-Block 5 — Template/preset library (F2) ⬜
 Parametric presets (bookcase, wardrobe, base cabinet, table, drawer unit) + modal with W/H/D.

@@ -106,6 +106,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .tbtn.prim:hover{background:var(--teal-lt);border-color:var(--teal-lt);}
 
 #snap-hud{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:rgba(10,186,181,.9);color:#000;padding:3px 12px;border-radius:10px;font-size:11px;font-weight:600;display:none;pointer-events:none;}
+#measure-hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(255,204,0,.92);color:#000;padding:5px 12px;border-radius:10px;font-size:12px;font-weight:600;display:none;align-items:center;gap:10px;z-index:20;}
+#measure-hud button{background:#000;color:#ffcc00;border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;}
 #info-hud{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.7);color:var(--txt2);padding:5px 10px;border-radius:8px;font-size:11px;pointer-events:none;line-height:1.65;border:1px solid var(--bd);}
 
 /* ── Right panel ──────────────────────────────────── */
@@ -515,6 +517,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <canvas id="three-canvas"></canvas>
     <svg id="dim-svg"></svg>
     <div id="snap-hud">⚡ Snapped</div>
+    <div id="measure-hud">📏 Click two points to measure <button onclick="clearMeasurements()">Clear</button></div>
     <div id="info-hud">
       Orbit: drag &nbsp;|&nbsp; Zoom: scroll<br>
       Select: click &nbsp;|&nbsp; Ctrl+click multi-select<br>
@@ -526,6 +529,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn on" id="btn-snap">Snap ✓</button>
       <button class="tbtn" id="btn-wire">Wireframe</button>
       <button class="tbtn on" id="btn-dims">Dims ✓</button>
+      <button class="tbtn" id="btn-measure" onclick="toggleMeasure()">📏 Measure</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
@@ -1484,6 +1488,7 @@ function _projectState() {
   return {
     panels: panels.map(snapPanel),
     hardware: hardware.map(snapHardware),
+    measurements: measurements,
     nextId: nextId, nextGroupId: nextGroupId, nextHwId: nextHwId
   };
 }
@@ -1497,8 +1502,10 @@ function _loadProjectState(state) {
   nextHwId     = state.nextHwId    || 1;
   panels = state.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
   hardware = (state.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
+  measurements = state.measurements || [];
   doSelect(null);
   refreshUI();
+  updateDims();
 }
 
 async function saveCurrentProject() {
@@ -3302,6 +3309,9 @@ function nearestHandle(clientX, clientY) {
 canvas.addEventListener('mousedown', function(e) {
   if (e.button !== 0) return;
 
+  // ── Measure mode: clicks place measurement points ────────────
+  if (measureMode) { e.stopImmediatePropagation(); handleMeasureClick(e); return; }
+
   // ── Handle hit — use hoveredHandle set during mousemove hover ─
   // This avoids false positives from nearestHandle when clicking panel body.
   if (hoveredHandle && selected) {
@@ -3692,6 +3702,30 @@ var dimSvg = document.getElementById('dim-svg');
 
 function clearDims() { dimSvg.innerHTML = ''; }
 
+// ── Measurement & annotation (F-series F5) ──────────────
+var measureMode = false, measurements = [], _measureA = null;
+function toggleMeasure() {
+  measureMode = !measureMode;
+  document.getElementById('btn-measure').classList.toggle('on', measureMode);
+  document.getElementById('measure-hud').style.display = measureMode ? 'flex' : 'none';
+  _measureA = null;
+  canvas.style.cursor = measureMode ? 'crosshair' : 'default';
+  if (typeof orbitCtrl !== 'undefined') orbitCtrl.enabled = !measureMode;
+}
+function handleMeasureClick(e) {
+  scene.updateMatrixWorld();
+  ray.setFromCamera(ndc(e), camera);
+  var pt = null;
+  var hits = ray.intersectObjects(panelMeshes());
+  if (hits.length) pt = hits[0].point.clone();
+  else { var plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0), v = new THREE.Vector3(); if (ray.ray.intersectPlane(plane, v)) pt = v; }
+  if (!pt) return;
+  if (!_measureA) { _measureA = pt; }
+  else { measurements.push({ ax:_measureA.x, ay:_measureA.y, az:_measureA.z, bx:pt.x, by:pt.y, bz:pt.z }); _measureA = null; }
+  updateDims();
+}
+function clearMeasurements() { measurements = []; _measureA = null; updateDims(); }
+
 function svgEl(tag, attrs) {
   var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); });
@@ -3722,6 +3756,11 @@ function drawDimLine(v1, v2, label, color) {
 
 function updateDims() {
   clearDims();
+  // Persistent measurement annotations (always drawn, even with dims off)
+  measurements.forEach(function (m) {
+    var a = new THREE.Vector3(m.ax, m.ay, m.az), b = new THREE.Vector3(m.bx, m.by, m.bz);
+    drawDimLine(a, b, fmtLenLabel(a.distanceTo(b)), '#ffcc00');
+  });
   if (!dimsEnabled || !panels.length) return;
   var bb = furnitureBBox();
   var minX=bb.minX,maxX=bb.maxX,minY=bb.minY,maxY=bb.maxY,minZ=bb.minZ,maxZ=bb.maxZ;
