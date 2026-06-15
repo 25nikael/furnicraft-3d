@@ -1218,6 +1218,7 @@ async function _aiRun(prompt, currentDesign) {
   btn.textContent = '⏳ Designing…';
   statEl.style.display = 'block';
   statEl.textContent = currentDesign ? 'Updating your design…' : 'Designing…';
+  setTimeout(function(){ if (statEl.style.display !== 'none') statEl.textContent = 'Verifying completeness against similar designs…'; }, 4000);
 
   try {
     var resp = await fetch('/api/ai/design', {

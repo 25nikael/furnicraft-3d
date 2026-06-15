@@ -87,6 +87,33 @@ OUTPUT JSON FORMAT:
 
 Always include ALL structural panels. For every drawer opening output all 5 drawer panels plus 2 hardware slides. Ensure panels touch correctly at joints.`;
 
+const VERIFY_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker reviewing a generated furniture design for completeness.
+
+You will be given: (1) the original user request, and (2) a generated design JSON.
+
+Your task:
+1. Think of 10 real-world examples of this type of furniture (e.g. 10 real bookcases, 10 real bedside tables, etc.)
+2. For each structural element that appears consistently across those 10 examples, verify it is present in the design
+3. Check specifically for these common omissions:
+   - Missing back panel
+   - Missing top or bottom panel
+   - Shelves not spanning the full interior width/depth
+   - Drawer boxes incomplete (must have: front with func, left side, right side, back, bottom — and 2 slide hardware entries)
+   - Missing mounting rails on wall-hung pieces
+   - Missing legs or stretchers on tables/desks
+   - Door panels missing or wrongly positioned
+   - Panels that overlap or have gaps at joints
+4. If anything is missing or wrong, add/fix it. If everything is correct, return the design unchanged.
+
+Return ONLY the corrected JSON object — no explanation, no markdown fences.
+
+Use the same schema rules:
+- All coordinates and dimensions in mm
+- Panel position (x,y,z) is the CENTRE of the panel
+- Drawer box panels share _g group key; drawer front has func:{kind:"drawer",...}
+- hardware array: {type:"slide", x, y, z, params:{length, height:45}} — 2 per drawer
+- Materials: oak, walnut, pine, maple, cherry, birch, white, black, grey, metal, glass`;
+
 router.post('/design', async (req, res) => {
   const { prompt, currentDesign } = req.body || {};
   if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'prompt required' });
@@ -105,13 +132,10 @@ router.post('/design', async (req, res) => {
   }
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    // Pass 1 — generate initial design
+    const resp1 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
@@ -119,12 +143,33 @@ router.post('/design', async (req, res) => {
         messages: [{ role: 'user', content: userContent }]
       })
     });
-    if (!resp.ok) {
-      const e = await resp.json().catch(() => ({}));
-      return res.status(resp.status).json({ error: e.error ? e.error.message : `API error ${resp.status}` });
+    if (!resp1.ok) {
+      const e = await resp1.json().catch(() => ({}));
+      return res.status(resp1.status).json({ error: e.error ? e.error.message : `API error ${resp1.status}` });
     }
-    const data = await resp.json();
-    res.json({ text: data.content[0].text });
+    const draft = (await resp1.json()).content[0].text;
+
+    // Pass 2 — verify completeness against 10 similar examples
+    const verifyContent =
+      `Original request: ${prompt.trim()}\n\n` +
+      `Generated design:\n${draft}`;
+
+    const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: VERIFY_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: verifyContent }]
+      })
+    });
+    if (!resp2.ok) {
+      // Verification failed — return the draft rather than erroring
+      return res.json({ text: draft });
+    }
+    const verified = (await resp2.json()).content[0].text;
+    res.json({ text: verified });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
