@@ -3134,17 +3134,35 @@ function tplTable(W, H, D) {
   return { name:'Table', panels:list };
 }
 function tplDrawerUnit(W, H, D) {
-  var T = 18, list = _tplCarcass(W, H, D, { mat:'birch' }), inner = H - 2*T;
-  var n = Math.max(2, Math.round(inner/200)), dh = inner/n;
-  for (var i = 0; i < n; i++) list.push({ name:'Drawer Front '+(i+1), w:W-2*T-4, h:dh-6, d:T, x:0, y:T+dh*(i+0.5), z:(D/2-T/2),
-    material:'oak', func:{ kind:'drawer', travel:Math.max(150,D-30), slide:'sidemount', clearance:12.5, open:false } });
-  return { name:'Drawer Unit', panels:list };
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'birch' }), hw = [], inner = H - 2*T;
+  var n = Math.max(2, Math.round(inner / 200)), dh = inner / n, clr = 12.5;
+  var boxW = W - 2*T - 2*clr;                 // drawer box outer width (slide clearance each side)
+  for (var i = 0; i < n; i++) {
+    var yc = T + dh*(i + 0.5);
+    var boxH = Math.max(40, dh - 24);
+    var boxD = Math.max(80, D - 40);
+    var cz = -(T / 2);                         // box just behind the front
+    var g = 'd' + i, gname = 'Drawer ' + (i + 1);
+    // Working front face
+    list.push({ name:'Drawer Front '+(i+1), w:W-2*T-4, h:dh-6, d:T, x:0, y:yc, z:D/2-T/2, material:'oak',
+                func:{ kind:'drawer', travel:Math.max(150, D-30), slide:'sidemount', clearance:clr, open:false }, _g:g, _gname:gname });
+    // Drawer box: two sides, back, bottom
+    list.push({ name:'Drawer '+(i+1)+' L', w:T, h:boxH, d:boxD, x:-(boxW/2 - T/2), y:yc, z:cz, material:'birch', _g:g });
+    list.push({ name:'Drawer '+(i+1)+' R', w:T, h:boxH, d:boxD, x:(boxW/2 - T/2),  y:yc, z:cz, material:'birch', _g:g });
+    list.push({ name:'Drawer '+(i+1)+' Back', w:boxW-2*T, h:boxH, d:T, x:0, y:yc, z:cz - boxD/2 + T/2, material:'birch', _g:g });
+    list.push({ name:'Drawer '+(i+1)+' Bottom', w:boxW-2*T, h:T, d:boxD-2*T, x:0, y:yc - boxH/2 + T/2, z:cz, material:'birch', _g:g });
+    // Side-mount slides
+    [-1, 1].forEach(function (s) {
+      hw.push({ type:'slide', x: Math.round(s*(boxW/2 + clr/2)), y: Math.round(yc), z: Math.round(cz), params:{ length: Math.round(boxD), height: 45 } });
+    });
+  }
+  return { name:'Drawer Unit', panels:list, hardware:hw };
 }
 
 var TPL_GEN = { bookcase:tplBookcase, wardrobe:tplWardrobe, basecabinet:tplBaseCabinet, table:tplTable, drawerunit:tplDrawerUnit };
 var TPL_DEFAULTS = { bookcase:[800,1800,300], wardrobe:[1000,2000,600], basecabinet:[600,870,560], table:[1200,740,750], drawerunit:[500,800,500] };
 
-function _applyPanelSet(name, list, replace) {
+function _applyPanelSet(name, list, replace, hwList) {
   saveUndo();
   if (replace) {
     panels.slice().forEach(function (p) { removeMesh(p); });
@@ -3152,11 +3170,19 @@ function _applyPanelSet(name, list, replace) {
     clearAllHardware();
     doSelect(null);
   }
+  var groupMap = {};
   list.forEach(function (pd) {
-    var m = FMAT[pd.material] || FMAT.oak;
-    var p = mkPanel(Object.assign({ color:m.color, edgeColor:m.edgeColor }, pd));
+    var data = Object.assign({}, pd);
+    if (data._g) {
+      if (!groupMap[data._g]) { var gid = nextGroupId++; groupMeta[gid] = { name: data._gname || ('Group ' + gid), parent: null }; groupMap[data._g] = gid; }
+      data.groupId = groupMap[data._g];
+      delete data._g; delete data._gname;
+    }
+    var m = FMAT[data.material] || FMAT.oak;
+    var p = mkPanel(Object.assign({ color:m.color, edgeColor:m.edgeColor }, data));
     panels.push(p); buildMesh(p);
   });
+  (hwList || []).forEach(function (hd) { var hw = mkHardware(hd); hardware.push(hw); buildHardwareMesh(hw); });
   refreshUI(); fitCamera();
   document.getElementById('topbar-proj-name').textContent = name;
 }
@@ -3176,7 +3202,7 @@ function applyTemplate(replace) {
   var D = parseLen(document.getElementById('tpl-d').value) || 400;
   if (replace && panels.length && !confirm('Replace the current design with this template?')) return;
   var tpl = TPL_GEN[k](W, H, D);
-  _applyPanelSet(tpl.name, tpl.panels, replace);
+  _applyPanelSet(tpl.name, tpl.panels, replace, tpl.hardware);
   closeTemplates();
 }
 
@@ -3190,7 +3216,7 @@ function closeWelcome() {
 function loadSample(key) {
   var d = TPL_DEFAULTS[key] || [800, 800, 400];
   var t = TPL_GEN[key](d[0], d[1], d[2]);
-  _applyPanelSet(t.name, t.panels, true);
+  _applyPanelSet(t.name, t.panels, true, t.hardware);
   localStorage.setItem('fc3d_seen', '1');
   closeWelcome();
 }
@@ -4078,7 +4104,11 @@ document.addEventListener('mousemove', function(e) {
   // ── Hardware drag (XZ plane at its current height) ───────────
   if (isDraggingHw && selectedHw) {
     var hwp = selectedHw, hsp = hwStart;
-    var hplane = new THREE.Plane(new THREE.Vector3(0,1,0), -hsp.y);
+    var vd = new THREE.Vector3(); camera.getWorldDirection(vd);
+    var ax = Math.abs(vd.x), ay = Math.abs(vd.y), az = Math.abs(vd.z);
+    var nrm = (ay >= ax && ay >= az) ? new THREE.Vector3(0,1,0)
+            : (ax >= az ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,0,1));
+    var hplane = new THREE.Plane(nrm, -nrm.dot(new THREE.Vector3(hsp.x, hsp.y, hsp.z)));
     var hr0 = canvas.getBoundingClientRect();
     var hsR = new THREE.Raycaster();
     hsR.setFromCamera(new THREE.Vector2(((dragStart.mx-hr0.left)/hr0.width)*2-1, ((dragStart.my-hr0.top)/hr0.height)*-2+1), camera);
@@ -4087,6 +4117,7 @@ document.addEventListener('mousemove', function(e) {
     hsR.ray.intersectPlane(hplane, hsi); ray.ray.intersectPlane(hplane, hci);
     if (hsi.lengthSq() || hci.lengthSq()) {
       hwp.x = Math.round(hsp.x + (hci.x - hsi.x));
+      hwp.y = Math.round(hsp.y + (hci.y - hsi.y));
       hwp.z = Math.round(hsp.z + (hci.z - hsi.z));
       syncHwPos(hwp); rebuildHwSelBox();
     }
@@ -4708,6 +4739,10 @@ function applyProps() {
   p.y         = parseLen(document.getElementById('p-y').value) || 0;
   p.z         = parseLen(document.getElementById('p-z').value) || 0;
   var matKey = document.getElementById('p-mat').value;
+  if (matKey !== p.material && p.textureURL) {
+    if (p._uploadedTex) { p._uploadedTex.dispose(); p._uploadedTex = null; }
+    p.textureURL = null;
+  }
   p.material = matKey;
   var fd2 = FMAT[matKey];
   if (fd2 && matKey !== 'custom') {
