@@ -99,9 +99,10 @@ Parametric presets (bookcase, wardrobe, base cabinet, table, drawer unit) + moda
 Named groups + group-of-groups; select/move as a unit; group manager.
 **Done:** `groupMeta` registry (name + parent); `_rootGroup`/`getGroupPanels` make selection grab the whole top-level assembly; `nestSelected` parents distinct groups under a new assembly; Group Manager modal (rename, select, ungroup, nest) with depth indent; persisted in project state. Verified: 2 groups nest under common parent, member-select grabs all 4, rename, 3 manager rows, round-trip preserves groupMeta + assembly.
 
-### F-Block 7 — Parametric overall resize (F1) ⬜
+### F-Block 7 — Parametric overall resize (F1) ✅
 Editable overall W/H/D → proportional refit of all panels (positions + in-plane
 dims, thickness preserved). Pragmatic parametric resize for any design.
+**Done:** `resizeOverall(axis,newSize)` scales positions about the centre and in-plane dims by the ratio, preserving thickness (skips the thickness-role dim); hardware repositions too; overall W/H/D inputs made editable (`_applyOverallResize`, unit-aware). Verified: 450→900 doubles width, sides keep 18mm + move apart, top width ×2, round-trip, no errors.
 
 ### F-Block 8 — Integration, polish & docs ⬜
 Units flow into new features; mobile/theme; regression; README + DEVPLAN.

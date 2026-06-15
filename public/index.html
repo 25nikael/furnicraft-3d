@@ -469,9 +469,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   <div id="left-panel">
     <div class="sec-title">Overall Size</div>
     <div class="dim-block">
-      <div class="dim-row"><span class="dim-lbl">W</span><input class="dim-input" id="ov-w" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
-      <div class="dim-row"><span class="dim-lbl">H</span><input class="dim-input" id="ov-h" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
-      <div class="dim-row"><span class="dim-lbl">D</span><input class="dim-input" id="ov-d" type="number" readonly tabindex="-1"><span class="dim-unit">mm</span></div>
+      <div class="dim-row"><span class="dim-lbl">W</span><input class="dim-input" id="ov-w" type="number" title="Edit to rescale the whole design" onchange="_applyOverallResize('x')"><span class="dim-unit">mm</span></div>
+      <div class="dim-row"><span class="dim-lbl">H</span><input class="dim-input" id="ov-h" type="number" title="Edit to rescale the whole design" onchange="_applyOverallResize('y')"><span class="dim-unit">mm</span></div>
+      <div class="dim-row"><span class="dim-lbl">D</span><input class="dim-input" id="ov-d" type="number" title="Edit to rescale the whole design" onchange="_applyOverallResize('z')"><span class="dim-unit">mm</span></div>
     </div>
     <div class="sec-title">Materials</div>
     <div class="mat-block" id="mat-legend"></div>
@@ -4151,6 +4151,35 @@ function applyProps() {
 // ═══════════════════════════════════════════════════════════════
 //  LEFT-PANEL REFRESH
 // ═══════════════════════════════════════════════════════════════
+// ── Parametric overall resize (F-series F1) ─────────────
+// Editing overall W/H/D proportionally refits every panel on that axis:
+// positions scale about the centre; in-plane dims scale; thickness preserved.
+function resizeOverall(axis, newSize) {
+  if (!panels.length) return;
+  var key = axis.toUpperCase();
+  var bb = furnitureBBox();
+  var cur = bb['max'+key] - bb['min'+key];
+  if (cur <= 0.5) return;
+  var scale = newSize / cur;
+  var c0 = (bb['min'+key] + bb['max'+key]) / 2;
+  var dimKey = { x:'w', y:'h', z:'d' }[axis];
+  saveUndo();
+  panels.forEach(function (p) {
+    p[axis] = Math.round(c0 + (p[axis] - c0) * scale);
+    if (panelDimRoles(p)[dimKey] !== 'Thickness') p[dimKey] = Math.max(1, Math.round(p[dimKey] * scale));
+    buildMesh(p); rebuildSelBox(p);
+  });
+  hardware.forEach(function (hw) { hw[axis] = Math.round(c0 + (hw[axis] - c0) * scale); syncHwPos(hw); });
+  refreshUI();
+  if (selected) { clearHandles(); buildHandles(selected); showProps(selected); }
+}
+function _applyOverallResize(axis) {
+  var id = { x:'ov-w', y:'ov-h', z:'ov-d' }[axis];
+  var val = parseLen(document.getElementById(id).value);
+  if (isNaN(val) || val < 10) { refreshOverall(); return; }
+  resizeOverall(axis, val);
+}
+
 function refreshOverall() {
   if (!panels.length) {
     ['ov-w','ov-h','ov-d'].forEach(function(id){ document.getElementById(id).value = 0; });
