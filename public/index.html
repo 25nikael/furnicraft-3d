@@ -542,6 +542,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn" id="btn-wire">Wireframe</button>
       <button class="tbtn on" id="btn-dims">Dims ✓</button>
       <button class="tbtn" id="btn-measure" onclick="toggleMeasure()">📏 Measure</button>
+      <button class="tbtn" id="btn-explode" onclick="toggleExplode()">💥 Explode</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
@@ -4720,6 +4721,39 @@ resizeRenderer();
 //  RENDER LOOP  (dims throttled to 10 fps)
 // ═══════════════════════════════════════════════════════════════
 var _lastFrameTime = performance.now();
+// ── Exploded view (G-series G2) ─────────────────────────
+var _explode = 0, _explodeTarget = 0, _explodeActive = false;
+function toggleExplode() {
+  _explodeTarget = _explodeTarget > 0 ? 0 : 1;
+  var b = document.getElementById('btn-explode');
+  if (b) b.classList.toggle('on', _explodeTarget > 0);
+}
+function tickExplode(dt) {
+  if (_explode !== _explodeTarget) {
+    var dir = _explodeTarget > _explode ? 1 : -1;
+    _explode += dir * dt * 1.6;
+    if ((dir > 0 && _explode >= _explodeTarget) || (dir < 0 && _explode <= _explodeTarget)) _explode = _explodeTarget;
+  }
+  if (_explode <= 0.0001) {
+    if (_explodeActive) { panels.forEach(function (p) { syncPos(p); }); _explodeActive = false; }
+    return;
+  }
+  if (!panels.length) return;
+  _explodeActive = true;
+  var bb = furnitureBBox();
+  var cx = (bb.minX+bb.maxX)/2, cy = (bb.minY+bb.maxY)/2, cz = (bb.minZ+bb.maxZ)/2;
+  var mag = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ) * 0.6;
+  panels.forEach(function (p) {
+    if (!p.mesh) return;
+    var dx = p.x-cx, dy = p.y-cy, dz = p.z-cz, len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
+    var k = _explode * mag / len;
+    var bp = new THREE.Vector3(p.x + dx*k, p.y + dy*k, p.z + dz*k);
+    [p.mesh, p.edges, p.selBox].forEach(function (o) { if (o) o.position.copy(bp); });
+    if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(bp); });
+    if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(bp); });
+  });
+}
+
 function animate() {
   requestAnimationFrame(animate);
   var now = performance.now();
@@ -4727,6 +4761,7 @@ function animate() {
   _lastFrameTime = now;
   _tickFPS(dt);
   tickFunctional(dt);
+  tickExplode(dt);
   if (_currentNavMode === 'orbit') orbitCtrl.update();
   renderer.render(scene, camera);
   if (isDragging || isResizing || cameraMoving) {

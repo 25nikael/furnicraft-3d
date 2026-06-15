@@ -123,8 +123,9 @@ MeshStandardMaterial (roughness/metalness per material) + procedural PMREM
 environment + ACES tone mapping + sRGB output; Realistic/Standard toggle in settings.
 **Done:** sRGB output; `_buildEnvMap` (gradient equirect → PMREM) → `scene.environment`; `_pbrSpec` per-material roughness/metalness; `buildMesh` + `_hwMaterial` choose Standard vs Phong on `_pbr`; ACES tone mapping (exposure 1.15); Rendering toggle in settings rebuilds meshes. Verified: PMREM/sRGB present, panels Standard (oak r0.62), env+ACES on, toggle off→Phong/no-env/no-tone, toggle on→Standard, no errors.
 
-### G-Block 2 — Exploded-view animation (G2) ⬜
+### G-Block 2 — Exploded-view animation (G2) ✅
 Explode slider/toggle moves panels outward from the design centre, animated.
+**Done:** `💥 Explode` toolbar toggle; `tickExplode` lerps an explode factor and offsets each panel (mesh/edges/markers/mitre) radially from the bbox centre by 0.6×maxDim; restores base on collapse. Verified: side panel offsets -270mm at full explode, returns to base, no errors.
 
 ### G-Block 3 — Room context mode (G3) ⬜
 Toggle adds floor + walls to scale; places the piece; hides grid.
