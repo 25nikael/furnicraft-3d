@@ -13,16 +13,17 @@ function meta(row) {
   return {
     id: row.id,
     name: row.name,
+    thumb: row.thumb || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
 }
 
-// ── List the current user's projects (metadata only) ────────────────────
+// ── List the current user's projects (metadata + thumbnail) ─────────────
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, created_at, updated_at FROM projects WHERE user_id = $1 ORDER BY updated_at DESC',
+      'SELECT id, name, thumb, created_at, updated_at FROM projects WHERE user_id = $1 ORDER BY updated_at DESC',
       [req.user.id]
     );
     res.json({ projects: result.rows.map(meta) });
@@ -56,9 +57,10 @@ router.post('/', async (req, res) => {
     if (!name) return res.status(400).json({ error: 'Project name is required.' });
     if (!state || typeof state !== 'object') return res.status(400).json({ error: 'Invalid project data.' });
 
+    const thumb = typeof req.body.thumb === 'string' ? req.body.thumb : null;
     const result = await db.query(
-      'INSERT INTO projects (user_id, name, state) VALUES ($1, $2, $3) RETURNING *',
-      [req.user.id, name, state]
+      'INSERT INTO projects (user_id, name, state, thumb) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, name, state, thumb]
     );
     res.status(201).json({ project: meta(result.rows[0]) });
   } catch (err) {
@@ -85,6 +87,9 @@ router.put('/:id', async (req, res) => {
     }
     if (req.body.state && typeof req.body.state === 'object') {
       sets.push(`state = $${i++}`); vals.push(req.body.state);
+    }
+    if (typeof req.body.thumb === 'string') {
+      sets.push(`thumb = $${i++}`); vals.push(req.body.thumb);
     }
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
     sets.push('updated_at = NOW()');

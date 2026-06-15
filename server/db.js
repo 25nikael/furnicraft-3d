@@ -70,10 +70,26 @@ CREATE TABLE IF NOT EXISTS projects (
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name        TEXT NOT NULL,
   state       JSONB NOT NULL,
+  thumb       TEXT,
+  is_public   BOOLEAN NOT NULL DEFAULT FALSE,
+  share_token TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects (user_id);
+
+-- Columns added after initial release (no-ops if already present)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS thumb TEXT;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS share_token TEXT;
+
+CREATE TABLE IF NOT EXISTS project_versions (
+  id          SERIAL PRIMARY KEY,
+  project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  state       JSONB NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_versions_project ON project_versions (project_id);
 `;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

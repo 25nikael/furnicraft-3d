@@ -195,7 +195,8 @@ Quote modal: materials + hardware (`projectHardwareCost`, per-type prices) + lab
 Loaded GLTF/OBJ/STL exporters (CDN); `exportModel` clones panels+hardware into a group and downloads .glb/.obj/.stl; `exportRender` 2× PNG (renderer `preserveDrawingBuffer:true`); Export modal + toolbar button. Verified: OBJ 14.7KB, STL 10.5KB, GLB parses, PNG data:image/png 45KB, no errors.
 ### R6 — DXF/SVG per-panel + shareable link (E1, E4) ✅
 `_panelLayout` arranges panel faces in rows; `exportDXF` (LINE entities) + `exportSVG` (rects, mm units); `shareLink` encodes state to a `#d=` URL (copied to clipboard), `_loadSharedFromHash` loads it on startup. Verified: DXF 1.2KB, SVG 1.4KB, link round-trips 7 panels + loads as "Shared design", no errors.
-### R7 — JSON import/export + project thumbnails (H5, H1) ⬜
+### R7 — JSON import/export + project thumbnails (H5, H1) ✅
+JSON export/import of project state (`exportProjectJSON`/`importProjectJSON`) in Export modal; `_captureThumb` (downscaled JPEG) sent on save; thumbnails shown in My Projects. Backend: `thumb` column (+ ALTER) + thumb in create/update/list. Also pre-added `is_public`/`share_token`/`project_versions` schema for R8/R9. Verified: thumb 3KB JPEG, JSON 2.7KB round-trip, list shows img; server syntax-clean.
 ### R8 — Version history / restore (H2, backend) ⬜
 ### R9 — Share token + public gallery (H3, H4, backend) ⬜
 ### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ⬜
