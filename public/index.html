@@ -338,6 +338,16 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <input type="radio" name="unit" id="unit-inch" value="inch">
           <label for="unit-inch">Inches <small>fractional</small></label>
         </div>
+        <div class="sd-divider"></div>
+        <div class="sd-section">Rendering</div>
+        <div class="sd-row" onclick="setPBR(true)">
+          <input type="radio" name="pbr" id="pbr-on" value="on" checked>
+          <label for="pbr-on">Realistic <small>PBR + reflections</small></label>
+        </div>
+        <div class="sd-row" onclick="setPBR(false)">
+          <input type="radio" name="pbr" id="pbr-off" value="off">
+          <label for="pbr-off">Standard <small>faster, flatter</small></label>
+        </div>
         <div id="fps-hint">
           <strong>WASD</strong> — move &nbsp;|&nbsp; <strong>Mouse</strong> — look<br>
           <strong>Q/E</strong> — down/up &nbsp;|&nbsp; <strong>Shift</strong> — fast<br>
@@ -1509,6 +1519,7 @@ function _applyPrefs() {
   setTheme(_currentTheme);
   if (_currentNavMode === 'fps') setNavMode('fps');
   updateUnitLabels();
+  setPBR(_pbr);
 }
 
 // ── Topbar state ──────────────────────────────────────
@@ -1704,9 +1715,49 @@ var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
 
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
+
+// ── PBR rendering (G-series G1) ──────────────────────
+var _pbr = localStorage.getItem('fc3d_pbr') !== 'off';
+var _envMap = null;
+function _buildEnvMap() {
+  // Procedural studio environment: vertical gradient equirect → PMREM
+  var cv = document.createElement('canvas'); cv.width = 16; cv.height = 256;
+  var ctx = cv.getContext('2d');
+  var g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0.00, '#e6edf5'); g.addColorStop(0.45, '#c2c9d0');
+  g.addColorStop(0.55, '#9aa0a6'); g.addColorStop(1.00, '#46423c');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 16, 256);
+  var tex = new THREE.CanvasTexture(cv);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  var pmrem = new THREE.PMREMGenerator(renderer);
+  var rt = pmrem.fromEquirectangular(tex);
+  tex.dispose(); pmrem.dispose();
+  return rt.texture;
+}
+function _pbrSpec(key) {
+  var S = {
+    oak:{r:0.62,m:0}, walnut:{r:0.55,m:0}, pine:{r:0.70,m:0}, maple:{r:0.60,m:0},
+    cherry:{r:0.50,m:0}, birch:{r:0.68,m:0}, white:{r:0.40,m:0}, black:{r:0.42,m:0.05},
+    grey:{r:0.80,m:0}, metal:{r:0.30,m:0.92}, glass:{r:0.06,m:0}, custom:{r:0.60,m:0}
+  };
+  return S[key] || S.custom;
+}
+function setPBR(on) {
+  _pbr = on;
+  localStorage.setItem('fc3d_pbr', on ? 'on' : 'off');
+  renderer.toneMapping = on ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  if (on) { if (!_envMap) _envMap = _buildEnvMap(); scene.environment = _envMap; }
+  else { scene.environment = null; }
+  panels.forEach(function (p) { buildMesh(p); });
+  hardware.forEach(function (hw) { buildHardwareMesh(hw); });
+  var rOn = document.getElementById('pbr-on'), rOff = document.getElementById('pbr-off');
+  if (rOn) rOn.checked = on; if (rOff) rOff.checked = !on;
+}
 
 var camera = new THREE.PerspectiveCamera(42, 1, 1, 20000);
 camera.position.set(680, 540, 880);
@@ -2249,15 +2300,30 @@ function buildMesh(p) {
 
   var tex  = fd.tex ? fd.tex() : null;
   var col  = tex ? '#ffffff' : (fd.color || p.color);
-  var mat  = new THREE.MeshPhongMaterial({
-    color:       new THREE.Color(col),
-    map:         tex,
-    specular:    new THREE.Color(fd.specular),
-    shininess:   fd.shininess,
-    transparent: !!fd.transparent,
-    opacity:     fd.opacity !== undefined ? fd.opacity : 1,
-    wireframe:   wireMode
-  });
+  var mat;
+  if (_pbr) {
+    var sp = _pbrSpec(p.material);
+    mat = new THREE.MeshStandardMaterial({
+      color:       new THREE.Color(col),
+      map:         tex,
+      roughness:   sp.r,
+      metalness:   sp.m,
+      envMapIntensity: 1.0,
+      transparent: !!fd.transparent,
+      opacity:     fd.opacity !== undefined ? fd.opacity : 1,
+      wireframe:   wireMode
+    });
+  } else {
+    mat = new THREE.MeshPhongMaterial({
+      color:       new THREE.Color(col),
+      map:         tex,
+      specular:    new THREE.Color(fd.specular),
+      shininess:   fd.shininess,
+      transparent: !!fd.transparent,
+      opacity:     fd.opacity !== undefined ? fd.opacity : 1,
+      wireframe:   wireMode
+    });
+  }
   var _rDEG = Math.PI / 180;
   p.mesh = new THREE.Mesh(geo, mat);
   p.mesh.position.set(p.x, p.y, p.z);
@@ -2683,6 +2749,16 @@ var HW_FINISH = {
 
 function _hwMaterial(finishKey) {
   var f = HW_FINISH[finishKey] || HW_FINISH.steel;
+  if (_pbr) {
+    var isMetal = finishKey !== 'wood';
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(f.color),
+      roughness: isMetal ? 0.32 : 0.7,
+      metalness: isMetal ? 0.9 : 0,
+      envMapIntensity: 1.0,
+      wireframe: wireMode
+    });
+  }
   return new THREE.MeshPhongMaterial({
     color: new THREE.Color(f.color),
     specular: new THREE.Color(f.specular),

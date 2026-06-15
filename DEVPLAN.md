@@ -109,7 +109,34 @@ Units flow into new features; mobile/theme; regression; README + DEVPLAN.
 **Done:** README "Modeling tools" section; new modals reuse themed/mobile classes; measurements + groupMeta added to project state. Regression verified end-to-end: template + inch units (31.496") + align + mirror + measure + group + parametric resize + cut sheet (11 rows) + light theme + mobile drawer + full round-trip (measurements & groupMeta preserved), no errors.
 
 ---
-**F-SERIES COMPLETE** — all seven F features shipped (F1–F7 + integration) across commits d57bf20 → (F-block 8).
+**F-SERIES COMPLETE** — all seven F features shipped (F1–F7 + integration) across commits d57bf20 → 9db400e.
+
+---
+
+# Development Plan 3 — G-Series (Visualization)
+
+All five G features. Same cadence: one block per work unit, each ending in a
+commit. Commit messages must stay quote-free (PS here-string quirk).
+
+### G-Block 1 — PBR photorealistic rendering (G1) ✅
+MeshStandardMaterial (roughness/metalness per material) + procedural PMREM
+environment + ACES tone mapping + sRGB output; Realistic/Standard toggle in settings.
+**Done:** sRGB output; `_buildEnvMap` (gradient equirect → PMREM) → `scene.environment`; `_pbrSpec` per-material roughness/metalness; `buildMesh` + `_hwMaterial` choose Standard vs Phong on `_pbr`; ACES tone mapping (exposure 1.15); Rendering toggle in settings rebuilds meshes. Verified: PMREM/sRGB present, panels Standard (oak r0.62), env+ACES on, toggle off→Phong/no-env/no-tone, toggle on→Standard, no errors.
+
+### G-Block 2 — Exploded-view animation (G2) ⬜
+Explode slider/toggle moves panels outward from the design centre, animated.
+
+### G-Block 3 — Room context mode (G3) ⬜
+Toggle adds floor + walls to scale; places the piece; hides grid.
+
+### G-Block 4 — Custom texture upload (G5) ⬜
+Per-panel image upload (data URL) applied as the material map; persisted.
+
+### G-Block 5 — AR view / WebXR (G4) ⬜
+View-in-AR via renderer.xr + ARButton; graceful fallback. Needs HTTPS + device.
+
+### G-Block 6 — Integration, polish & docs ⬜
+Toggles coexist; mobile/theme; regression; README + DEVPLAN.
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).
