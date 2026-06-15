@@ -320,6 +320,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <span id="topbar-user" style="display:none;"></span>
     <button class="tb-btn tb-prim" id="tb-save" style="display:none;" onclick="saveCurrentProject()">Save</button>
     <button class="tb-btn" id="tb-projects" style="display:none;" onclick="openProjectManager()">My Projects</button>
+    <button class="tb-btn" id="tb-admin" style="display:none;" onclick="window.location.href='/admin'">Admin</button>
     <button class="tb-btn" id="tb-signin" onclick="openAuth()">Sign In</button>
     <button class="tb-btn" id="tb-logout" style="display:none;" onclick="logoutUser()">Sign Out</button>
     <button class="tb-btn" id="tb-help" title="Shortcuts & help (?)" onclick="toggleCheatsheet()">?</button>
@@ -1456,8 +1457,7 @@ function logoutUser() {
   _currentUser   = null;
   _currentProjId = null;
   _clearToken();
-  _updateTopbar();
-  document.getElementById('topbar-proj-name').textContent = 'Unsaved project';
+  window.location.href = '/landing';
 }
 
 // ── Settings: theme + navigation ─────────────────────
@@ -1629,12 +1629,33 @@ function _applyPrefs() {
 }
 
 // ── Topbar state ──────────────────────────────────────
+var ADMIN_EMAIL = '25nikael@gmail.com';
+var _featureFlags = {};   // populated on init from /api/flags
+
+function _flagOn(key) {
+  // If flags haven't loaded or key is absent, default to enabled
+  return _featureFlags[key] !== false;
+}
+
+function _applyFeatureFlags() {
+  // AI design toolbar button (id="btn-ai")
+  var aiBtn = document.getElementById('btn-ai');
+  if (aiBtn) aiBtn.style.display = _flagOn('ai_design') ? '' : 'none';
+  // Cut sheet / PDF button (id="btn-cs") and inner PDF export
+  var csBtn = document.getElementById('btn-cs');
+  if (csBtn) csBtn.style.display = _flagOn('pdf_export') ? '' : 'none';
+  var pdfBtn = document.getElementById('btn-export-pdf');
+  if (pdfBtn) pdfBtn.style.display = _flagOn('pdf_export') ? '' : 'none';
+}
+
 function _updateTopbar() {
   var loggedIn = !!_currentUser;
   document.getElementById('tb-signin').style.display   = loggedIn ? 'none' : '';
   document.getElementById('tb-logout').style.display   = loggedIn ? ''     : 'none';
   document.getElementById('tb-save').style.display     = loggedIn ? ''     : 'none';
   document.getElementById('tb-projects').style.display = loggedIn ? ''     : 'none';
+  var isAdmin = loggedIn && _currentUser.email === ADMIN_EMAIL;
+  document.getElementById('tb-admin').style.display    = isAdmin  ? ''     : 'none';
   var userEl = document.getElementById('topbar-user');
   userEl.style.display   = loggedIn ? '' : 'none';
   userEl.textContent     = loggedIn ? _currentUser.email : '';
@@ -1872,15 +1893,30 @@ async function deleteProject(projId) {
 (async function() {
   try { _serverConfig = await api('/auth/config'); }
   catch(e) { _serverConfig = { googleClientId:'', dbReady:false }; }
+
+  // Auth gate — redirect to landing if no valid session
   if (_getToken()) {
     try {
       var res = await api('/auth/me');
       _currentUser = res.user;
     } catch(e) {
-      _clearToken();   // token invalid or expired
+      _clearToken();
+      window.location.href = '/landing?return=' + encodeURIComponent(location.pathname + location.search);
+      return;
     }
+  } else {
+    window.location.href = '/landing?return=' + encodeURIComponent(location.pathname + location.search);
+    return;
   }
+
+  // Load feature flags (non-fatal)
+  try {
+    var flagData = await api('/flags');
+    _featureFlags = flagData.flags || {};
+  } catch(e) { _featureFlags = {}; }
+
   _updateTopbar();
+  _applyFeatureFlags();
 })();
 // Walk a group's parent chain to its top-level assembly root
 function _rootGroup(gid) {

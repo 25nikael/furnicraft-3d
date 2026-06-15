@@ -90,6 +90,23 @@ CREATE TABLE IF NOT EXISTS project_versions (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_versions_project ON project_versions (project_id);
+
+CREATE TABLE IF NOT EXISTS feature_flags (
+  key         TEXT PRIMARY KEY,
+  label       TEXT NOT NULL DEFAULT '',
+  enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO feature_flags (key, label, enabled) VALUES
+  ('ai_design',       'AI Design Assistant',    true),
+  ('image_to_design', 'AI Design from Image',   true),
+  ('public_gallery',  'Public Gallery',         true),
+  ('version_history', 'Version History',        true),
+  ('pdf_export',      'PDF / Cut Sheet Export', true),
+  ('share',           'Share Projects',         true)
+ON CONFLICT (key) DO NOTHING;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled BOOLEAN NOT NULL DEFAULT FALSE;
 `;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

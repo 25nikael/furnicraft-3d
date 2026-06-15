@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FurniCraft 3D — AI-Powered Furniture Designer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --teal:#0ABAB5;--teal-dk:#089e99;--teal-lt:#3dd6d1;
+  --bg0:#0a0a0a;--bg1:#111;--bg2:#161616;--bg3:#1e1e1e;
+  --bd:#252525;--txt:#e0e0e0;--txt2:#999;--txt3:#555;
+  --gold:#f0c040;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg0);color:var(--txt);min-height:100vh;line-height:1.5;}
+
+/* ── Nav ── */
+nav{display:flex;align-items:center;justify-content:space-between;padding:18px 48px;position:sticky;top:0;z-index:100;background:rgba(10,10,10,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);}
+.logo{font-size:20px;font-weight:800;letter-spacing:-.3px;}
+.logo span{color:var(--teal);}
+.nav-cta{padding:8px 22px;background:var(--teal);color:#000;font-weight:700;font-size:14px;border:none;border-radius:6px;cursor:pointer;transition:background .15s;}
+.nav-cta:hover{background:var(--teal-lt);}
+
+/* ── Hero ── */
+.hero{display:flex;align-items:center;justify-content:space-between;gap:48px;padding:80px 48px 60px;max-width:1200px;margin:0 auto;}
+.hero-text{flex:1;max-width:520px;}
+.hero-badge{display:inline-block;padding:4px 12px;background:rgba(10,186,181,.12);border:1px solid rgba(10,186,181,.3);border-radius:20px;font-size:12px;color:var(--teal);font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:20px;}
+h1{font-size:clamp(36px,5vw,58px);font-weight:800;line-height:1.08;letter-spacing:-.02em;margin-bottom:20px;}
+h1 em{font-style:normal;color:var(--teal);}
+.hero-sub{font-size:18px;color:var(--txt2);margin-bottom:36px;line-height:1.6;}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;}
+.btn-primary{padding:14px 32px;background:var(--teal);color:#000;font-weight:700;font-size:15px;border:none;border-radius:8px;cursor:pointer;transition:all .15s;}
+.btn-primary:hover{background:var(--teal-lt);transform:translateY(-1px);box-shadow:0 6px 20px rgba(10,186,181,.3);}
+.btn-secondary{padding:14px 28px;background:transparent;color:var(--txt);font-size:15px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;transition:all .15s;}
+.btn-secondary:hover{border-color:var(--teal);color:var(--teal);}
+
+/* ── Hero visual ── */
+.hero-visual{flex:1;max-width:520px;aspect-ratio:4/3;background:var(--bg2);border:1px solid var(--bd);border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;}
+.hero-scene{width:100%;height:100%;padding:24px;}
+.hv-cabinet{position:relative;width:200px;height:240px;margin:0 auto;}
+.hv-face{position:absolute;background:linear-gradient(135deg,#8B6914 0%,#C49A28 40%,#A07820 100%);}
+.hv-front{width:200px;height:240px;left:0;top:20px;border-radius:4px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);}
+.hv-top{width:200px;height:20px;left:0;top:0;background:linear-gradient(135deg,#A07820,#D4AA30);transform-origin:bottom;transform:skewX(-40deg) translateX(16px);border-radius:2px;}
+.hv-side{width:24px;height:240px;right:-24px;top:20px;background:linear-gradient(180deg,#6B4E10,#5a3e08);border-radius:0 4px 4px 0;}
+.hv-door{position:absolute;width:88px;height:200px;top:20px;background:linear-gradient(135deg,#C49A28,#E8C040,#B08820);border-radius:3px;border:2px solid rgba(0,0,0,.3);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
+.hv-door-l{left:6px;}
+.hv-door-r{right:6px;}
+.hv-handle{width:6px;height:30px;background:#ccc;border-radius:3px;position:absolute;top:50%;transform:translateY(-50%);}
+.hv-door-l .hv-handle{right:6px;}
+.hv-door-r .hv-handle{left:6px;}
+.hv-drawer{position:absolute;height:44px;left:6px;right:6px;background:linear-gradient(180deg,#D4AA30,#B08820);border-radius:3px;border:2px solid rgba(0,0,0,.3);}
+.hv-drawer:nth-child(1){bottom:6px;}
+.hv-drawer-handle{width:40px;height:5px;background:#ccc;border-radius:3px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);}
+.hv-teal-line{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--teal),transparent);}
+.hero-tag{position:absolute;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--txt2);white-space:nowrap;}
+.hero-tag strong{display:block;color:var(--txt);font-size:13px;}
+.tag-ai{top:20px;right:20px;}
+.tag-3d{bottom:20px;left:20px;}
+.tag-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block;margin-right:6px;animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(.85);}}
+
+/* ── Features ── */
+.features{max-width:1200px;margin:0 auto;padding:60px 48px;}
+.section-label{text-align:center;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--teal);margin-bottom:12px;}
+.section-title{text-align:center;font-size:clamp(26px,4vw,38px);font-weight:800;margin-bottom:48px;letter-spacing:-.02em;}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;}
+.feature-card{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;padding:28px 24px;transition:border-color .2s,transform .2s;}
+.feature-card:hover{border-color:var(--teal);transform:translateY(-2px);}
+.fc-icon{width:44px;height:44px;background:rgba(10,186,181,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:16px;}
+.fc-title{font-size:16px;font-weight:700;margin-bottom:8px;}
+.fc-desc{font-size:13px;color:var(--txt2);line-height:1.6;}
+
+/* ── Auth section ── */
+.auth-section{max-width:480px;margin:0 auto 80px;padding:0 24px;}
+.auth-box{background:var(--bg2);border:1px solid var(--bd);border-radius:16px;padding:36px;}
+.auth-title{font-size:22px;font-weight:700;margin-bottom:6px;text-align:center;}
+.auth-sub{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:28px;}
+.auth-tabs{display:flex;gap:0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-bottom:24px;}
+.auth-tab{flex:1;padding:9px;background:transparent;border:none;color:var(--txt2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.auth-tab.active{background:var(--teal);color:#000;}
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.form-group input{width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--bd);border-radius:7px;color:var(--txt);font-size:14px;transition:border-color .15s;outline:none;}
+.form-group input:focus{border-color:var(--teal);}
+.form-submit{width:100%;padding:12px;background:var(--teal);color:#000;font-weight:700;font-size:14px;border:none;border-radius:7px;cursor:pointer;margin-top:6px;transition:background .15s;}
+.form-submit:hover{background:var(--teal-lt);}
+.form-err{color:#f87171;font-size:13px;margin-top:8px;min-height:18px;}
+.form-ok{color:#4ade80;font-size:13px;margin-top:8px;}
+.divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--txt3);font-size:12px;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--bd);}
+#google-btn-wrap{min-height:44px;}
+.google-btn{width:100%;padding:10px;background:var(--bg3);border:1px solid var(--bd);border-radius:7px;color:var(--txt);font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:border-color .15s;}
+.google-btn:hover{border-color:var(--teal);}
+.google-icon{width:18px;height:18px;flex-shrink:0;}
+
+/* ── OTP step ── */
+.otp-note{font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.5;}
+.otp-devbox{background:rgba(10,186,181,.08);border:1px solid rgba(10,186,181,.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;}
+.otp-devbox b{color:var(--teal);}
+.back-link{font-size:12px;color:var(--txt3);cursor:pointer;text-align:center;display:block;margin-top:12px;}
+.back-link:hover{color:var(--txt2);}
+
+/* ── Footer ── */
+footer{border-top:1px solid var(--bd);padding:24px 48px;text-align:center;font-size:12px;color:var(--txt3);}
+footer a{color:var(--txt3);text-decoration:none;}footer a:hover{color:var(--teal);}
+
+@media(max-width:768px){
+  nav{padding:14px 20px;}
+  .hero{flex-direction:column;padding:48px 20px 40px;text-align:center;}
+  .hero-btns{justify-content:center;}
+  .hero-visual{width:100%;max-width:380px;}
+  .features{padding:40px 20px;}
+  footer{padding:20px;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Furni<span>Craft</span> 3D</div>
+  <button class="nav-cta" onclick="document.getElementById('auth-section').scrollIntoView({behavior:'smooth'})">Get Started Free</button>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="hero-text">
+    <div class="hero-badge">✦ Now with AI Design</div>
+    <h1>Design furniture<br>with <em>precision</em> and<br><em>intelligence</em></h1>
+    <p class="hero-sub">FurniCraft 3D gives you a professional 3D woodworking designer powered by AI. Describe any piece and watch it appear — complete with joinery, hardware, and cut sheets.</p>
+    <div class="hero-btns">
+      <button class="btn-primary" onclick="document.getElementById('auth-section').scrollIntoView({behavior:'smooth'})">Start designing free</button>
+      <button class="btn-secondary" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">See features ↓</button>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div class="hero-scene">
+      <div class="hv-cabinet">
+        <div class="hv-front">
+          <div class="hv-door hv-door-l"><div class="hv-handle"></div></div>
+          <div class="hv-door hv-door-r"><div class="hv-handle"></div></div>
+          <div class="hv-drawer" style="bottom:6px"><div class="hv-drawer-handle"></div></div>
+        </div>
+        <div class="hv-top"></div>
+        <div class="hv-side"></div>
+        <div class="hv-teal-line"></div>
+      </div>
+    </div>
+    <div class="hero-tag tag-ai"><span class="tag-dot"></span><strong>AI Design</strong>Describe → instant 3D</div>
+    <div class="hero-tag tag-3d"><strong>Full 3D</strong>Rotate, inspect, measure</div>
+  </div>
+</section>
+
+<!-- ── Features ── -->
+<section class="features" id="features">
+  <div class="section-label">What's included</div>
+  <div class="section-title">Everything you need to build anything</div>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="fc-icon">🤖</div>
+      <div class="fc-title">AI Design Assistant</div>
+      <div class="fc-desc">Describe a piece in plain English — drawers, doors, dimensions — and get a complete 3D design instantly, with every panel and hardware component placed.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">🪵</div>
+      <div class="fc-title">Real Wood Materials</div>
+      <div class="fc-desc">Oak, walnut, maple, cherry, birch and more — each with accurate grain, colour and edge banding. Switch materials with a click.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">📐</div>
+      <div class="fc-title">Professional Cut Sheets</div>
+      <div class="fc-desc">Export a PDF cut sheet, parts list, hardware BOM, and board layout optimiser. Print and take it straight to the workshop.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">💾</div>
+      <div class="fc-title">Cloud Projects</div>
+      <div class="fc-desc">Save unlimited projects to the cloud, browse version history, and restore any past snapshot. Share designs with a public link.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">📸</div>
+      <div class="fc-title">Design from a Photo</div>
+      <div class="fc-desc">Upload a photo or sketch and the AI will reverse-engineer the design into a fully editable 3D model.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">🔩</div>
+      <div class="fc-title">Joinery & Hardware</div>
+      <div class="fc-desc">Get AI-powered joinery recommendations — pocket screws, dowels, mortise and tenon — and cost-saving material tips for any design.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Auth ── -->
+<section class="auth-section" id="auth-section">
+  <div class="auth-box">
+    <div class="auth-title">Start designing today</div>
+    <div class="auth-sub">Free account — no credit card required</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login"    onclick="switchTab('login')">Sign In</button>
+      <button class="auth-tab"        id="tab-register" onclick="switchTab('register')">Create Account</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="form-group"><label>Email</label><input type="email" id="li-email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="li-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-err" id="li-err"></div>
+      <button class="form-submit" onclick="doLogin()">Sign In</button>
+      <div class="divider">or</div>
+      <div id="google-btn-wrap"><button class="google-btn" onclick="doGoogleSignIn()">
+        <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none;">
+      <div id="reg-step1">
+        <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="At least 6 characters"></div>
+        <div class="form-group"><label>Confirm Password</label><input type="password" id="reg-pass2" placeholder="••••••••" onkeydown="if(event.key==='Enter')doRegisterStep1()"></div>
+        <div class="form-err" id="reg-err"></div>
+        <div class="form-ok"  id="reg-ok"></div>
+        <button class="form-submit" onclick="doRegisterStep1()">Create Account</button>
+        <div class="divider">or</div>
+        <button class="google-btn" onclick="doGoogleSignIn()">
+          <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+      <div id="reg-step2" style="display:none;">
+        <p class="otp-note">A 6-digit verification code was sent to <strong id="reg-otp-email"></strong>. Enter it below to complete registration.</p>
+        <div id="reg-otp-devbox" style="display:none;" class="otp-devbox">Dev mode — no email sent. Code: <b id="reg-otp-display"></b></div>
+        <div class="form-group"><label>Verification Code</label><input type="text" id="reg-otp-input" placeholder="123456" maxlength="6" onkeydown="if(event.key==='Enter')doRegisterStep2()"></div>
+        <div class="form-err" id="reg-otp-err"></div>
+        <button class="form-submit" onclick="doRegisterStep2()">Verify &amp; Sign In</button>
+        <span class="back-link" onclick="cancelOTP()">← Back</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>© 2026 FurniCraft 3D &nbsp;·&nbsp; <a href="/landing">Home</a></p>
+</footer>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+'use strict';
+
+var _serverConfig = null;
+
+function _getToken()  { return localStorage.getItem('fc3d_token') || ''; }
+function _setToken(t) { localStorage.setItem('fc3d_token', t); }
+
+async function api(path, opts) {
+  opts = opts || {};
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = _getToken();
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  var resp = await fetch('/api' + path, {
+    method: opts.method || 'GET',
+    headers: headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  var data = null;
+  try { data = await resp.json(); } catch(e) { data = {}; }
+  if (!resp.ok) {
+    var err = new Error(data.error || ('Request failed (' + resp.status + ')'));
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
+}
+
+function afterAuth(res) {
+  _setToken(res.token);
+  var ret = new URLSearchParams(location.search).get('return') || '/';
+  window.location.href = ret;
+}
+
+function switchTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('form-login').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('li-err').textContent  = '';
+  document.getElementById('reg-err').textContent = '';
+}
+
+async function doLogin() {
+  var email = document.getElementById('li-email').value.trim().toLowerCase();
+  var pw    = document.getElementById('li-pass').value;
+  var err   = document.getElementById('li-err');
+  err.textContent = '';
+  if (!email || !pw) { err.textContent = 'Enter your email and password.'; return; }
+  try {
+    var res = await api('/auth/login', { method:'POST', body:{ email, password:pw } });
+    afterAuth(res);
+  } catch(e) { err.textContent = e.message; }
+}
+
+// ── Register ──
+var _pendingOTP = null;
+
+async function doRegisterStep1() {
+  var email = document.getElementById('reg-email').value.trim().toLowerCase();
+  var pw    = document.getElementById('reg-pass').value;
+  var pw2   = document.getElementById('reg-pass2').value;
+  var err   = document.getElementById('reg-err');
+  err.textContent = '';
+  if (!email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
+  if (pw.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+  if (pw !== pw2)    { err.textContent = 'Passwords do not match.'; return; }
+  try {
+    var res = await api('/auth/register', { method:'POST', body:{ email, password:pw } });
+    _pendingOTP = { email };
+    document.getElementById('reg-otp-email').textContent = email;
+    var devbox = document.getElementById('reg-otp-devbox');
+    if (res.devMode && res.devCode) {
+      document.getElementById('reg-otp-display').textContent = res.devCode;
+      devbox.style.display = '';
+    } else {
+      devbox.style.display = 'none';
+    }
+    document.getElementById('reg-otp-input').value     = '';
+    document.getElementById('reg-otp-err').textContent = '';
+    document.getElementById('reg-step1').style.display = 'none';
+    document.getElementById('reg-step2').style.display = '';
+  } catch(e) { err.textContent = e.message; }
+}
+
+async function doRegisterStep2() {
+  if (!_pendingOTP) return;
+  var code = document.getElementById('reg-otp-input').value.trim();
+  var err  = document.getElementById('reg-otp-err');
+  err.textContent = '';
+  if (!code) { err.textContent = 'Enter the verification code.'; return; }
+  try {
+    var res = await api('/auth/verify', { method:'POST', body:{ email:_pendingOTP.email, code } });
+    afterAuth(res);
+  } catch(e) { err.textContent = e.message; }
+}
+
+function cancelOTP() {
+  _pendingOTP = null;
+  document.getElementById('reg-step1').style.display = '';
+  document.getElementById('reg-step2').style.display = 'none';
+}
+
+// ── Google ──
+function _googleClientId() { return _serverConfig ? _serverConfig.googleClientId : ''; }
+
+function doGoogleSignIn() {
+  var cid = _googleClientId();
+  if (!cid) { alert('Google Sign-In is not configured on this server.'); return; }
+  if (typeof google === 'undefined' || !google.accounts) {
+    alert('Google Identity Services failed to load. Check your internet connection.');
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: cid,
+    callback: _handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true
+  });
+  google.accounts.id.prompt(function(n) {
+    if (n.isNotDisplayed() || n.isSkippedMoment()) {
+      google.accounts.id.renderButton(
+        document.getElementById('google-btn-wrap'),
+        { theme:'outline', size:'large', width:'100%' }
+      );
+    }
+  });
+}
+
+async function _handleGoogleCredential(response) {
+  try {
+    var res = await api('/auth/google', { method:'POST', body:{ credential: response.credential } });
+    afterAuth(res);
+  } catch(e) { document.getElementById('li-err').textContent = e.message; }
+}
+
+// ── Init: redirect if already signed in ──
+(async function() {
+  try { _serverConfig = await api('/auth/config'); } catch(e) {}
+  if (_getToken()) {
+    try {
+      await api('/auth/me');
+      // Already authenticated — go straight to the app
+      var ret = new URLSearchParams(location.search).get('return') || '/';
+      window.location.href = ret;
+      return;
+    } catch(e) { localStorage.removeItem('fc3d_token'); }
+  }
+})();
+</script>
+</body>
+</html>

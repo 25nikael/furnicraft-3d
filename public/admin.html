@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FurniCraft Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --teal:#0ABAB5;--teal-dk:#089e99;--teal-lt:#3dd6d1;
+  --bg0:#0a0a0a;--bg1:#111;--bg2:#161616;--bg3:#1e1e1e;
+  --bd:#252525;--bd2:#333;--txt:#e0e0e0;--txt2:#999;--txt3:#555;
+  --red:#f87171;--green:#4ade80;--amber:#fbbf24;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg0);color:var(--txt);min-height:100vh;}
+
+/* ── Nav ── */
+nav{display:flex;align-items:center;gap:16px;padding:14px 32px;background:var(--bg1);border-bottom:1px solid var(--bd);}
+.logo{font-size:16px;font-weight:800;}.logo span{color:var(--teal);}
+.admin-badge{padding:3px 10px;background:rgba(10,186,181,.12);border:1px solid rgba(10,186,181,.3);border-radius:20px;font-size:11px;color:var(--teal);font-weight:600;letter-spacing:.4px;text-transform:uppercase;}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.nav-email{font-size:12px;color:var(--txt2);}
+.nav-btn{padding:6px 14px;background:transparent;border:1px solid var(--bd2);border-radius:6px;color:var(--txt2);font-size:12px;cursor:pointer;transition:all .15s;text-decoration:none;display:inline-block;}
+.nav-btn:hover{border-color:var(--teal);color:var(--teal);}
+
+/* ── Layout ── */
+main{max-width:1100px;margin:0 auto;padding:36px 24px;}
+.page-title{font-size:24px;font-weight:800;margin-bottom:4px;}
+.page-sub{font-size:14px;color:var(--txt2);margin-bottom:36px;}
+
+/* ── Section ── */
+.section{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;margin-bottom:28px;overflow:hidden;}
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--bd);}
+.section-head h2{font-size:15px;font-weight:700;}
+.section-head .count{font-size:12px;color:var(--txt3);background:var(--bg3);padding:2px 8px;border-radius:10px;}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;}
+th{padding:10px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--txt3);text-align:left;border-bottom:1px solid var(--bd);}
+td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--bd);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.02);}
+.td-email{font-weight:500;}
+.td-date{color:var(--txt2);font-size:12px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;}
+.badge-active{background:rgba(74,222,128,.1);color:var(--green);}
+.badge-disabled{background:rgba(248,113,113,.1);color:var(--red);}
+.badge-admin{background:rgba(10,186,181,.12);color:var(--teal);}
+
+/* ── Actions ── */
+.actions{display:flex;gap:6px;align-items:center;}
+.act-btn{padding:5px 12px;border-radius:5px;border:1px solid var(--bd2);background:transparent;color:var(--txt2);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.act-btn:hover{border-color:var(--teal);color:var(--teal);}
+.act-btn.danger:hover{border-color:var(--red);color:var(--red);}
+.act-btn.act-enable:hover{border-color:var(--green);color:var(--green);}
+
+/* ── Toggle switch ── */
+.toggle{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-track{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--bd2);border-radius:11px;cursor:pointer;transition:all .2s;}
+.toggle input:checked+.toggle-track{background:var(--teal);border-color:var(--teal);}
+.toggle-thumb{position:absolute;height:16px;width:16px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:transform .2s;}
+.toggle input:checked+.toggle-track .toggle-thumb{transform:translateX(18px);}
+.flag-row td:first-child{font-weight:500;}
+.flag-row td:nth-child(2){color:var(--txt2);font-size:12px;}
+
+/* ── Stats ── */
+.stats-row{display:flex;gap:20px;padding:20px 24px;border-bottom:1px solid var(--bd);}
+.stat{text-align:center;}
+.stat-val{font-size:26px;font-weight:800;color:var(--teal);}
+.stat-lbl{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+
+/* ── Empty ── */
+.empty{padding:32px;text-align:center;color:var(--txt3);font-size:14px;}
+
+/* ── Loading / Error ── */
+#gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px;}
+.gate-icon{font-size:48px;}
+.gate-title{font-size:20px;font-weight:700;}
+.gate-sub{font-size:14px;color:var(--txt2);}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:28px;right:28px;background:var(--bg3);border:1px solid var(--bd2);border-radius:10px;padding:12px 20px;font-size:13px;font-weight:600;transform:translateY(80px);opacity:0;transition:all .25s;z-index:999;pointer-events:none;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast.ok{border-color:var(--green);color:var(--green);}
+#toast.err{border-color:var(--red);color:var(--red);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Furni<span>Craft</span> 3D</div>
+  <div class="admin-badge">Admin Portal</div>
+  <div class="nav-right">
+    <span class="nav-email" id="nav-email"></span>
+    <a href="/" class="nav-btn">← Back to App</a>
+    <button class="nav-btn" onclick="doLogout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- Gate overlay while checking auth -->
+<div id="gate">
+  <div class="gate-icon">🔐</div>
+  <div class="gate-title">Checking access…</div>
+  <div class="gate-sub" id="gate-msg"></div>
+</div>
+
+<!-- Main content (hidden until auth confirmed) -->
+<main id="admin-main" style="display:none;">
+  <div class="page-title">Admin Portal</div>
+  <div class="page-sub">Manage users and control which features are available.</div>
+
+  <!-- Feature flags -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Feature Flags</h2>
+      <span class="count" id="flags-count">—</span>
+    </div>
+    <table>
+      <thead><tr><th>Feature</th><th>Description</th><th style="text-align:center;">Enabled</th></tr></thead>
+      <tbody id="flags-tbody"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Users -->
+  <div class="section">
+    <div class="section-head">
+      <h2>Users</h2>
+      <span class="count" id="users-count">—</span>
+    </div>
+    <div class="stats-row" id="stats-row"></div>
+    <table>
+      <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+      <tbody id="users-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+var ADMIN_EMAIL = '25nikael@gmail.com';
+var _users = [];
+var _flags = [];
+
+function _getToken()  { return localStorage.getItem('fc3d_token') || ''; }
+function _clearToken(){ localStorage.removeItem('fc3d_token'); }
+
+async function api(path, opts) {
+  opts = opts || {};
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = _getToken();
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  var resp = await fetch('/api' + path, {
+    method:  opts.method || 'GET',
+    headers: headers,
+    body:    opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  var data = null;
+  try { data = await resp.json(); } catch(e) { data = {}; }
+  if (!resp.ok) throw new Error(data.error || 'Request failed (' + resp.status + ')');
+  return data;
+}
+
+function toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || 'ok');
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.className = ''; }, 2800);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function doLogout() {
+  _clearToken();
+  window.location.href = '/landing';
+}
+
+// ── Feature flags ────────────────────────────────────────────
+var FLAG_LABELS = {
+  ai_design:       'AI Design Assistant',
+  image_to_design: 'AI Design from Image',
+  public_gallery:  'Public Gallery',
+  version_history: 'Version History',
+  pdf_export:      'PDF / Cut Sheet Export',
+  share:           'Share Projects'
+};
+var FLAG_DESCS = {
+  ai_design:       'AI-powered furniture design from text prompts',
+  image_to_design: 'Generate designs from uploaded photos or sketches',
+  public_gallery:  'Browse and discover designs shared by other users',
+  version_history: 'Save and restore previous project snapshots',
+  pdf_export:      'Export cut sheets, parts lists and board layouts as PDF',
+  share:           'Share projects via a public link'
+};
+
+function renderFlags() {
+  document.getElementById('flags-count').textContent = _flags.length + ' flags';
+  var tbody = document.getElementById('flags-tbody');
+  if (!_flags.length) { tbody.innerHTML = '<tr><td colspan="3" class="empty">No flags found.</td></tr>'; return; }
+  tbody.innerHTML = _flags.map(function(f) {
+    return '<tr class="flag-row">' +
+      '<td>' + (FLAG_LABELS[f.key] || f.label || f.key) + '</td>' +
+      '<td>' + (FLAG_DESCS[f.key] || '') + '</td>' +
+      '<td style="text-align:center;">' +
+        '<label class="toggle">' +
+          '<input type="checkbox"' + (f.enabled ? ' checked' : '') + ' onchange="toggleFlag(\'' + f.key + '\',this.checked)">' +
+          '<div class="toggle-track"><div class="toggle-thumb"></div></div>' +
+        '</label>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function toggleFlag(key, enabled) {
+  try {
+    await api('/admin/flags/' + key, { method:'PUT', body:{ enabled } });
+    var f = _flags.find(function(x){ return x.key === key; });
+    if (f) f.enabled = enabled;
+    toast((FLAG_LABELS[key] || key) + (enabled ? ' enabled' : ' disabled'), 'ok');
+  } catch(e) {
+    toast('Error: ' + e.message, 'err');
+    // Revert toggle
+    await loadFlags();
+    renderFlags();
+  }
+}
+
+async function loadFlags() {
+  var data = await api('/admin/flags');
+  _flags = data.flags;
+}
+
+// ── Users ────────────────────────────────────────────────────
+function renderUsers() {
+  var active   = _users.filter(function(u){ return !u.disabled; }).length;
+  var disabled = _users.filter(function(u){ return u.disabled; }).length;
+  document.getElementById('users-count').textContent = _users.length + ' users';
+  document.getElementById('stats-row').innerHTML =
+    '<div class="stat"><div class="stat-val">' + _users.length + '</div><div class="stat-lbl">Total</div></div>' +
+    '<div class="stat"><div class="stat-val" style="color:var(--green)">' + active + '</div><div class="stat-lbl">Active</div></div>' +
+    '<div class="stat"><div class="stat-val" style="color:var(--red)">' + disabled + '</div><div class="stat-lbl">Disabled</div></div>';
+
+  var tbody = document.getElementById('users-tbody');
+  if (!_users.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No users yet.</td></tr>'; return; }
+  tbody.innerHTML = _users.map(function(u) {
+    var isAdmin = u.email === ADMIN_EMAIL;
+    var statusBadge = isAdmin
+      ? '<span class="badge badge-admin">Admin</span>'
+      : u.disabled
+        ? '<span class="badge badge-disabled">Disabled</span>'
+        : '<span class="badge badge-active">Active</span>';
+    var actions = isAdmin
+      ? '<span style="font-size:11px;color:var(--txt3);">Protected</span>'
+      : '<div class="actions">' +
+          (u.disabled
+            ? '<button class="act-btn act-enable" onclick="toggleUser(' + u.id + ',false)">Enable</button>'
+            : '<button class="act-btn" onclick="toggleUser(' + u.id + ',true)">Disable</button>') +
+          '<button class="act-btn danger" onclick="deleteUser(' + u.id + ',\'' + u.email.replace(/'/g,"\\'") + '\')">Delete</button>' +
+        '</div>';
+    return '<tr>' +
+      '<td class="td-email">' + escHtml(u.email) + '</td>' +
+      '<td>' + escHtml(u.name || '—') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td class="td-date">' + fmtDate(u.created_at) + '</td>' +
+      '<td>' + actions + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function toggleUser(id, disabled) {
+  try {
+    await api('/admin/users/' + id, { method:'PATCH', body:{ disabled } });
+    var u = _users.find(function(x){ return x.id === id; });
+    if (u) u.disabled = disabled;
+    renderUsers();
+    toast('User ' + (disabled ? 'disabled' : 'enabled'), 'ok');
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function deleteUser(id, email) {
+  if (!confirm('Permanently delete ' + email + '?\n\nThis also deletes all their projects. This cannot be undone.')) return;
+  try {
+    await api('/admin/users/' + id, { method:'DELETE' });
+    _users = _users.filter(function(u){ return u.id !== id; });
+    renderUsers();
+    toast('User deleted', 'ok');
+  } catch(e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function loadUsers() {
+  var data = await api('/admin/users');
+  _users = data.users;
+}
+
+// ── Init ─────────────────────────────────────────────────────
+(async function() {
+  var gateMsg = document.getElementById('gate-msg');
+  if (!_getToken()) {
+    gateMsg.textContent = 'You must be signed in as the admin.';
+    setTimeout(function(){ window.location.href = '/landing?return=/admin'; }, 1500);
+    return;
+  }
+  try {
+    var me = await api('/auth/me');
+    if (me.user.email !== ADMIN_EMAIL) {
+      document.getElementById('gate').innerHTML =
+        '<div class="gate-icon">🚫</div>' +
+        '<div class="gate-title">Access Denied</div>' +
+        '<div class="gate-sub">This portal is restricted to the site administrator.</div>';
+      return;
+    }
+    document.getElementById('nav-email').textContent = me.user.email;
+    // Load data in parallel
+    await Promise.all([loadFlags(), loadUsers()]);
+    renderFlags();
+    renderUsers();
+    document.getElementById('gate').style.display   = 'none';
+    document.getElementById('admin-main').style.display = '';
+  } catch(e) {
+    gateMsg.textContent = e.message || 'Authentication failed.';
+    setTimeout(function(){ window.location.href = '/landing?return=/admin'; }, 1800);
+  }
+})();
+</script>
+</body>
+</html>
