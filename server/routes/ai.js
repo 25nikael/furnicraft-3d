@@ -135,7 +135,7 @@ router.post('/design', async (req, res) => {
   }
 
   try {
-    // Pass 1 — generate initial design
+    // Pass 1 — generate initial design (prefill "{" forces JSON-only output)
     const resp1 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -143,14 +143,22 @@ router.post('/design', async (req, res) => {
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: AI_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }]
+        messages: [
+          { role: 'user',      content: userContent },
+          { role: 'assistant', content: '{' }
+        ]
       })
     });
     if (!resp1.ok) {
       const e = await resp1.json().catch(() => ({}));
       return res.status(resp1.status).json({ error: e.error ? e.error.message : `API error ${resp1.status}` });
     }
-    const draft = extractJSON((await resp1.json()).content[0].text);
+    const draft = '{' + (await resp1.json()).content[0].text;
+
+    // Validate pass 1 JSON before proceeding
+    try { JSON.parse(draft); } catch (e) {
+      return res.status(500).json({ error: 'Design generation returned invalid JSON. Please try again.' });
+    }
 
     // Pass 2 — verify completeness against 10 similar examples
     const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
@@ -160,14 +168,17 @@ router.post('/design', async (req, res) => {
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: VERIFY_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: `Original request: ${prompt.trim()}\n\nGenerated design:\n${draft}` }]
+        messages: [
+          { role: 'user',      content: `Original request: ${prompt.trim()}\n\nGenerated design:\n${draft}` },
+          { role: 'assistant', content: '{' }
+        ]
       })
     });
     if (!resp2.ok) {
       return res.json({ text: draft });
     }
-    const verifiedRaw = extractJSON((await resp2.json()).content[0].text);
-    // Sanity-check: if extracted text isn't valid JSON fall back to draft
+    const verifiedRaw = '{' + (await resp2.json()).content[0].text;
+    // Sanity-check: fall back to draft if pass 2 result is invalid JSON
     try { JSON.parse(verifiedRaw); } catch (_) { return res.json({ text: draft }); }
     res.json({ text: verifiedRaw });
   } catch (err) {
