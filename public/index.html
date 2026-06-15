@@ -968,9 +968,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 
       <!-- Generate button -->
       <button id="ai-gen-btn" onclick="generateAIDesign()"
-        style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:opacity .15s;">
+        style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;transition:opacity .15s;">
         ✦ Generate Design
       </button>
+      <label class="btn" style="display:block;text-align:center;cursor:pointer;margin:0 0 12px;">📷 Generate from a reference image
+        <input type="file" accept="image/*" style="display:none;" onchange="aiFromImage(this)">
+      </label>
 
       <!-- Status / result -->
       <div id="ai-status" style="display:none;text-align:center;padding:10px;font-size:13px;color:var(--txt2);"></div>
@@ -1327,6 +1330,47 @@ async function aiAdvise(kind) {
     if (err.message === 'Failed to fetch' || err.name === 'TypeError') out.textContent = 'Direct API blocked here. Paste this prompt into claude.ai:\n\n' + prompt;
     else out.textContent = '⚠ ' + err.message;
   }
+}
+
+// Generate a design from a reference image (I2) — vision needs the direct API
+async function aiFromImage(input) {
+  if (!input.files || !input.files[0]) return;
+  var reader = new FileReader();
+  reader.onload = async function () {
+    var dataUrl = reader.result, b64 = dataUrl.split(',')[1];
+    var mt = (dataUrl.match(/data:(.*?);/) || [])[1] || 'image/png';
+    var key = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
+    var statEl = document.getElementById('ai-status'), errEl = document.getElementById('ai-err');
+    errEl.textContent = '';
+    document.getElementById('ai-manual').style.display = 'none';
+    document.getElementById('ai-result').style.display = 'none';
+    if (!key) { errEl.textContent = 'Generating from an image needs the direct API — add your Anthropic API key above.'; return; }
+    statEl.style.display = 'block'; statEl.textContent = 'Analysing image…';
+    try {
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST', mode: 'cors',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001', max_tokens: 4096, system: AI_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
+            { type: 'text', text: 'Design furniture matching this reference image. Return ONLY the JSON design object.' }
+          ] }]
+        })
+      });
+      if (!resp.ok) { var e = await resp.json().catch(function () { return {}; }); throw new Error(e.error ? e.error.message : ('API error ' + resp.status)); }
+      var data = await resp.json();
+      statEl.style.display = 'none';
+      _parseAndShowDesign(data.content[0].text);
+    } catch (err) {
+      statEl.style.display = 'none';
+      errEl.textContent = (err.message === 'Failed to fetch' || err.name === 'TypeError')
+        ? 'Direct API blocked here — image generation is unavailable in this environment.'
+        : '⚠ ' + err.message;
+    }
+  };
+  reader.readAsDataURL(input.files[0]);
+  input.value = '';
 }
 
 async function _aiRun(prompt) {

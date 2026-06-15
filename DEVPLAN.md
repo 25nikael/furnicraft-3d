@@ -203,7 +203,8 @@ JSON export/import of project state (`exportProjectJSON`/`importProjectJSON`) in
 Backend: `POST /:id/share` (generates share_token), `POST /:id/publish` (is_public toggle), new unauthenticated `routes/public.js` (`GET /gallery`, `GET /:token`) mounted at `/api/public`. Frontend: Share modal (read-only `?share=` link + publish checkbox), Gallery modal (browse → open read-only), `_loadSharedFromQuery` on load. Verified: functions/modals/Share button present, all server files syntax-clean (runs on Render).
 ### R10 — AI refine + joinery/hardware suggestions + cost tips (I1, I3, I4) ✅
 Factored `_aiRun(prompt)` (generate delegates); `aiRefine` embeds the current design + instruction and re-runs the JSON pipeline; `aiAdvise('joinery'|'cost')` returns plain-text advice (inline with key, prompt-to-copy without). Refine input + advice buttons + output area in the AI modal. Verified: functions wired, 7-panel context, advice shows prompt without key, refine guards empty input, no errors.
-### R11 — AI design from image/sketch (I2) ⬜
+### R11 — AI design from image/sketch (I2) ✅
+`aiFromImage` reads an uploaded image to base64 and sends it as a Claude vision message (image + text, AI_SYSTEM_PROMPT) → `_parseAndShowDesign`; graceful messaging without an API key / on CORS. "Generate from a reference image" button in the AI modal. Verified: function + file input + parse pipeline present, no errors (live vision needs the direct API + key).
 ### R12 — Integration, polish & docs ⬜
 
 ## Testing approach (per block)
