@@ -104,8 +104,12 @@ Editable overall W/H/D → proportional refit of all panels (positions + in-plan
 dims, thickness preserved). Pragmatic parametric resize for any design.
 **Done:** `resizeOverall(axis,newSize)` scales positions about the centre and in-plane dims by the ratio, preserving thickness (skips the thickness-role dim); hardware repositions too; overall W/H/D inputs made editable (`_applyOverallResize`, unit-aware). Verified: 450→900 doubles width, sides keep 18mm + move apart, top width ×2, round-trip, no errors.
 
-### F-Block 8 — Integration, polish & docs ⬜
+### F-Block 8 — Integration, polish & docs ✅
 Units flow into new features; mobile/theme; regression; README + DEVPLAN.
+**Done:** README "Modeling tools" section; new modals reuse themed/mobile classes; measurements + groupMeta added to project state. Regression verified end-to-end: template + inch units (31.496") + align + mirror + measure + group + parametric resize + cut sheet (11 rows) + light theme + mobile drawer + full round-trip (measurements & groupMeta preserved), no errors.
+
+---
+**F-SERIES COMPLETE** — all seven F features shipped (F1–F7 + integration) across commits d57bf20 → (F-block 8).
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).

@@ -18,6 +18,10 @@ guides, export to PDF, and save your projects to your account in the cloud.
   select/move/snap-to-face editing and a hardware BOM in the cut sheet
 - **Functional components** — designate a panel as a working **door** (swings on
   its hinge edge) or **drawer** (slides out with the box, auto slide-clearance)
+- **Modeling tools** — mm/cm/inch units (fractional inches), align & distribute,
+  mirror & linear/radial array, two-point measure annotations, parametric
+  templates (bookcase, wardrobe, cabinet, table, drawer unit), named
+  sub-assemblies, and parametric overall resize (edit W/H/D to rescale)
 - **Output** — auto cut sheet with board-nesting optimizer, assembly guide, PDF export
 - **AI Designer** — describe furniture in plain language and generate a starting design
 
