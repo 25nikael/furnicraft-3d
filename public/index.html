@@ -205,6 +205,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .hw-cat-icon{font-size:26px;line-height:1;}
 .hw-cat-label{font-size:12px;font-weight:600;}
 
+/* ── Align & distribute ───────────────────────────── */
+.arr-grid{display:grid;grid-template-columns:14px repeat(4,1fr);gap:4px;align-items:center;}
+.arr-axis{font-size:11px;font-weight:700;color:var(--teal);text-align:center;}
+.arr-btn{padding:4px 0;font-size:11px;border:1px solid var(--bd2);border-radius:4px;background:var(--bg3);color:var(--txt2);cursor:pointer;transition:all .12s;}
+.arr-btn:hover{background:var(--teal-dim);border-color:var(--teal);color:var(--teal);}
+
 /* ── Cut Sheet modal ──────────────────────────────── */
 #cs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;overflow-y:auto;}
 #cs-inner{background:var(--bg2);margin:16px auto;max-width:980px;border-radius:10px;box-shadow:0 6px 40px rgba(0,0,0,.7);overflow:hidden;border:1px solid var(--bd2);}
@@ -475,6 +481,27 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="btn" id="btn-group">⊞ Group Selected</button>
       <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
       <button class="btn danger" id="btn-del">✕ Delete Selected</button>
+    </div>
+    <div class="sec-title">Arrange</div>
+    <div style="padding:7px 10px;">
+      <div style="font-size:10px;color:var(--txt3);margin-bottom:5px;">Select 2+ panels (Ctrl+click), then align or distribute.</div>
+      <div class="arr-grid">
+        <span class="arr-axis">X</span>
+        <button class="arr-btn" onclick="alignPanels('x','min')">Min</button>
+        <button class="arr-btn" onclick="alignPanels('x','center')">Ctr</button>
+        <button class="arr-btn" onclick="alignPanels('x','max')">Max</button>
+        <button class="arr-btn" title="Distribute evenly" onclick="distributePanels('x')">⇿</button>
+        <span class="arr-axis">Y</span>
+        <button class="arr-btn" onclick="alignPanels('y','min')">Min</button>
+        <button class="arr-btn" onclick="alignPanels('y','center')">Ctr</button>
+        <button class="arr-btn" onclick="alignPanels('y','max')">Max</button>
+        <button class="arr-btn" title="Distribute evenly" onclick="distributePanels('y')">⇕</button>
+        <span class="arr-axis">Z</span>
+        <button class="arr-btn" onclick="alignPanels('z','min')">Min</button>
+        <button class="arr-btn" onclick="alignPanels('z','center')">Ctr</button>
+        <button class="arr-btn" onclick="alignPanels('z','max')">Max</button>
+        <button class="arr-btn" title="Distribute evenly" onclick="distributePanels('z')">⇿</button>
+      </div>
     </div>
     <div class="sec-title">Hardware</div>
     <ul class="comp-list" id="hw-list"></ul>
@@ -2339,6 +2366,52 @@ function duplicateSelected() {
   buildMesh(p);
   refreshUI();
   doSelect(p);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ALIGN & DISTRIBUTE  (F-series F3)
+// ═══════════════════════════════════════════════════════════════
+function _axisBounds(p, key) {
+  var b = _panelWorldBounds(p);
+  return { min: b['min'+key], max: b['max'+key], c: (b['min'+key] + b['max'+key]) / 2 };
+}
+
+function alignPanels(axis, mode) {
+  if (selectedGroup.length < 2) return;
+  saveUndo();
+  var key = axis.toUpperCase();
+  var info = selectedGroup.map(function (p) { var ab = _axisBounds(p, key); return { p: p, min: ab.min, max: ab.max, c: ab.c }; });
+  var target;
+  if (mode === 'min')      target = Math.min.apply(null, info.map(function (i) { return i.min; }));
+  else if (mode === 'max') target = Math.max.apply(null, info.map(function (i) { return i.max; }));
+  else {
+    var lo = Math.min.apply(null, info.map(function (i) { return i.min; }));
+    var hi = Math.max.apply(null, info.map(function (i) { return i.max; }));
+    target = (lo + hi) / 2;
+  }
+  info.forEach(function (i) {
+    var cur = mode === 'min' ? i.min : (mode === 'max' ? i.max : i.c);
+    i.p[axis] = Math.round(i.p[axis] + (target - cur));
+    syncPos(i.p); rebuildSelBox(i.p);
+  });
+  refreshHandlePos(); refreshUI();
+  if (selected) showProps(selected);
+}
+
+function distributePanels(axis) {
+  if (selectedGroup.length < 3) return;
+  saveUndo();
+  var key = axis.toUpperCase();
+  var arr = selectedGroup.map(function (p) { return { p: p, c: _axisBounds(p, key).c }; });
+  arr.sort(function (a, b) { return a.c - b.c; });
+  var lo = arr[0].c, hi = arr[arr.length - 1].c, step = (hi - lo) / (arr.length - 1);
+  arr.forEach(function (it, i) {
+    var tc = lo + step * i;
+    it.p[axis] = Math.round(it.p[axis] + (tc - it.c));
+    syncPos(it.p); rebuildSelBox(it.p);
+  });
+  refreshHandlePos(); refreshUI();
+  if (selected) showProps(selected);
 }
 
 // ═══════════════════════════════════════════════════════════════

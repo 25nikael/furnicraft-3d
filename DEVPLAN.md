@@ -79,8 +79,9 @@ dims+positions, overall size, 3D dim labels, cut sheet & PDF; fractional inches
 in read-only displays; settings selector. (Built first so later tools display units.)
 **Done:** `_unit` + `MM_PER`, `toUnit`/`fromUnit`/`parseLen`/`fmtLen`/`fmtLenLabel` (1/16" fractions); Units section in settings; applied to props (show/apply), overall, 3D labels, cut-sheet table, PDF note. Verified: mm/cm/inch convert, `1 1/2"` fractions, 20"→508mm round-trip, no errors.
 
-### F-Block 2 — Alignment & distribution (F3) ⬜
+### F-Block 2 — Alignment & distribution (F3) ✅
 Multi-select align min/center/max per axis + distribute evenly.
+**Done:** `alignPanels(axis,mode)` (min/center/max via world bounds) + `distributePanels(axis)` (even centre spacing); Arrange section in left panel with X/Y/Z rows. Verified: align min → all 0, distribute → even gaps [0,450,900], no errors.
 
 ### F-Block 3 — Mirror & array (F4) ⬜
 Mirror across X/Y/Z; linear array (count+spacing) and radial array (count+angle).
