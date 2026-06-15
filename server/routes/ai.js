@@ -87,32 +87,35 @@ OUTPUT JSON FORMAT:
 
 Always include ALL structural panels. For every drawer opening output all 5 drawer panels plus 2 hardware slides. Ensure panels touch correctly at joints.`;
 
-const VERIFY_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker reviewing a generated furniture design for completeness.
+const VERIFY_SYSTEM_PROMPT = `You are a furniture completeness checker. You receive a user request and a generated furniture design JSON. You output ONLY a corrected JSON object — absolutely no prose, no explanation, no markdown fences, no preamble. Your entire response must start with { and end with }.
 
-You will be given: (1) the original user request, and (2) a generated design JSON.
+CHECKING PROCESS (do this mentally, do not write it out):
+- Think of 10 real-world examples of this furniture type
+- Verify every structural element present in those 10 examples is in this design
+- Common omissions to fix: missing back panel, missing top/bottom, incomplete drawer boxes (need all 5 panels + 2 slides each), missing legs/stretchers on tables, missing mounting rail on wall-hung units, door panels absent
 
-Your task:
-1. Think of 10 real-world examples of this type of furniture (e.g. 10 real bookcases, 10 real bedside tables, etc.)
-2. For each structural element that appears consistently across those 10 examples, verify it is present in the design
-3. Check specifically for these common omissions:
-   - Missing back panel
-   - Missing top or bottom panel
-   - Shelves not spanning the full interior width/depth
-   - Drawer boxes incomplete (must have: front with func, left side, right side, back, bottom — and 2 slide hardware entries)
-   - Missing mounting rails on wall-hung pieces
-   - Missing legs or stretchers on tables/desks
-   - Door panels missing or wrongly positioned
-   - Panels that overlap or have gaps at joints
-4. If anything is missing or wrong, add/fix it. If everything is correct, return the design unchanged.
+SCHEMA RULES (same as the original design):
+- All values in mm; panel (x,y,z) = centre of panel
+- Drawer front: func:{kind:"drawer",travel:N,slide:"sidemount",clearance:12.5,open:false}, _g:"d0", _gname:"Drawer 1"
+- Drawer box panels: left, right, back, bottom — all with same _g key
+- hardware: [{type:"slide",x,y,z,params:{length:N,height:45}}] — 2 per drawer
+- Materials: oak, walnut, pine, maple, cherry, birch, white, black, grey, metal, glass
 
-Return ONLY the corrected JSON object — no explanation, no markdown fences.
+OUTPUT: raw JSON only. Start with {`;
 
-Use the same schema rules:
-- All coordinates and dimensions in mm
-- Panel position (x,y,z) is the CENTRE of the panel
-- Drawer box panels share _g group key; drawer front has func:{kind:"drawer",...}
-- hardware array: {type:"slide", x, y, z, params:{length, height:45}} — 2 per drawer
-- Materials: oak, walnut, pine, maple, cherry, birch, white, black, grey, metal, glass`;
+// Extract the first valid JSON object from a string that may contain prose
+function extractJSON(text) {
+  const s = text.trim();
+  // Strip common markdown fences
+  const stripped = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  // If it starts with { it's likely clean JSON
+  if (stripped.startsWith('{')) return stripped;
+  // Otherwise find the first { and last } pair
+  const start = s.indexOf('{');
+  const end   = s.lastIndexOf('}');
+  if (start !== -1 && end > start) return s.slice(start, end + 1);
+  return stripped;
+}
 
 router.post('/design', async (req, res) => {
   const { prompt, currentDesign } = req.body || {};
@@ -147,13 +150,9 @@ router.post('/design', async (req, res) => {
       const e = await resp1.json().catch(() => ({}));
       return res.status(resp1.status).json({ error: e.error ? e.error.message : `API error ${resp1.status}` });
     }
-    const draft = (await resp1.json()).content[0].text;
+    const draft = extractJSON((await resp1.json()).content[0].text);
 
     // Pass 2 — verify completeness against 10 similar examples
-    const verifyContent =
-      `Original request: ${prompt.trim()}\n\n` +
-      `Generated design:\n${draft}`;
-
     const resp2 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -161,15 +160,16 @@ router.post('/design', async (req, res) => {
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         system: VERIFY_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: verifyContent }]
+        messages: [{ role: 'user', content: `Original request: ${prompt.trim()}\n\nGenerated design:\n${draft}` }]
       })
     });
     if (!resp2.ok) {
-      // Verification failed — return the draft rather than erroring
       return res.json({ text: draft });
     }
-    const verified = (await resp2.json()).content[0].text;
-    res.json({ text: verified });
+    const verifiedRaw = extractJSON((await resp2.json()).content[0].text);
+    // Sanity-check: if extracted text isn't valid JSON fall back to draft
+    try { JSON.parse(verifiedRaw); } catch (_) { return res.json({ text: draft }); }
+    res.json({ text: verifiedRaw });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
