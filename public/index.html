@@ -215,6 +215,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .cheat-grid kbd{justify-self:start;background:var(--bg3);border:1px solid var(--bd2);border-bottom-width:2px;border-radius:5px;padding:2px 8px;font-size:11px;font-family:monospace;color:var(--teal);white-space:nowrap;}
 .cheat-grid span{font-size:12px;color:var(--txt2);}
 
+/* ── History panel ────────────────────────────────── */
+.hist-row{padding:6px 10px;font-size:12px;color:var(--txt2);border-radius:5px;cursor:pointer;border:1px solid transparent;}
+.hist-row:hover{background:var(--teal-dim);border-color:var(--teal);color:var(--teal);}
+.hist-row.current{color:var(--teal);font-weight:700;cursor:default;background:var(--bg3);}
+.hist-row.current:hover{border-color:transparent;}
+.hist-row.redo{color:var(--txt3);}
+
 /* ── Align & distribute ───────────────────────────── */
 .arr-grid{display:grid;grid-template-columns:14px repeat(4,1fr);gap:4px;align-items:center;}
 .arr-axis{font-size:11px;font-weight:700;color:var(--teal);text-align:center;}
@@ -504,6 +511,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
       <button class="btn" id="btn-groups" onclick="openGroupManager()">🗂 Group Manager…</button>
       <button class="btn danger" id="btn-del">✕ Delete Selected</button>
+      <button class="btn" id="btn-history" onclick="openHistory()">🕑 History…</button>
     </div>
     <div class="sec-title">Arrange</div>
     <div style="padding:7px 10px;">
@@ -551,6 +559,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       [G] group &nbsp;|&nbsp; [U] ungroup &nbsp;|&nbsp; [D] dup &nbsp;|&nbsp; [S] snap
     </div>
     <div id="toolbar">
+      <button class="tbtn" id="btn-undo" title="Undo (Ctrl+Z)" onclick="undo()">↶</button>
+      <button class="tbtn" id="btn-redo" title="Redo (Ctrl+Shift+Z)" onclick="redo()">↷</button>
       <button class="tbtn" id="btn-reset">⟳ Reset View</button>
       <button class="tbtn on" id="btn-snap">Snap ✓</button>
       <button class="tbtn" id="btn-wire">Wireframe</button>
@@ -675,6 +685,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── History modal ─────────────────────────────────── -->
+<div class="overlay-modal" id="history-modal">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-hdr">History<button class="modal-close" onclick="closeHistory()">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;">Click a step to jump to it.</div>
+      <div id="history-body" style="max-height:50vh;overflow-y:auto;"></div>
     </div>
   </div>
 </div>
@@ -956,6 +977,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 var panels        = [];
 var selected      = null;
 var undoStack     = [];
+var redoStack     = [];
 var MAX_UNDO      = 50;
 var selectedGroup = [];   // all panels in the current selection (1 or whole group)
 var snapEnabled   = true;
@@ -2017,28 +2039,67 @@ function snapPanel(p) {
            textureURL: p.textureURL || null };
 }
 
-function saveUndo() {
-  undoStack.push({
+// Full state snapshot / restore (J4) — covers panels, hardware, measurements, groups
+function _snapshot() {
+  return {
     panels: panels.map(snapPanel),
     hardware: hardware.map(snapHardware),
+    measurements: JSON.parse(JSON.stringify(typeof measurements !== 'undefined' ? measurements : [])),
+    groupMeta: JSON.parse(JSON.stringify(typeof groupMeta !== 'undefined' ? groupMeta : {})),
     nextId: nextId, nextGroupId: nextGroupId, nextHwId: nextHwId
-  });
+  };
+}
+function _restoreSnapshot(snap) {
+  panels.forEach(function(p){ removeMesh(p); });
+  clearAllHardware();
+  clearHandles();
+  nextId = snap.nextId; nextGroupId = snap.nextGroupId; nextHwId = snap.nextHwId || 1;
+  panels = snap.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
+  hardware = (snap.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
+  if (typeof measurements !== 'undefined') measurements = snap.measurements || [];
+  if (typeof groupMeta !== 'undefined') groupMeta = snap.groupMeta || {};
+  doSelect(null);
+  refreshUI();
+  if (typeof updateDims === 'function') updateDims();
+}
+
+function saveUndo() {
+  undoStack.push(_snapshot());
   if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack = [];                 // a fresh action invalidates the redo branch
+  _refreshHistoryPanel();
 }
 
 function undo() {
   if (!undoStack.length) return;
-  var snap = undoStack.pop();
-  panels.forEach(function(p){ removeMesh(p); });
-  clearAllHardware();
-  clearHandles();
-  nextId = snap.nextId;
-  nextGroupId = snap.nextGroupId;
-  nextHwId = snap.nextHwId || 1;
-  panels = snap.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
-  hardware = (snap.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
-  doSelect(null);
-  refreshUI();
+  redoStack.push(_snapshot());
+  _restoreSnapshot(undoStack.pop());
+  _refreshHistoryPanel();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(_snapshot());
+  _restoreSnapshot(redoStack.pop());
+  _refreshHistoryPanel();
+}
+
+function undoN(n) { for (var i = 0; i < n; i++) undo(); }
+function redoN(n) { for (var i = 0; i < n; i++) redo(); }
+
+function openHistory()  { _refreshHistoryPanel(); document.getElementById('history-modal').classList.add('active'); }
+function closeHistory() { document.getElementById('history-modal').classList.remove('active'); }
+function _refreshHistoryPanel() {
+  var el = document.getElementById('history-body');
+  if (!el) return;
+  var html = '';
+  for (var r = redoStack.length - 1; r >= 0; r--) html += '<div class="hist-row redo" onclick="redoN(' + (redoStack.length - r) + ')">↷ Redo ' + (redoStack.length - r) + '</div>';
+  html += '<div class="hist-row current">● Current state</div>';
+  for (var u = undoStack.length - 1; u >= 0; u--) html += '<div class="hist-row" onclick="undoN(' + (undoStack.length - u) + ')">↶ Undo ' + (undoStack.length - u) + '</div>';
+  el.innerHTML = html;
+  var ub = document.getElementById('btn-undo'), rb = document.getElementById('btn-redo');
+  if (ub) ub.style.opacity = undoStack.length ? '1' : '0.4';
+  if (rb) rb.style.opacity = redoStack.length ? '1' : '0.4';
 }
 
 // Vertex index key:

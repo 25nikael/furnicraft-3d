@@ -157,8 +157,9 @@ commit. Commit messages stay quote-free (PS here-string quirk).
 Consolidated shortcuts + `?`-toggled cheatsheet overlay + Help button; guarded against typing/FPS.
 **Done:** expanded keydown handler (undo/redo, delete, dup, group/ungroup, arrow-nudge with ⇧=50mm, snap/wire/measure/explode/fit/reset, Esc, ?); guarded against inputs + FPS; cheatsheet modal + `?` Help button. Verified: 13 shortcut rows, m/x/arrow shortcuts fire, nudge 1mm, input-typing guard holds, no errors.
 
-### J-Block 2 — Undo/redo + history panel (J4) ⬜
+### J-Block 2 — Undo/redo + history panel (J4) ✅
 Add redo; snapshot/restore helpers; history panel with click-to-jump; toolbar undo/redo.
+**Done:** `_snapshot`/`_restoreSnapshot` (now also cover measurements + groupMeta, fixing an undo gap); `redoStack` + `redo`; `undoN`/`redoN` jump; History modal (click a step to jump); toolbar ↶/↷ buttons (dimmed when empty) + Ctrl+Z / Ctrl+⇧Z. Verified: undo→0, redo→100, redo cleared on new action, measurement restored on undo, history shows current marker, no errors.
 
 ### J-Block 3 — Snap/grid settings UI (J3) ⬜
 Snap on/off, snap distance, grid increment (round positions); persisted.
