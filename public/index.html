@@ -621,12 +621,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <option value="grey">🔲 Grey MDF</option>
           <option value="metal">🔩 Brushed Steel</option>
           <option value="glass">🪟 Glass</option>
-          <option value="custom">🎨 Custom…</option>
         </select>
-        <div id="custom-colors">
-          <div class="prop-row"><span class="prop-lbl">Panel colour</span><input type="color" class="clr" id="p-color"></div>
-          <div class="prop-row"><span class="prop-lbl">Edge colour</span><input type="color" class="clr" id="p-edge"></div>
-        </div>
       </div>
       <div class="prop-sec">
         <div class="prop-title">Grain Direction</div>
@@ -685,10 +680,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <input type="checkbox" id="p-rounded"> Rounded edges
         </label>
         <div style="font-size:10px;color:#aaa;margin-top:4px;">Visual effect only — does not affect cut sheet</div>
-        <label class="btn" style="display:block;text-align:center;cursor:pointer;margin:8px 0 0;">📷 Upload texture
-          <input type="file" accept="image/*" style="display:none;" id="p-tex-file" onchange="uploadPanelTexture(this)">
-        </label>
-        <button class="btn" id="p-tex-clear" style="margin-top:4px;display:none;" onclick="clearPanelTexture()">Remove texture</button>
       </div>
       <div class="prop-sec">
         <div class="prop-title">Function</div>
@@ -2219,8 +2210,8 @@ var DIM = {x:'w',y:'h',z:'d'};
 var _texCache = {};
 var TEX_MM = 320; // mm per texture repeat (controls visual grain scale)
 
-function _woodTex(base, dark, count, wave) {
-  var key = 'w'+base+dark+count+wave;
+function _woodTex(base, dark, count, wave, light) {
+  var key = 'w'+base+dark+count+wave+(light||'');
   if (_texCache[key]) return _texCache[key];
   var sz=512, cv=document.createElement('canvas');
   cv.width=cv.height=sz;
@@ -2228,9 +2219,10 @@ function _woodTex(base, dark, count, wave) {
   cx.fillStyle=base; cx.fillRect(0,0,sz,sz);
   for (var i=0; i<count; i++) {
     var y0=Math.random()*sz*1.4-sz*0.2;
-    cx.globalAlpha=0.04+Math.random()*0.13;
-    cx.strokeStyle=dark;
-    cx.lineWidth=0.4+Math.random()*2.2;
+    var isLight = light && Math.random()<0.22;
+    cx.globalAlpha = isLight ? 0.06+Math.random()*0.10 : 0.04+Math.random()*0.14;
+    cx.strokeStyle = isLight ? light : dark;
+    cx.lineWidth=0.3+Math.random()*2.4;
     cx.beginPath(); cx.moveTo(0,y0);
     var cy=y0;
     for (var x=0;x<=sz;x+=6){ cy+=(Math.random()-0.5)*wave; cx.lineTo(x,cy); }
@@ -2295,18 +2287,17 @@ function _glassTex() {
 }
 
 var FMAT = {
-  oak:    {name:'Oak',            color:'#C8A050',edgeColor:'#7A5C1E',shininess:22, specular:'#1a1400', tex:function(){return _woodTex('#C8A050','#8B6010',120,3);}},
-  walnut: {name:'Walnut',         color:'#4A2810',edgeColor:'#221008',shininess:35, specular:'#0a0500', tex:function(){return _woodTex('#4A2810','#2E1808',100,2);}},
-  pine:   {name:'Pine',           color:'#E8CB85',edgeColor:'#B09040',shininess:12, specular:'#0a0a00', tex:function(){return _woodTex('#E8CB85','#C0A050',160,4);}},
-  maple:  {name:'Maple',          color:'#EDD9A3',edgeColor:'#C8A85A',shininess:18, specular:'#0a0a00', tex:function(){return _woodTex('#EDD9A3','#D0B070',130,2);}},
-  cherry: {name:'Cherry',         color:'#7A2E1A',edgeColor:'#3A1208',shininess:45, specular:'#150800', tex:function(){return _woodTex('#7A2E1A','#4E1C10',90,2);}},
-  birch:  {name:'Birch Plywood',  color:'#D4BA82',edgeColor:'#9A7840',shininess:10, specular:'#080800', tex:function(){return _woodTex('#D4BA82','#B09050',170,1.5);}},
-  white:  {name:'White Melamine', color:'#F4F4F0',edgeColor:'#C8C8C4',shininess:75, specular:'#444444', tex:function(){return _flatTex('#F4F4F0');}},
-  black:  {name:'Black Melamine', color:'#1A1A1A',edgeColor:'#0A0A0A',shininess:75, specular:'#555555', tex:function(){return _flatTex('#1A1A1A');}},
-  grey:   {name:'Grey MDF',       color:'#9A9A94',edgeColor:'#585852',shininess:8,  specular:'#111111', tex:function(){return _flatTex('#9A9A94');}},
+  oak:    {name:'Oak',            color:'#C9A84C',edgeColor:'#6B4812',shininess:22, specular:'#1a1400', tex:function(){return _woodTex('#C9A84C','#7A5010',140,3,'#E8C870');}},
+  walnut: {name:'Walnut',         color:'#3E2410',edgeColor:'#1E0A02',shininess:40, specular:'#0a0500', tex:function(){return _woodTex('#3E2410','#1E0A02',100,1.5);}},
+  pine:   {name:'Pine',           color:'#E8D498',edgeColor:'#A87E2C',shininess:10, specular:'#0a0a00', tex:function(){return _woodTex('#E8D498','#A87E2C',180,5.5,'#F4E4B0');}},
+  maple:  {name:'Maple',          color:'#F2ECD8',edgeColor:'#CEC090',shininess:18, specular:'#0a0a00', tex:function(){return _woodTex('#F2ECD8','#C8B478',70,0.8);}},
+  cherry: {name:'Cherry',         color:'#8C3A20',edgeColor:'#4A1C0C',shininess:55, specular:'#180800', tex:function(){return _woodTex('#8C3A20','#4A1C0C',100,2,'#A84A2C');}},
+  birch:  {name:'Birch Plywood',  color:'#D4C28A',edgeColor:'#9A7A38',shininess:8,  specular:'#080800', tex:function(){return _woodTex('#D4C28A','#A88840',200,0.8);}},
+  white:  {name:'White Melamine', color:'#F5F5F2',edgeColor:'#DCDCD8',shininess:85, specular:'#555555', tex:function(){return _flatTex('#F5F5F2');}},
+  black:  {name:'Black Melamine', color:'#1C1C1C',edgeColor:'#0A0A0A',shininess:85, specular:'#666666', tex:function(){return _flatTex('#1C1C1C');}},
+  grey:   {name:'Grey MDF',       color:'#8E8E88',edgeColor:'#5A5A54',shininess:6,  specular:'#111111', tex:function(){return _flatTex('#8E8E88');}},
   metal:  {name:'Brushed Steel',  color:'#B0BAC4',edgeColor:'#707880',shininess:160,specular:'#999999', tex:_metalTex},
-  glass:  {name:'Glass',          color:'#C0E4F8',edgeColor:'#80C0E0',shininess:280,specular:'#cccccc', transparent:true,opacity:0.28, tex:_glassTex},
-  custom: {name:'Custom…',        color:null,     edgeColor:null,     shininess:30, specular:'#111111', tex:null}
+  glass:  {name:'Glass',          color:'#C0E4F8',edgeColor:'#80C0E0',shininess:280,specular:'#cccccc', transparent:true,opacity:0.28, tex:_glassTex}
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -2340,7 +2331,7 @@ function mkPanel(o) {
     roundedEdges: o.roundedEdges || false,
     joints:      o.joints ? JSON.parse(JSON.stringify(o.joints)) : {},
     func:        o.func ? JSON.parse(JSON.stringify(o.func)) : null,
-    textureURL:  o.textureURL || null,
+
     mesh:        null,
     edges:       null,
     selBox:      null,
@@ -2362,7 +2353,7 @@ function snapPanel(p) {
            joints: JSON.parse(JSON.stringify(p.joints||{})),
            func: p.func ? { kind:p.func.kind, hingeSide:p.func.hingeSide, angle:p.func.angle,
                             travel:p.func.travel, slide:p.func.slide, clearance:p.func.clearance, open:p.func.open } : null,
-           textureURL: p.textureURL || null };
+           };
 }
 
 // Full state snapshot / restore (J4) — covers panels, hardware, measurements, groups
@@ -2664,7 +2655,7 @@ function buildJointMarkers(p) {
 
 function buildMesh(p) {
   removeMesh(p);
-  var fd = FMAT[p.material] || FMAT.custom;
+  var fd = FMAT[p.material] || FMAT.oak;
   var grainW = (p.grain === 'width');
   var uw = p.w/TEX_MM, uh = p.h/TEX_MM, ud = p.d/TEX_MM;
 
@@ -2733,20 +2724,8 @@ function buildMesh(p) {
     geo.computeVertexNormals();
   }
 
-  var tex, col;
-  if (p.textureURL) {
-    // Custom uploaded texture (G5) — cached per panel, tiles via existing UVs
-    if (!p._uploadedTex || p._uploadedTexURL !== p.textureURL) {
-      p._uploadedTex = new THREE.TextureLoader().load(p.textureURL);
-      p._uploadedTex.wrapS = p._uploadedTex.wrapT = THREE.RepeatWrapping;
-      p._uploadedTex.encoding = THREE.sRGBEncoding;
-      p._uploadedTexURL = p.textureURL;
-    }
-    tex = p._uploadedTex; col = '#ffffff';
-  } else {
-    tex = fd.tex ? fd.tex() : null;
-    col = tex ? '#ffffff' : (fd.color || p.color);
-  }
+  var tex = fd.tex ? fd.tex() : null;
+  var col = tex ? '#ffffff' : (fd.color || p.color);
   var mat;
   if (_pbr) {
     var sp = _pbrSpec(p.material);
@@ -4603,26 +4582,6 @@ function resetRotation() {
 var AXIS_LABEL = { w: 'X', h: 'Y', d: 'Z' };
 var ROLE_COLOR = { Length: '#555', Width: '#555', Thickness: '#e67e22' };
 
-// ── Custom texture upload (G-series G5) ─────────────────
-function uploadPanelTexture(input) {
-  if (!selected || !input.files || !input.files[0]) return;
-  var reader = new FileReader();
-  reader.onload = function () {
-    saveUndo();
-    selected.textureURL = reader.result;
-    selected._uploadedTex = null;
-    buildMesh(selected); refreshUI(); showProps(selected);
-  };
-  reader.readAsDataURL(input.files[0]);
-  input.value = '';
-}
-function clearPanelTexture() {
-  if (!selected) return;
-  saveUndo();
-  if (selected._uploadedTex) { selected._uploadedTex.dispose(); selected._uploadedTex = null; }
-  selected.textureURL = null;
-  buildMesh(selected); refreshUI(); showProps(selected);
-}
 
 function showProps(p) {
   propBusy = true;
@@ -4642,11 +4601,7 @@ function showProps(p) {
   document.getElementById('p-x').value     = fmtLen(p.x);
   document.getElementById('p-y').value     = fmtLen(p.y);
   document.getElementById('p-z').value     = fmtLen(p.z);
-  document.getElementById('p-mat').value    = p.material || 'custom';
-  var isCustom = (p.material === 'custom' || !p.material);
-  document.getElementById('custom-colors').style.display = isCustom ? '' : 'none';
-  document.getElementById('p-color').value  = p.color;
-  document.getElementById('p-edge').value   = p.edgeColor;
+  document.getElementById('p-mat').value    = p.material || 'oak';
   document.getElementById('p-grain').value  = p.grain;
   document.getElementById('r-rx').value = Math.round((p.rx||0)*10)/10;
   document.getElementById('r-ry').value = Math.round((p.ry||0)*10)/10;
@@ -4665,8 +4620,6 @@ function showProps(p) {
   });
   renderJointsUI(p);
   renderFuncUI(p);
-  var tc = document.getElementById('p-tex-clear');
-  if (tc) tc.style.display = p.textureURL ? 'block' : 'none';
   propBusy = false;
 }
 
@@ -4739,23 +4692,10 @@ function applyProps() {
   p.y         = parseLen(document.getElementById('p-y').value) || 0;
   p.z         = parseLen(document.getElementById('p-z').value) || 0;
   var matKey = document.getElementById('p-mat').value;
-  if (matKey !== p.material && p.textureURL) {
-    if (p._uploadedTex) { p._uploadedTex.dispose(); p._uploadedTex = null; }
-    p.textureURL = null;
-  }
   p.material = matKey;
-  var fd2 = FMAT[matKey];
-  if (fd2 && matKey !== 'custom') {
-    p.color     = fd2.color;
-    p.edgeColor = fd2.edgeColor;
-    document.getElementById('p-color').value = fd2.color;
-    document.getElementById('p-edge').value  = fd2.edgeColor;
-    document.getElementById('custom-colors').style.display = 'none';
-  } else {
-    p.color     = document.getElementById('p-color').value;
-    p.edgeColor = document.getElementById('p-edge').value;
-    document.getElementById('custom-colors').style.display = '';
-  }
+  var fd2 = FMAT[matKey] || FMAT.oak;
+  p.color     = fd2.color;
+  p.edgeColor = fd2.edgeColor;
   p.grain     = document.getElementById('p-grain').value;
   p.rx = parseFloat(document.getElementById('r-rx').value) || 0;
   p.ry = parseFloat(document.getElementById('r-ry').value) || 0;
@@ -4777,7 +4717,7 @@ function applyProps() {
 }
 
 // Only fire on 'change' — not mid-keypress — to avoid rapid mesh rebuilds
-['p-name','p-w','p-h','p-d','p-x','p-y','p-z','p-color','p-edge','p-grain','p-mat',
+['p-name','p-w','p-h','p-d','p-x','p-y','p-z','p-grain','p-mat',
  'r-rx','r-ry','r-rz',
  'p-rounded',
  'm-angle','m-xmin','m-xmax','m-ymin','m-ymax','m-zmin','m-zmax'].forEach(function(id) {
@@ -5824,7 +5764,7 @@ function generateAssemblySteps() {
 
   // Step 0 — prep
   var matNames = {};
-  panels.forEach(function(p){ matNames[p.material||'custom']=true; });
+  panels.forEach(function(p){ matNames[p.material||'oak']=true; });
   steps.push({
     num: 'PREP', numClass: 'prep',
     title: 'Prepare all parts',
@@ -5959,7 +5899,7 @@ function exportToPDF() {
     var thick = fmtLenLabel(panelThickness(p));
     var mitre = _jointSummary(p, false);
     return [i+1, p.name, fmtLenLabel(fd.faceL), fmtLenLabel(fd.faceW), thick,
-            mitre, fmtLenLabel(fd.rawL), fmtLenLabel(fd.rawW), p.grain==='length'?'Length':'Width', p.material||'custom'];
+            mitre, fmtLenLabel(fd.rawL), fmtLenLabel(fd.rawW), p.grain==='length'?'Length':'Width', p.material||'oak'];
   });
 
   doc.autoTable({
