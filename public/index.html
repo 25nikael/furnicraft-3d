@@ -483,6 +483,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="btn" id="btn-dup">⧉ Duplicate</button>
       <button class="btn" id="btn-group">⊞ Group Selected</button>
       <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
+      <button class="btn" id="btn-groups" onclick="openGroupManager()">🗂 Group Manager…</button>
       <button class="btn danger" id="btn-del">✕ Delete Selected</button>
     </div>
     <div class="sec-title">Arrange</div>
@@ -643,6 +644,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Group Manager modal ───────────────────────────── -->
+<div class="overlay-modal" id="gm-modal">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-hdr">Group Manager<button class="modal-close" onclick="closeGroupManager()">×</button></div>
+    <div class="modal-body">
+      <button class="btn" onclick="nestSelected();renderGroupManager();">⊞ Nest current selection into assembly</button>
+      <div style="font-size:10px;color:var(--txt3);margin:4px 0 10px;">Select panels spanning 2+ groups, then nest. Rename, select, or ungroup below. Indented rows are sub-assemblies.</div>
+      <div id="gm-body"></div>
     </div>
   </div>
 </div>
@@ -894,6 +907,7 @@ var wireMode      = false;
 var dimsEnabled   = true;
 var nextId        = 1;
 var nextGroupId   = 1;
+var groupMeta     = {};   // groupId -> { name, parent }  (sub-assemblies, F6)
 var hardware      = [];   // placeable hardware items (knobs, handles, legs, shelf pins, …)
 var nextHwId      = 1;
 var isResizing    = false;
@@ -1515,6 +1529,7 @@ function _projectState() {
     panels: panels.map(snapPanel),
     hardware: hardware.map(snapHardware),
     measurements: measurements,
+    groupMeta: groupMeta,
     nextId: nextId, nextGroupId: nextGroupId, nextHwId: nextHwId
   };
 }
@@ -1529,6 +1544,7 @@ function _loadProjectState(state) {
   panels = state.panels.map(function(s){ var p = mkPanel(s); p.id = s.id; buildMesh(p); return p; });
   hardware = (state.hardware || []).map(function(s){ var hw = mkHardware(s); buildHardwareMesh(hw); return hw; });
   measurements = state.measurements || [];
+  groupMeta = state.groupMeta || {};
   doSelect(null);
   refreshUI();
   updateDims();
@@ -1663,9 +1679,23 @@ async function deleteProject(projId) {
   }
   _updateTopbar();
 })();
+// Walk a group's parent chain to its top-level assembly root
+function _rootGroup(gid) {
+  var guard = 0;
+  while (gid != null && groupMeta[gid] && groupMeta[gid].parent != null && guard++ < 50) gid = groupMeta[gid].parent;
+  return gid;
+}
+function _groupDepth(gid) {
+  var d = 0, guard = 0;
+  while (gid != null && groupMeta[gid] && groupMeta[gid].parent != null && guard++ < 50) { d++; gid = groupMeta[gid].parent; }
+  return d;
+}
+
+// Selecting any panel grabs its whole top-level assembly (flat groups = themselves)
 function getGroupPanels(p) {
   if (!p || !p.groupId) return p ? [p] : [];
-  return panels.filter(function(q) { return q.groupId === p.groupId; });
+  var root = _rootGroup(p.groupId);
+  return panels.filter(function (q) { return q.groupId != null && _rootGroup(q.groupId) === root; });
 }
 
 // ── Scene ──────────────────────────────────────────────────────
@@ -4273,6 +4303,7 @@ function groupSelected() {
   if (selectedGroup.length < 2) return;
   saveUndo();
   var gid = nextGroupId++;
+  groupMeta[gid] = { name: 'Group ' + gid, parent: null };
   selectedGroup.forEach(function(p) { p.groupId = gid; });
   refreshCompList();
 }
@@ -4288,6 +4319,83 @@ function ungroupSelected() {
   rebuildSelBox(p);
   refreshCompList();
 }
+
+// ── Sub-assemblies / nested grouping (F-series F6) ──────
+// Nest the distinct groups within the current selection under a new parent
+function nestSelected() {
+  if (selectedGroup.length < 2) return;
+  saveUndo();
+  var ungrouped = selectedGroup.filter(function (p) { return p.groupId == null; });
+  if (ungrouped.length) {
+    var lg = nextGroupId++;
+    groupMeta[lg] = { name: 'Group ' + lg, parent: null };
+    ungrouped.forEach(function (p) { p.groupId = lg; });
+  }
+  var roots = {};
+  selectedGroup.forEach(function (p) { if (p.groupId != null) roots[_rootGroup(p.groupId)] = true; });
+  var rootIds = Object.keys(roots).map(Number);
+  if (rootIds.length < 2) { refreshCompList(); return; }
+  var parent = nextGroupId++;
+  groupMeta[parent] = { name: 'Assembly ' + parent, parent: null };
+  rootIds.forEach(function (r) {
+    if (groupMeta[r]) groupMeta[r].parent = parent;
+    else groupMeta[r] = { name: 'Group ' + r, parent: parent };
+  });
+  refreshCompList();
+}
+
+function selectAssembly(gid) {
+  var root = _rootGroup(gid);
+  var members = panels.filter(function (q) { return q.groupId != null && _rootGroup(q.groupId) === root; });
+  if (members.length) doSelect(members[0]);
+  closeGroupManager();
+}
+
+function ungroupGroup(gid) {
+  gid = Number(gid);
+  saveUndo();
+  Object.keys(groupMeta).forEach(function (k) { if (groupMeta[k].parent === gid) groupMeta[k].parent = null; });
+  panels.forEach(function (p) { if (p.groupId === gid) p.groupId = null; });
+  delete groupMeta[gid];
+  refreshCompList(); renderGroupManager();
+}
+
+function renameGroup(gid, name) {
+  if (!groupMeta[gid]) groupMeta[gid] = { name: name, parent: null };
+  else groupMeta[gid].name = name;
+  refreshCompList();
+}
+
+function _groupSubtreeCount(gid) {
+  return panels.filter(function (p) {
+    var g = p.groupId, guard = 0;
+    while (g != null && guard++ < 50) { if (g === gid) return true; g = groupMeta[g] ? groupMeta[g].parent : null; }
+    return false;
+  }).length;
+}
+
+function renderGroupManager() {
+  var el = document.getElementById('gm-body');
+  if (!el) return;
+  var ids = {};
+  panels.forEach(function (p) { if (p.groupId != null) ids[p.groupId] = true; });
+  Object.keys(groupMeta).forEach(function (k) { ids[k] = true; });
+  var list = Object.keys(ids).map(Number).sort(function (a, b) { return a - b; });
+  if (!list.length) { el.innerHTML = '<div style="color:var(--txt3);font-size:12px;padding:8px;">No groups yet. Select 2+ panels and Group them.</div>'; return; }
+  el.innerHTML = list.map(function (gid) {
+    var meta = groupMeta[gid] || { name: 'Group ' + gid, parent: null };
+    var depth = _groupDepth(gid), count = _groupSubtreeCount(gid);
+    return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 4px ' + (8 + depth * 16) + 'px;">'
+      + '<span style="width:9px;height:9px;border-radius:50%;background:' + groupColor(gid) + ';flex:0 0 auto;"></span>'
+      + '<input value="' + String(meta.name || ('Group ' + gid)).replace(/"/g, '&quot;') + '" onchange="renameGroup(' + gid + ',this.value)" style="flex:1;min-width:0;padding:3px 6px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:12px;">'
+      + '<span style="font-size:11px;color:var(--txt3);">' + count + '</span>'
+      + '<button class="pi-btn" onclick="selectAssembly(' + gid + ')">Select</button>'
+      + '<button class="pi-btn del" onclick="ungroupGroup(' + gid + ')">Ungroup</button>'
+      + '</div>';
+  }).join('');
+}
+function openGroupManager()  { renderGroupManager(); document.getElementById('gm-modal').classList.add('active'); }
+function closeGroupManager() { document.getElementById('gm-modal').classList.remove('active'); }
 
 // ═══════════════════════════════════════════════════════════════
 //  CUT SHEET

@@ -95,8 +95,9 @@ Measure mode: two-point distance (+ angle); persistent annotation overlay; uses 
 Parametric presets (bookcase, wardrobe, base cabinet, table, drawer unit) + modal with W/H/D.
 **Done:** `_tplCarcass` + 5 generators (`tplBookcase`/`tplWardrobe`/`tplBaseCabinet`/`tplTable`/`tplDrawerUnit`, drawer unit emits functional drawers); `_applyPanelSet` (add or replace) + Templates modal (preset + W/H/D in active unit). Verified: all 5 generate, replace builds 10 panels/5 shelves named Bookcase, drawer unit → 4 drawers, round-trip, no errors.
 
-### F-Block 6 — Sub-assemblies / nested grouping (F6) ⬜
+### F-Block 6 — Sub-assemblies / nested grouping (F6) ✅
 Named groups + group-of-groups; select/move as a unit; group manager.
+**Done:** `groupMeta` registry (name + parent); `_rootGroup`/`getGroupPanels` make selection grab the whole top-level assembly; `nestSelected` parents distinct groups under a new assembly; Group Manager modal (rename, select, ungroup, nest) with depth indent; persisted in project state. Verified: 2 groups nest under common parent, member-select grabs all 4, rename, 3 manager rows, round-trip preserves groupMeta + assembly.
 
 ### F-Block 7 — Parametric overall resize (F1) ⬜
 Editable overall W/H/D → proportional refit of all panels (positions + in-plane
