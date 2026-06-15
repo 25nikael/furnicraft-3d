@@ -127,8 +127,9 @@ environment + ACES tone mapping + sRGB output; Realistic/Standard toggle in sett
 Explode slider/toggle moves panels outward from the design centre, animated.
 **Done:** `💥 Explode` toolbar toggle; `tickExplode` lerps an explode factor and offsets each panel (mesh/edges/markers/mitre) radially from the bbox centre by 0.6×maxDim; restores base on collapse. Verified: side panel offsets -270mm at full explode, returns to base, no errors.
 
-### G-Block 3 — Room context mode (G3) ⬜
+### G-Block 3 — Room context mode (G3) ✅
 Toggle adds floor + walls to scale; places the piece; hides grid.
+**Done:** `🏠 Room` toolbar toggle; `buildRoom` adds a finished floor + back/left walls (MeshStandard, shadow-receiving) at `_room` W/H/D; hides grid + design floor while active; Room HUD with unit-aware W/H/D inputs (`_applyRoomDims` rebuilds). Verified: 3 surfaces build, grid/floor hidden, resize to 6000 keeps 3 walls, toggle off clears + restores grid, no errors.
 
 ### G-Block 4 — Custom texture upload (G5) ⬜
 Per-panel image upload (data URL) applied as the material map; persisted.

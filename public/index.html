@@ -108,6 +108,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 #snap-hud{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:rgba(10,186,181,.9);color:#000;padding:3px 12px;border-radius:10px;font-size:11px;font-weight:600;display:none;pointer-events:none;}
 #measure-hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(255,204,0,.92);color:#000;padding:5px 12px;border-radius:10px;font-size:12px;font-weight:600;display:none;align-items:center;gap:10px;z-index:20;}
 #measure-hud button{background:#000;color:#ffcc00;border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;}
+#room-hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(20,20,20,.9);color:var(--txt);padding:5px 12px;border-radius:10px;font-size:12px;font-weight:600;display:none;align-items:center;gap:8px;z-index:20;border:1px solid var(--bd2);}
+#room-hud label{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--txt2);font-weight:500;}
+#room-hud input{width:54px;padding:2px 5px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:11px;}
 #info-hud{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.7);color:var(--txt2);padding:5px 10px;border-radius:8px;font-size:11px;pointer-events:none;line-height:1.65;border:1px solid var(--bd);}
 
 /* ── Right panel ──────────────────────────────────── */
@@ -530,6 +533,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <svg id="dim-svg"></svg>
     <div id="snap-hud">⚡ Snapped</div>
     <div id="measure-hud">📏 Click two points to measure <button onclick="clearMeasurements()">Clear</button></div>
+    <div id="room-hud">🏠 Room
+      <label>W<input type="number" id="room-w" onchange="_applyRoomDims()"></label>
+      <label>H<input type="number" id="room-h" onchange="_applyRoomDims()"></label>
+      <label>D<input type="number" id="room-d" onchange="_applyRoomDims()"></label>
+    </div>
     <div id="info-hud">
       Orbit: drag &nbsp;|&nbsp; Zoom: scroll<br>
       Select: click &nbsp;|&nbsp; Ctrl+click multi-select<br>
@@ -543,6 +551,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn on" id="btn-dims">Dims ✓</button>
       <button class="tbtn" id="btn-measure" onclick="toggleMeasure()">📏 Measure</button>
       <button class="tbtn" id="btn-explode" onclick="toggleExplode()">💥 Explode</button>
+      <button class="tbtn" id="btn-room" onclick="toggleRoom()">🏠 Room</button>
       <button class="tbtn prim" id="btn-cs">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
     </div>
@@ -4752,6 +4761,42 @@ function tickExplode(dt) {
     if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(bp); });
     if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(bp); });
   });
+}
+
+// ── Room context (G-series G3) ──────────────────────────
+var roomGroup = new THREE.Group(); scene.add(roomGroup);
+var _roomMode = false, _room = { w: 4000, h: 2700, d: 4000 };
+function buildRoom() {
+  while (roomGroup.children.length) { var c = roomGroup.children[0]; roomGroup.remove(c); if (c.geometry) c.geometry.dispose(); }
+  if (!_roomMode) return;
+  var W = _room.w, H = _room.h, D = _room.d;
+  var floorMat = new THREE.MeshStandardMaterial({ color: 0xb8a98f, roughness: 0.9, metalness: 0 });
+  var wallMat  = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
+  var fl = new THREE.Mesh(new THREE.PlaneGeometry(W, D), floorMat); fl.rotation.x = -Math.PI/2; fl.position.y = 0.5; fl.receiveShadow = true; roomGroup.add(fl);
+  var bw = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat); bw.position.set(0, H/2, -D/2); bw.receiveShadow = true; roomGroup.add(bw);
+  var lw = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wallMat); lw.rotation.y = Math.PI/2; lw.position.set(-W/2, H/2, 0); lw.receiveShadow = true; roomGroup.add(lw);
+}
+function toggleRoom() {
+  _roomMode = !_roomMode;
+  var b = document.getElementById('btn-room'); if (b) b.classList.toggle('on', _roomMode);
+  if (_gridHelper) _gridHelper.visible = !_roomMode;
+  if (_floorMesh)  _floorMesh.visible  = !_roomMode;
+  var hud = document.getElementById('room-hud');
+  if (hud) {
+    hud.style.display = _roomMode ? 'flex' : 'none';
+    if (_roomMode) {
+      document.getElementById('room-w').value = fmtLen(_room.w);
+      document.getElementById('room-h').value = fmtLen(_room.h);
+      document.getElementById('room-d').value = fmtLen(_room.d);
+    }
+  }
+  buildRoom();
+}
+function _applyRoomDims() {
+  _room.w = Math.max(500, parseLen(document.getElementById('room-w').value) || 4000);
+  _room.h = Math.max(500, parseLen(document.getElementById('room-h').value) || 2700);
+  _room.d = Math.max(500, parseLen(document.getElementById('room-d').value) || 4000);
+  buildRoom();
 }
 
 function animate() {
