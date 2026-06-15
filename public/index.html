@@ -575,6 +575,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
       <button class="tbtn on" id="btn-snap">Snap ✓</button>
       <button class="tbtn" id="btn-wire">Wireframe</button>
       <button class="tbtn on" id="btn-dims">Dims ✓</button>
+      <button class="tbtn" id="btn-labels" onclick="toggleLabels()"># Labels</button>
       <button class="tbtn" id="btn-measure" onclick="toggleMeasure()">📏 Measure</button>
       <button class="tbtn" id="btn-explode" onclick="toggleExplode()">💥 Explode</button>
       <button class="tbtn" id="btn-room" onclick="toggleRoom()">🏠 Room</button>
@@ -4144,6 +4145,14 @@ function handleMeasureClick(e) {
 }
 function clearMeasurements() { measurements = []; _measureA = null; updateDims(); }
 
+// ── Part-number labels (R2 / C5) ────────────────────────
+var _showLabels = false;
+function toggleLabels() {
+  _showLabels = !_showLabels;
+  var b = document.getElementById('btn-labels'); if (b) b.classList.toggle('on', _showLabels);
+  updateDims();
+}
+
 function svgEl(tag, attrs) {
   var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); });
@@ -4179,6 +4188,17 @@ function updateDims() {
     var a = new THREE.Vector3(m.ax, m.ay, m.az), b = new THREE.Vector3(m.bx, m.by, m.bz);
     drawDimLine(a, b, fmtLenLabel(a.distanceTo(b)), '#ffcc00');
   });
+  // Part-number badges (C5)
+  if (_showLabels) {
+    panels.forEach(function (p, i) {
+      if (!p.mesh) return;
+      var sp = toScreen(p.mesh.position);
+      dimSvg.appendChild(svgEl('circle', { cx: sp.x, cy: sp.y, r: 9, fill: 'rgba(10,186,181,0.92)', stroke: '#000', 'stroke-width': 0.5 }));
+      var t = svgEl('text', { x: sp.x, y: sp.y + 3, 'text-anchor': 'middle', 'font-size': 10, fill: '#000', 'font-weight': '700', 'font-family': 'system-ui' });
+      t.textContent = (i + 1);
+      dimSvg.appendChild(t);
+    });
+  }
   if (!dimsEnabled || !panels.length) return;
   var bb = furnitureBBox();
   var minX=bb.minX,maxX=bb.maxX,minY=bb.minY,maxY=bb.maxY,minZ=bb.minZ,maxZ=bb.maxZ;
@@ -4888,11 +4908,11 @@ function runOptimizer() {
   var bH   = parseInt(document.getElementById('st-h').value)    || 1220;
   var kerf = parseInt(document.getElementById('st-kerf').value) || 3;
   var byT  = {};
-  panels.forEach(function(p) {
+  panels.forEach(function(p, i) {
     var t = Math.round(panelThickness(p));
     if (!byT[t]) byT[t] = [];
     var fd = panelFaceDims(p);
-    byT[t].push({ name:p.name, pw:fd.rawL, ph:fd.rawW, color:p.color, edge:p.edgeColor, grain:p.grain,
+    byT[t].push({ num:i+1, name:p.name, pw:fd.rawL, ph:fd.rawW, color:p.color, edge:p.edgeColor, grain:p.grain,
                   finW:fd.faceL, finD:fd.faceW, hasMitre: fd.rawL>fd.faceL||fd.rawW>fd.faceW });
   });
   var boardsDiv  = document.getElementById('cs-boards');
@@ -4996,7 +5016,7 @@ function drawBoard(cvs, board, bW, bH, scale, kerf) {
     ctx.save(); ctx.beginPath(); ctx.rect(px+2,py+2,pw-4,ph-4); ctx.clip();
     var fs=Math.max(7,Math.min(11,pw/9,ph/2.5));
     ctx.fillStyle='#111'; ctx.font='600 '+fs+'px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(pl.pc.name, px+pw/2, py+ph/2-fs*0.65);
+    ctx.fillText((pl.pc.num?'#'+pl.pc.num+' ':'')+pl.pc.name, px+pw/2, py+ph/2-fs*0.65);
     ctx.fillStyle='#444'; ctx.font=(Math.max(6,fs-1))+'px system-ui';
     ctx.fillText(pl.w+'×'+pl.h+(pl.rot?'↺':''), px+pw/2, py+ph/2+fs*0.7);
     ctx.restore();

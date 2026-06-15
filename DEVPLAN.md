@@ -185,7 +185,8 @@ sheet). Remaining, in build order (one block per commit, quote-free messages):
 
 ### R1 — Edge-banding totals + CSV export (C3, C4) ✅
 `_bandingTotals` (face perimeter per material) + Edge Banding section in cut sheet; `exportCutSheetCSV` downloads parts + hardware + banding as CSV; CSV button in cut-sheet header. Verified: 2 materials/9.91m, 454-byte text/csv blob, no errors.
-### R2 — Part labels/numbers in 3D + layout (C5) ⬜
+### R2 — Part labels/numbers in 3D + layout (C5) ✅
+`# Labels` toolbar toggle draws numbered badges over each panel (in updateDims, follows live mesh position); board-layout pieces carry `num` and show `#n name`. Verified: 7 badges on/off, button state, layout renders, no errors.
 ### R3 — Material cost DB + currency (D1, D3) ⬜
 ### R4 — Quote generator PDF (D2) ⬜
 ### R5 — 3D export GLTF/OBJ/STL + high-res render (E2, E3) ⬜
