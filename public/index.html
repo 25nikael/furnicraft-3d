@@ -374,6 +374,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div class="sd-section">Snap &amp; Grid</div>
         <div class="sd-num-row"><span>Snap distance <small>mm</small></span><input type="number" id="set-snap-dist" min="0" value="14" onchange="setSnapDist(this.value)"></div>
         <div class="sd-num-row"><span>Grid step <small>mm</small></span><input type="number" id="set-grid" min="1" value="1" onchange="setGridSize(this.value)"></div>
+        <div class="sd-num-row"><span>Currency</span><input type="text" id="set-currency" maxlength="3" value="$" onchange="setCurrency(this.value)" style="text-align:center;"></div>
         <div id="fps-hint">
           <strong>WASD</strong> — move &nbsp;|&nbsp; <strong>Mouse</strong> — look<br>
           <strong>Q/E</strong> — down/up &nbsp;|&nbsp; <strong>Shift</strong> — fast<br>
@@ -976,6 +977,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div class="cs-sec" id="cs-band-sec">
           <h3>Edge Banding</h3>
           <div id="cs-banding"></div>
+        </div>
+        <div class="cs-sec" id="cs-cost-sec">
+          <h3>Material Cost</h3>
+          <div id="cs-costs"></div>
         </div>
         <div class="cs-sec">
           <h3>Stock Board Optimizer</h3>
@@ -4837,6 +4842,50 @@ function renderBanding() {
     + '<p style="font-size:11px;color:#888;margin-top:4px;">Assumes all four edges of each panel are banded — adjust for your design.</p>';
 }
 
+// ── Material cost DB + currency (R3 / D1, D3) ───────────
+var MAT_PRICE_DEFAULT = { oak:90, walnut:140, pine:45, maple:95, cherry:130, birch:70, white:40, black:45, grey:35, metal:0, glass:0, custom:60 };
+var _matPrices = JSON.parse(localStorage.getItem('fc3d_prices') || '{}');
+var _currency  = localStorage.getItem('fc3d_currency') || '$';
+(function () { var ci = document.getElementById('set-currency'); if (ci) ci.value = _currency; })();
+function fmtMoney(v) { return _currency + (Math.round(v * 100) / 100).toFixed(2); }
+function _matPrice(k) { return _matPrices[k] != null ? _matPrices[k] : (MAT_PRICE_DEFAULT[k] != null ? MAT_PRICE_DEFAULT[k] : 60); }
+function setMatPrice(k, v) { _matPrices[k] = Math.max(0, parseFloat(v) || 0); localStorage.setItem('fc3d_prices', JSON.stringify(_matPrices)); renderCosts(); }
+function setCurrency(v) { _currency = (v || '$').trim() || '$'; localStorage.setItem('fc3d_currency', _currency); renderCosts(); }
+function _sheetArea() {
+  var w = parseInt(document.getElementById('st-w').value) || 2440;
+  var h = parseInt(document.getElementById('st-h').value) || 1220;
+  return w * h;
+}
+function _materialAreas() {
+  var a = {};
+  panels.forEach(function (p) { var fd = panelFaceDims(p); var k = p.material || 'custom'; a[k] = (a[k] || 0) + fd.rawL * fd.rawW; });
+  return a;
+}
+// Total estimated material cost (whole sheets per material) — used by the quote too
+function projectMaterialCost() {
+  var areas = _materialAreas(), sheetA = _sheetArea(), total = 0, lines = [];
+  Object.keys(areas).forEach(function (k) {
+    var sheets = Math.max(1, Math.ceil(areas[k] / sheetA));
+    var cost = sheets * _matPrice(k);
+    total += cost;
+    lines.push({ key: k, name: (FMAT[k] && FMAT[k].name) || k, sheets: sheets, price: _matPrice(k), cost: cost });
+  });
+  return { total: total, lines: lines };
+}
+function renderCosts() {
+  var el = document.getElementById('cs-costs');
+  if (!el) return;
+  var mc = projectMaterialCost();
+  if (!mc.lines.length) { el.innerHTML = '<p style="font-size:12px;color:#888;">No panels.</p>'; return; }
+  var rows = mc.lines.map(function (l) {
+    return '<tr><td>' + l.name + '</td><td>' + l.sheets + '</td>'
+      + '<td><input type="number" min="0" value="' + l.price + '" style="width:64px;padding:2px 5px;background:#fff;border:1px solid #ccc;border-radius:4px;" onchange="setMatPrice(\'' + l.key + '\',this.value)"></td>'
+      + '<td>' + fmtMoney(l.cost) + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="cs-tbl"><thead><tr><th>Material</th><th>Sheets</th><th>' + _currency + '/sheet</th><th>Cost</th></tr></thead><tbody>'
+    + rows + '<tr style="font-weight:700;"><td colspan="3">Total materials</td><td>' + fmtMoney(mc.total) + '</td></tr></tbody></table>';
+}
+
 // ── CSV export (R1 / C4) ────────────────────────────────
 function _csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 function exportCutSheetCSV() {
@@ -4882,6 +4931,7 @@ function showCutSheet() {
   renderAssemblyGuide();
   renderHardwareBOM();
   renderBanding();
+  renderCosts();
   var tbody = document.getElementById('cs-tbody');
   tbody.innerHTML = '';
   panels.forEach(function(p, i) {
