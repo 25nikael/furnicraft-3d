@@ -923,48 +923,32 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div class="modal-body">
 
-      <!-- API key row -->
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);">Anthropic API Key</label>
-          <a href="https://console.anthropic.com/keys" target="_blank" style="font-size:11px;color:var(--teal);text-decoration:none;">Get a key ↗</a>
-        </div>
-        <div style="display:flex;gap:7px;">
-          <input type="password" id="ai-key" placeholder="sk-ant-…" autocomplete="off"
-            style="flex:1;padding:7px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;font-family:monospace;">
-          <button onclick="saveAIKey()" class="tbtn prim" style="padding:7px 14px;border-radius:6px;">Save</button>
-        </div>
-        <div id="ai-key-status" style="font-size:11px;margin-top:4px;color:var(--txt3);"></div>
-      </div>
-
       <!-- Prompt examples -->
-      <div style="margin-bottom:8px;">
+      <div style="margin-bottom:10px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:6px;">Examples — click to fill</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;" id="ai-examples">
           <button class="ai-chip" onclick="fillPrompt(this)">Simple bookshelf, 5 shelves, 900mm wide, oak</button>
           <button class="ai-chip" onclick="fillPrompt(this)">Floating wall cabinet, 600mm wide, 400mm deep, white melamine with soft-close doors</button>
           <button class="ai-chip" onclick="fillPrompt(this)">Bedside table with drawer, pine, 450mm wide</button>
-          <button class="ai-chip" onclick="fillPrompt(this)">L-shaped corner desk, 1500×1200mm, walnut top, steel legs</button>
-          <button class="ai-chip" onclick="fillPrompt(this)">TV unit with cable management, 1800mm wide, low profile 400mm tall, oak</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">L-shaped corner desk, 1500×1200mm, walnut top, metal legs</button>
+          <button class="ai-chip" onclick="fillPrompt(this)">TV unit, 1800mm wide, low profile 400mm tall, oak</button>
           <button class="ai-chip" onclick="fillPrompt(this)">Kitchen wall cabinet row, 3 units, 600mm each, white melamine</button>
         </div>
       </div>
 
       <!-- Prompt input -->
       <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);display:block;margin-bottom:5px;">Describe your furniture</label>
-        <textarea id="ai-prompt" rows="4" placeholder="e.g. A wall-mounted bookshelf 1200mm wide with 4 adjustable shelves in oak. Mount with French cleats."
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);display:block;margin-bottom:5px;">What would you like to build or change?</label>
+        <textarea id="ai-prompt" rows="4" placeholder="Describe new furniture — or — tell me how to change the current design. e.g. &quot;oak bookshelf 900mm wide, 5 shelves&quot; or &quot;make it 200mm taller and add a drawer&quot;"
           style="width:100%;padding:9px 11px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;resize:vertical;line-height:1.5;"></textarea>
+        <div id="ai-ctx-note" style="font-size:11px;color:var(--teal);margin-top:4px;display:none;">✦ Current design will be included as context</div>
       </div>
 
       <!-- Generate button -->
       <button id="ai-gen-btn" onclick="generateAIDesign()"
-        style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;transition:opacity .15s;">
-        ✦ Generate Design
+        style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;transition:opacity .15s;">
+        ✦ Generate
       </button>
-      <label class="btn" style="display:block;text-align:center;cursor:pointer;margin:0 0 12px;">📷 Generate from a reference image
-        <input type="file" accept="image/*" style="display:none;" onchange="aiFromImage(this)">
-      </label>
 
       <!-- Status / result -->
       <div id="ai-status" style="display:none;text-align:center;padding:10px;font-size:13px;color:var(--txt2);"></div>
@@ -981,51 +965,16 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           </button>
           <button onclick="applyAIDesign(true)"
             style="flex:1;padding:10px;border-radius:7px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">
-            Replace & Apply
+            Replace &amp; Apply
           </button>
         </div>
       </div>
       <div id="ai-err" class="auth-err" style="margin-top:8px;"></div>
 
-      <!-- Manual mode fallback (shown when direct API call is blocked) -->
-      <div id="ai-manual" style="display:none;margin-top:4px;">
-        <div style="background:rgba(108,61,224,.12);border:1px solid rgba(108,61,224,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px;">
-          <div style="font-size:12px;font-weight:700;color:#a078f0;margin-bottom:6px;">⚡ Manual Mode — direct API call was blocked by browser security</div>
-          <div style="font-size:11px;color:var(--txt2);line-height:1.6;">
-            1. Click <strong>Copy Prompt</strong> below<br>
-            2. Open <a href="https://claude.ai" target="_blank" style="color:var(--teal);">claude.ai</a> and paste it into a new chat<br>
-            3. Copy Claude's entire JSON response<br>
-            4. Paste it below and click <strong>Apply Response</strong>
-          </div>
-        </div>
-        <div style="margin-bottom:8px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-            <label style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">Generated Prompt</label>
-            <button onclick="navigator.clipboard.writeText(document.getElementById('manual-prompt-text').value).then(function(){ this.textContent='Copied!'; }.bind(this))"
-              style="font-size:11px;padding:3px 10px;background:var(--teal);border:none;border-radius:4px;color:#000;cursor:pointer;font-weight:600;">Copy Prompt</button>
-          </div>
-          <textarea id="manual-prompt-text" readonly rows="4"
-            style="width:100%;padding:8px;background:var(--bg4);border:1px solid var(--bd2);border-radius:6px;color:var(--txt3);font-size:11px;resize:none;line-height:1.4;cursor:text;"></textarea>
-        </div>
-        <div style="margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px;">Paste Claude's JSON Response</label>
-          <textarea id="manual-paste-area" rows="5" placeholder='{"name":"…","panels":[…]}'
-            style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:12px;resize:vertical;line-height:1.4;font-family:monospace;"></textarea>
-        </div>
-        <button onclick="applyManualResponse()"
-          style="width:100%;padding:10px;border-radius:7px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
-          Apply Response
-        </button>
-      </div>
-
-      <!-- Refine & advise (I1, I3, I4) -->
+      <!-- Design analysis -->
       <div style="border-top:1px solid var(--bd);margin-top:14px;padding-top:12px;">
-        <div class="prop-title">Refine current design</div>
-        <div style="display:flex;gap:7px;">
-          <input id="ai-refine" placeholder="e.g. make it 200mm taller, add a drawer" style="flex:1;padding:8px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:6px;color:var(--txt);font-size:13px;">
-          <button class="tbtn prim" style="padding:8px 12px;border-radius:6px;" onclick="aiRefine()">Refine</button>
-        </div>
-        <div style="display:flex;gap:7px;margin-top:10px;">
+        <div class="prop-title">Design Analysis</div>
+        <div style="display:flex;gap:7px;margin-top:6px;">
           <button class="btn" style="flex:1;margin:0;" onclick="aiAdvise('joinery')">🔩 Joinery &amp; hardware</button>
           <button class="btn" style="flex:1;margin:0;" onclick="aiAdvise('cost')">💡 Cost &amp; material</button>
         </div>
@@ -1184,102 +1133,37 @@ async function api(path, opts) {
 // ═══════════════════════════════════════════════════════════════
 //  AI DESIGN ASSISTANT
 // ═══════════════════════════════════════════════════════════════
-var _aiDesignResult = null; // holds parsed JSON from last generation
-
-var AI_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker. When given a furniture description, output ONLY a valid JSON object — no markdown fences, no explanation, just raw JSON.
-
-COORDINATE SYSTEM (all values in mm):
-- X axis: left = negative, right = positive. Horizontal centre of design = 0
-- Y axis: floor = 0, upward = positive. Panel y = vertical centre of panel
-- Z axis: back = negative, front = positive. Depth centre of design = 0
-- Panel position (x,y,z) is the CENTRE point of the panel
-
-WOODWORKING CONSTRUCTION RULES:
-1. Structural panels (sides, tops, bottoms, shelves): 18mm thick
-2. Back panels: 12mm thick, recessed 6mm from back face (z = -(depth/2 - 6))
-3. Side panels span FULL height: h = total_height, x = ±(total_width/2 - 9)
-4. Top & bottom panels fit BETWEEN sides: w = total_width - 36
-   - Bottom: y = 9 (sits on floor), Top: y = total_height - 9
-5. Shelves fit between sides: w = total_width - 36, d = depth - 12 (clear of back)
-6. Drawers: front panel only (face frame), positioned flush with cabinet front
-7. Doors: single panel per door opening, d=18, z = depth/2 + 9 (proud of cabinet)
-8. Wall-mounted units MUST include a mounting rail: h=75, d=18, positioned at back-top inside cabinet
-9. For desks with legs: use 4 leg panels, w=50, d=50, h=leg_height, positioned at corners
-10. French cleats for wall mounting: two panels per cleat set (wall piece + cabinet piece)
-
-MATERIALS — use ONLY these exact keys: oak, walnut, pine, maple, cherry, birch, white, black, grey
-- Structural carcass: oak / birch / pine / white
-- Visible faces / doors: oak / walnut / cherry / maple
-- Back panels: birch
-- Painted/modern look: white or black
-- MDF painted: grey
-
-OUTPUT JSON FORMAT:
-{
-  "name": "Furniture Name",
-  "description": "One sentence design summary",
-  "assembly_notes": "Brief ordered assembly steps",
-  "panels": [
-    {
-      "name": "Left Side",
-      "w": 18,
-      "h": 800,
-      "d": 400,
-      "x": -241,
-      "y": 400,
-      "z": 0,
-      "material": "oak"
-    }
-  ]
-}
-
-Always include ALL structural panels needed to build the piece. Ensure panels touch correctly at joints. Minimise off-cuts by using standard sheet sizes where possible.`;
+var _aiDesignResult = null;
 
 function openAIDesign() {
-  var saved = localStorage.getItem('fc3d_ai_key') || '';
-  if (saved) {
-    document.getElementById('ai-key').value = saved;
-    document.getElementById('ai-key-status').textContent = 'Key loaded from storage.';
-  }
   _aiDesignResult = null;
   document.getElementById('ai-result').style.display = 'none';
-  document.getElementById('ai-status').style.display  = 'none';
+  document.getElementById('ai-status').style.display = 'none';
   document.getElementById('ai-err').textContent = '';
+  document.getElementById('ai-advice').style.display = 'none';
+  // Show context note if canvas already has panels
+  var note = document.getElementById('ai-ctx-note');
+  if (note) note.style.display = panels.length > 0 ? 'block' : 'none';
   document.getElementById('ai-modal').classList.add('active');
 }
 function closeAIDesign() { document.getElementById('ai-modal').classList.remove('active'); }
-
-function saveAIKey() {
-  var k = document.getElementById('ai-key').value.trim();
-  if (!k.startsWith('sk-ant-')) { document.getElementById('ai-key-status').textContent = 'Key should start with sk-ant-…'; return; }
-  localStorage.setItem('fc3d_ai_key', k);
-  document.getElementById('ai-key-status').textContent = '✓ Saved.';
-}
 
 function fillPrompt(btn) {
   document.getElementById('ai-prompt').value = btn.textContent.trim();
 }
 
-function _buildFullPrompt(userPrompt) {
-  return AI_SYSTEM_PROMPT + '\n\nUser request: ' + userPrompt + '\n\nRespond with ONLY the JSON object.';
-}
-
 function _parseAndShowDesign(raw) {
-  raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'');
+  raw = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
   var design = JSON.parse(raw);
   if (!design.panels || !Array.isArray(design.panels) || design.panels.length === 0)
-    throw new Error('No panels found. Make sure you copied the full JSON response.');
+    throw new Error('No panels in response.');
   _aiDesignResult = design;
   document.getElementById('ai-res-name').textContent  = design.name || 'Untitled';
   document.getElementById('ai-res-desc').textContent  = design.description || '';
   document.getElementById('ai-res-notes').textContent = '📋 ' + (design.assembly_notes || '');
   document.getElementById('ai-result').style.display  = 'block';
-  document.getElementById('ai-manual').style.display  = 'none';
 }
 
-async function generateAIDesign() { _aiRun(document.getElementById('ai-prompt').value.trim()); }
-
-// Compact current design for AI refine/advise prompts
 function _currentDesignForAI() {
   return {
     name: document.getElementById('topbar-proj-name').textContent || 'Design',
@@ -1289,83 +1173,37 @@ function _currentDesignForAI() {
     })
   };
 }
-// Conversational refine (I1) — reuses the design generation pipeline
-function aiRefine() {
-  var instr = document.getElementById('ai-refine').value.trim();
-  if (!instr) { document.getElementById('ai-err').textContent = 'Describe the change you want (e.g. make it taller, add a drawer).'; return; }
-  if (!panels.length) { document.getElementById('ai-err').textContent = 'Nothing to refine — generate or open a design first.'; return; }
-  _aiRun('Here is the current furniture design as JSON:\n' + JSON.stringify(_currentDesignForAI())
-    + '\n\nApply this change: ' + instr + '\n\nReturn the COMPLETE updated design as a single JSON object in the same schema.');
+
+async function generateAIDesign() {
+  var prompt = document.getElementById('ai-prompt').value.trim();
+  var currentDesign = panels.length > 0 ? _currentDesignForAI() : null;
+  _aiRun(prompt, currentDesign);
 }
-// Joinery/hardware (I3) and cost/material (I4) advice — plain-text response
+
 async function aiAdvise(kind) {
-  var key = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
+  if (!panels.length) { document.getElementById('ai-err').textContent = 'Open or generate a design first.'; return; }
   var out = document.getElementById('ai-advice');
-  var ask = kind === 'joinery'
-    ? 'Suggest appropriate joinery and hardware for this furniture design. Be specific and concise — short bullet points.'
-    : 'Suggest ways to reduce material waste and cost for this design, plus any sensible material substitutions. Concise bullet points.';
-  var prompt = 'Design JSON:\n' + JSON.stringify(_currentDesignForAI()) + '\n\n' + ask;
   out.style.display = 'block';
-  if (!key) { out.textContent = 'Add your Anthropic API key above for inline advice, or paste this prompt into claude.ai:\n\n' + prompt; return; }
   out.textContent = 'Thinking…';
+  document.getElementById('ai-err').textContent = '';
   try {
-    var resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', mode: 'cors',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
+    var resp = await fetch('/api/ai/advise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: kind, currentDesign: _currentDesignForAI() })
     });
-    if (!resp.ok) { var e = await resp.json().catch(function () { return {}; }); throw new Error(e.error ? e.error.message : ('API error ' + resp.status)); }
+    if (!resp.ok) {
+      var e = await resp.json().catch(function () { return {}; });
+      throw new Error(e.error || 'Server error ' + resp.status);
+    }
     var data = await resp.json();
-    out.textContent = data.content[0].text;
+    out.textContent = data.text;
   } catch (err) {
-    if (err.message === 'Failed to fetch' || err.name === 'TypeError') out.textContent = 'Direct API blocked here. Paste this prompt into claude.ai:\n\n' + prompt;
-    else out.textContent = '⚠ ' + err.message;
+    out.textContent = '⚠ ' + err.message;
   }
 }
 
-// Generate a design from a reference image (I2) — vision needs the direct API
-async function aiFromImage(input) {
-  if (!input.files || !input.files[0]) return;
-  var reader = new FileReader();
-  reader.onload = async function () {
-    var dataUrl = reader.result, b64 = dataUrl.split(',')[1];
-    var mt = (dataUrl.match(/data:(.*?);/) || [])[1] || 'image/png';
-    var key = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
-    var statEl = document.getElementById('ai-status'), errEl = document.getElementById('ai-err');
-    errEl.textContent = '';
-    document.getElementById('ai-manual').style.display = 'none';
-    document.getElementById('ai-result').style.display = 'none';
-    if (!key) { errEl.textContent = 'Generating from an image needs the direct API — add your Anthropic API key above.'; return; }
-    statEl.style.display = 'block'; statEl.textContent = 'Analysing image…';
-    try {
-      var resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST', mode: 'cors',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-allow-browser': 'true' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001', max_tokens: 4096, system: AI_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: [
-            { type: 'image', source: { type: 'base64', media_type: mt, data: b64 } },
-            { type: 'text', text: 'Design furniture matching this reference image. Return ONLY the JSON design object.' }
-          ] }]
-        })
-      });
-      if (!resp.ok) { var e = await resp.json().catch(function () { return {}; }); throw new Error(e.error ? e.error.message : ('API error ' + resp.status)); }
-      var data = await resp.json();
-      statEl.style.display = 'none';
-      _parseAndShowDesign(data.content[0].text);
-    } catch (err) {
-      statEl.style.display = 'none';
-      errEl.textContent = (err.message === 'Failed to fetch' || err.name === 'TypeError')
-        ? 'Direct API blocked here — image generation is unavailable in this environment.'
-        : '⚠ ' + err.message;
-    }
-  };
-  reader.readAsDataURL(input.files[0]);
-  input.value = '';
-}
-
-async function _aiRun(prompt) {
-  var key    = (document.getElementById('ai-key').value.trim() || localStorage.getItem('fc3d_ai_key') || '');
+async function _aiRun(prompt, currentDesign) {
   var errEl  = document.getElementById('ai-err');
   var statEl = document.getElementById('ai-status');
   var resEl  = document.getElementById('ai-result');
@@ -1373,76 +1211,33 @@ async function _aiRun(prompt) {
 
   errEl.textContent = '';
   resEl.style.display = 'none';
-  document.getElementById('ai-manual').style.display = 'none';
 
-  if (!prompt) { errEl.textContent = 'Describe the furniture you want to design.'; return; }
-
-  // If no API key, go straight to manual mode
-  if (!key) { _showManualMode(prompt); return; }
+  if (!prompt) { errEl.textContent = 'Describe the furniture you want.'; return; }
 
   btn.disabled = true;
   btn.textContent = '⏳ Designing…';
   statEl.style.display = 'block';
-  statEl.textContent = 'Consulting Claude…';
+  statEl.textContent = currentDesign ? 'Updating your design…' : 'Designing…';
 
   try {
-    var resp = await fetch('https://api.anthropic.com/v1/messages', {
+    var resp = await fetch('/api/ai/design', {
       method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type':                      'application/json',
-        'x-api-key':                         key,
-        'anthropic-version':                 '2023-06-01',
-        'anthropic-dangerous-allow-browser': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
-        system: AI_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt, currentDesign: currentDesign })
     });
-
     if (!resp.ok) {
-      var e = await resp.json().catch(function(){ return {}; });
-      throw new Error(e.error ? e.error.message : ('API error ' + resp.status));
+      var e = await resp.json().catch(function () { return {}; });
+      throw new Error(e.error || 'Server error ' + resp.status);
     }
-
     var data = await resp.json();
     statEl.style.display = 'none';
-    _parseAndShowDesign(data.content[0].text);
-
-  } catch(err) {
+    _parseAndShowDesign(data.text);
+  } catch (err) {
     statEl.style.display = 'none';
-    // CORS / network error — offer manual mode instead
-    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-      _showManualMode(prompt);
-    } else {
-      errEl.textContent = '⚠ ' + err.message;
-    }
+    errEl.textContent = '⚠ ' + err.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = '✦ Generate Design';
-  }
-}
-
-function _showManualMode(prompt) {
-  var fullPrompt = _buildFullPrompt(prompt);
-  document.getElementById('manual-prompt-text').value = fullPrompt;
-  document.getElementById('manual-paste-area').value  = '';
-  document.getElementById('ai-manual').style.display  = 'block';
-  document.getElementById('ai-err').textContent       = '';
-}
-
-function applyManualResponse() {
-  var raw   = document.getElementById('manual-paste-area').value.trim();
-  var errEl = document.getElementById('ai-err');
-  errEl.textContent = '';
-  if (!raw) { errEl.textContent = 'Paste Claude\'s JSON response above first.'; return; }
-  try {
-    _parseAndShowDesign(raw);
-  } catch(e) {
-    errEl.textContent = '⚠ Could not parse response: ' + e.message;
+    btn.textContent = '✦ Generate';
   }
 }
 
