@@ -25,8 +25,16 @@ guides, export to PDF, and save your projects to your account in the cloud.
 - **Visualization** — PBR realistic rendering (reflections, tone mapping),
   exploded-view animation, room context (floor + walls to scale), custom
   texture upload per panel, and view-in-AR on supported phones (WebXR)
-- **Output** — auto cut sheet with board-nesting optimizer, assembly guide, PDF export
-- **AI Designer** — describe furniture in plain language and generate a starting design
+- **Production** — auto cut sheet with board-nesting optimizer & kerf, edge-banding
+  totals, part numbers (3D + layout), assembly guide, PDF + CSV export
+- **Costing** — per-material price database, currency setting, live material cost,
+  and a quote generator (materials + hardware + labour + markup) → PDF
+- **Export** — 3D model (GLB/OBJ/STL), high-res PNG render, per-panel DXF/SVG for
+  CNC, and a shareable read-only link
+- **Collaboration** — cloud projects with thumbnails, version history & restore,
+  share tokens, an opt-in public gallery, and JSON import/export backups
+- **AI Designer** — generate from a text description or a reference image, refine
+  the current design conversationally, and get joinery/hardware & cost suggestions
 - **Productivity** — keyboard shortcuts with a `?` cheatsheet, undo/redo with a
   history panel, configurable snap distance & grid step, and a first-run
   onboarding guide with one-click sample projects

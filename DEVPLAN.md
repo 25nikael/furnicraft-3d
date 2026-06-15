@@ -205,7 +205,11 @@ Backend: `POST /:id/share` (generates share_token), `POST /:id/publish` (is_publ
 Factored `_aiRun(prompt)` (generate delegates); `aiRefine` embeds the current design + instruction and re-runs the JSON pipeline; `aiAdvise('joinery'|'cost')` returns plain-text advice (inline with key, prompt-to-copy without). Refine input + advice buttons + output area in the AI modal. Verified: functions wired, 7-panel context, advice shows prompt without key, refine guards empty input, no errors.
 ### R11 — AI design from image/sketch (I2) ✅
 `aiFromImage` reads an uploaded image to base64 and sends it as a Claude vision message (image + text, AI_SYSTEM_PROMPT) → `_parseAndShowDesign`; graceful messaging without an API key / on CORS. "Generate from a reference image" button in the AI modal. Verified: function + file input + parse pipeline present, no errors (live vision needs the direct API + key).
-### R12 — Integration, polish & docs ⬜
+### R12 — Integration, polish & docs ✅
+README expanded (Production, Costing, Export, Collaboration, AI Designer). Regression verified: banding+cost in cut sheet, quote $492, JSON/DXF/SVG exports, share link, AI refine guard, labels, light theme, mobile drawer, round-trip — no errors.
+
+---
+**REMAINING FEATURES COMPLETE** — C/D/E/H/I shipped across commits b8ba410 → R12. Every menu from the original feature list (A·B·C·D·E·F·G·H·I·J) is now implemented.
 
 ## Testing approach (per block)
 - Verify via the live preview + `preview_eval` (DOM/state checks; the screenshot tool has been flaky in this environment).
