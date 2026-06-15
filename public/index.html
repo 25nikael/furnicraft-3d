@@ -479,6 +479,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <ul class="comp-list" id="comp-list"></ul>
     <div class="btn-block">
       <button class="btn" id="btn-add">＋ Add Panel</button>
+      <button class="btn" id="btn-tpl" onclick="openTemplates()">📐 Templates…</button>
       <button class="btn" id="btn-dup">⧉ Duplicate</button>
       <button class="btn" id="btn-group">⊞ Group Selected</button>
       <button class="btn" id="btn-ungroup">⊟ Ungroup</button>
@@ -642,6 +643,31 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     </div>
     <div id="hw-prop-panel" style="display:none;">
       <div class="prop-sec" id="hw-prop-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Templates modal ───────────────────────────────── -->
+<div class="overlay-modal" id="tpl-modal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-hdr">Templates<button class="modal-close" onclick="closeTemplates()">×</button></div>
+    <div class="modal-body">
+      <div class="prop-title">Preset</div>
+      <select class="prop-input" id="tpl-preset" style="width:100%;" onchange="_tplDefaults()">
+        <option value="bookcase">Bookcase</option>
+        <option value="wardrobe">Wardrobe</option>
+        <option value="basecabinet">Base Cabinet</option>
+        <option value="table">Table</option>
+        <option value="drawerunit">Drawer Unit</option>
+      </select>
+      <div class="prop-title" style="margin-top:12px;">Overall size</div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Width</span><input class="prop-input" id="tpl-w" type="number" style="width:84px;"></div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Height</span><input class="prop-input" id="tpl-h" type="number" style="width:84px;"></div>
+      <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Depth</span><input class="prop-input" id="tpl-d" type="number" style="width:84px;"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn" style="flex:1;margin:0;" onclick="applyTemplate(false)">Add to canvas</button>
+        <button class="btn" style="flex:1;margin:0;background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;" onclick="applyTemplate(true)">Replace</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2523,6 +2549,92 @@ function doRadialArray() {
   var c = parseInt(document.getElementById('arr-rad-count').value) || 2;
   var a = parseFloat(document.getElementById('arr-rad-angle').value) || 360;
   arrayRadial(c, a); closeArrayModal();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TEMPLATE / PRESET LIBRARY  (F-series F2)
+// ═══════════════════════════════════════════════════════════════
+function _tplCarcass(W, H, D, opts) {
+  opts = opts || {}; var T = 18, TB = 12, mat = opts.mat || 'birch', list = [];
+  list.push({ name:'Left Side',  w:T, h:H, d:D, x:-(W/2-T/2), y:H/2, z:0, material:mat });
+  list.push({ name:'Right Side', w:T, h:H, d:D, x:(W/2-T/2),  y:H/2, z:0, material:mat });
+  list.push({ name:'Bottom', w:W-2*T, h:T, d:D, x:0, y:T/2, z:0, material:mat });
+  if (opts.top !== false) list.push({ name:'Top', w:W-2*T, h:T, d:D, x:0, y:H-T/2, z:0, material:mat });
+  if (opts.back !== false) list.push({ name:'Back', w:W-2*T, h:H-2*T, d:TB, x:0, y:H/2, z:-(D/2-TB/2-6), material:'birch' });
+  return list;
+}
+function tplBookcase(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'oak' }), inner = H - 2*T;
+  var shelves = Math.max(1, Math.round(inner/320) - 1);
+  for (var i = 1; i <= shelves; i++) list.push({ name:'Shelf '+i, w:W-2*T, h:T, d:D-12, x:0, y:T+inner*i/(shelves+1), z:6, material:'oak' });
+  return { name:'Bookcase', panels:list };
+}
+function tplWardrobe(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'white' });
+  list.push({ name:'Top Shelf', w:W-2*T, h:T, d:D-12, x:0, y:H-300, z:6, material:'white' });
+  list.push({ name:'Hanging Rail', w:W-2*T, h:30, d:30, x:0, y:H-360, z:0, material:'metal' });
+  return { name:'Wardrobe', panels:list };
+}
+function tplBaseCabinet(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'white', top:false });
+  list.push({ name:'Top Rail Front', w:W-2*T, h:T, d:80, x:0, y:H-T/2, z:(D/2-40-6), material:'white' });
+  list.push({ name:'Top Rail Back',  w:W-2*T, h:T, d:80, x:0, y:H-T/2, z:-(D/2-40-6), material:'white' });
+  list.push({ name:'Shelf', w:W-2*T, h:T, d:D-12, x:0, y:H/2, z:6, material:'white' });
+  return { name:'Base Cabinet', panels:list };
+}
+function tplTable(W, H, D) {
+  var T = 30, legT = 60, list = [], lh = H - T, inset = legT/2 + 20;
+  list.push({ name:'Top', w:W, h:T, d:D, x:0, y:H-T/2, z:0, material:'oak' });
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function (c, i) {
+    list.push({ name:'Leg '+(i+1), w:legT, h:lh, d:legT, x:c[0]*(W/2-inset), y:lh/2, z:c[1]*(D/2-inset), material:'oak' });
+  });
+  return { name:'Table', panels:list };
+}
+function tplDrawerUnit(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'birch' }), inner = H - 2*T;
+  var n = Math.max(2, Math.round(inner/200)), dh = inner/n;
+  for (var i = 0; i < n; i++) list.push({ name:'Drawer Front '+(i+1), w:W-2*T-4, h:dh-6, d:T, x:0, y:T+dh*(i+0.5), z:(D/2-T/2),
+    material:'oak', func:{ kind:'drawer', travel:Math.max(150,D-30), slide:'sidemount', clearance:12.5, open:false } });
+  return { name:'Drawer Unit', panels:list };
+}
+
+var TPL_GEN = { bookcase:tplBookcase, wardrobe:tplWardrobe, basecabinet:tplBaseCabinet, table:tplTable, drawerunit:tplDrawerUnit };
+var TPL_DEFAULTS = { bookcase:[800,1800,300], wardrobe:[1000,2000,600], basecabinet:[600,870,560], table:[1200,740,750], drawerunit:[500,800,500] };
+
+function _applyPanelSet(name, list, replace) {
+  saveUndo();
+  if (replace) {
+    panels.slice().forEach(function (p) { removeMesh(p); });
+    panels.length = 0;
+    clearAllHardware();
+    doSelect(null);
+  }
+  list.forEach(function (pd) {
+    var m = FMAT[pd.material] || FMAT.oak;
+    var p = mkPanel(Object.assign({ color:m.color, edgeColor:m.edgeColor }, pd));
+    panels.push(p); buildMesh(p);
+  });
+  refreshUI(); fitCamera();
+  document.getElementById('topbar-proj-name').textContent = name;
+}
+
+function _tplDefaults() {
+  var d = TPL_DEFAULTS[document.getElementById('tpl-preset').value];
+  document.getElementById('tpl-w').value = fmtLen(d[0]);
+  document.getElementById('tpl-h').value = fmtLen(d[1]);
+  document.getElementById('tpl-d').value = fmtLen(d[2]);
+}
+function openTemplates()  { _tplDefaults(); document.getElementById('tpl-modal').classList.add('active'); }
+function closeTemplates() { document.getElementById('tpl-modal').classList.remove('active'); }
+function applyTemplate(replace) {
+  var k = document.getElementById('tpl-preset').value;
+  var W = parseLen(document.getElementById('tpl-w').value) || 600;
+  var H = parseLen(document.getElementById('tpl-h').value) || 800;
+  var D = parseLen(document.getElementById('tpl-d').value) || 400;
+  if (replace && panels.length && !confirm('Replace the current design with this template?')) return;
+  var tpl = TPL_GEN[k](W, H, D);
+  _applyPanelSet(tpl.name, tpl.panels, replace);
+  closeTemplates();
 }
 
 // ═══════════════════════════════════════════════════════════════

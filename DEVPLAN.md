@@ -91,8 +91,9 @@ Mirror across X/Y/Z; linear array (count+spacing) and radial array (count+angle)
 Measure mode: two-point distance (+ angle); persistent annotation overlay; uses unit formatter.
 **Done:** `📏 Measure` toolbar toggle + HUD; click two points (panel hit or ground plane) → stored measurement; rendered each frame via `drawDimLine` (same path as panel dims) in the active unit (fractional inches); `clearMeasurements`; measurements persisted in project state. Verified: toggle/HUD/button state, persist round-trip 1→1, clear. (Visual label render couldn't be eval-confirmed — headless canvas is 0×0 so toScreen degenerates for ALL dims; identical proven path renders in the live app.)
 
-### F-Block 5 — Template/preset library (F2) ⬜
+### F-Block 5 — Template/preset library (F2) ✅
 Parametric presets (bookcase, wardrobe, base cabinet, table, drawer unit) + modal with W/H/D.
+**Done:** `_tplCarcass` + 5 generators (`tplBookcase`/`tplWardrobe`/`tplBaseCabinet`/`tplTable`/`tplDrawerUnit`, drawer unit emits functional drawers); `_applyPanelSet` (add or replace) + Templates modal (preset + W/H/D in active unit). Verified: all 5 generate, replace builds 10 panels/5 shelves named Bookcase, drawer unit → 4 drawers, round-trip, no errors.
 
 ### F-Block 6 — Sub-assemblies / nested grouping (F6) ⬜
 Named groups + group-of-groups; select/move as a unit; group manager.
