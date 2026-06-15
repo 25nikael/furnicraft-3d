@@ -39,6 +39,9 @@
 .sd-row label{font-size:13px;color:var(--txt);cursor:pointer;flex:1;}
 .sd-row label small{display:block;font-size:11px;color:var(--txt3);margin-top:1px;}
 .sd-divider{height:1px;background:var(--bd);margin:4px 0;}
+.sd-num-row{display:flex;align-items:center;justify-content:space-between;padding:5px 14px;font-size:12px;color:var(--txt);}
+.sd-num-row small{color:var(--txt3);}
+.sd-num-row input{width:58px;padding:3px 6px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:12px;text-align:right;}
 #fps-hint{display:none;margin:0 14px 8px;padding:8px 10px;background:var(--teal-dim);border-radius:6px;font-size:11px;color:var(--txt2);line-height:1.5;}
 #fps-crosshair{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1000;}
 #fps-crosshair::before,#fps-crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.7);}
@@ -364,6 +367,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
           <input type="radio" name="pbr" id="pbr-off" value="off">
           <label for="pbr-off">Standard <small>faster, flatter</small></label>
         </div>
+        <div class="sd-divider"></div>
+        <div class="sd-section">Snap &amp; Grid</div>
+        <div class="sd-num-row"><span>Snap distance <small>mm</small></span><input type="number" id="set-snap-dist" min="0" value="14" onchange="setSnapDist(this.value)"></div>
+        <div class="sd-num-row"><span>Grid step <small>mm</small></span><input type="number" id="set-grid" min="1" value="1" onchange="setGridSize(this.value)"></div>
         <div id="fps-hint">
           <strong>WASD</strong> — move &nbsp;|&nbsp; <strong>Mouse</strong> — look<br>
           <strong>Q/E</strong> — down/up &nbsp;|&nbsp; <strong>Shift</strong> — fast<br>
@@ -3845,8 +3852,8 @@ document.addEventListener('mousemove', function(e) {
       }
 
       groupStart.forEach(function(gs) {
-        gs.panel.x = Math.round(gs.x + fdx);
-        gs.panel.z = Math.round(gs.z + fdz);
+        gs.panel.x = snapToGrid(gs.x + fdx);
+        gs.panel.z = snapToGrid(gs.z + fdz);
         syncPos(gs.panel);
       });
       refreshHandlePos();
@@ -3907,6 +3914,23 @@ function toScreen(v3) {
 // ═══════════════════════════════════════════════════════════════
 var SNAP_T = 14;        // drag snap threshold (mm)
 var SNAP_T_DIM = 16;   // resize snap threshold (mm) — more forgiving
+
+// ── Snap & grid settings (J-series J3) ──────────────────
+var _gridSize = parseFloat(localStorage.getItem('fc3d_grid')) || 1;
+function snapToGrid(v) { return Math.round(v / _gridSize) * _gridSize; }
+function setGridSize(v) { _gridSize = Math.max(1, parseFloat(v) || 1); localStorage.setItem('fc3d_grid', _gridSize); }
+function setSnapDist(v) {
+  var d = Math.max(0, parseFloat(v) || 0);
+  SNAP_T = d; SNAP_T_DIM = d + 2;
+  localStorage.setItem('fc3d_snapdist', d);
+}
+// Apply saved snap/grid prefs now that SNAP_T exists, and sync the inputs
+(function _initSnapPrefs() {
+  var sd = parseFloat(localStorage.getItem('fc3d_snapdist'));
+  if (!isNaN(sd)) { SNAP_T = sd; SNAP_T_DIM = sd + 2; }
+  var si = document.getElementById('set-snap-dist'); if (si) si.value = SNAP_T;
+  var gi = document.getElementById('set-grid');      if (gi) gi.value = _gridSize;
+})();
 
 function snapDim(p, axis, sign, newDim, sp) {
   var dk     = DIM[axis];

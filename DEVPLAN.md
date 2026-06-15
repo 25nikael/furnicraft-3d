@@ -161,8 +161,9 @@ Consolidated shortcuts + `?`-toggled cheatsheet overlay + Help button; guarded a
 Add redo; snapshot/restore helpers; history panel with click-to-jump; toolbar undo/redo.
 **Done:** `_snapshot`/`_restoreSnapshot` (now also cover measurements + groupMeta, fixing an undo gap); `redoStack` + `redo`; `undoN`/`redoN` jump; History modal (click a step to jump); toolbar ↶/↷ buttons (dimmed when empty) + Ctrl+Z / Ctrl+⇧Z. Verified: undo→0, redo→100, redo cleared on new action, measurement restored on undo, history shows current marker, no errors.
 
-### J-Block 3 — Snap/grid settings UI (J3) ⬜
+### J-Block 3 — Snap/grid settings UI (J3) ✅
 Snap on/off, snap distance, grid increment (round positions); persisted.
+**Done:** `_gridSize` + `snapToGrid` (drag positions round to the grid); `setSnapDist`/`setGridSize` adjust `SNAP_T`/`SNAP_T_DIM` and grid; Snap & Grid section in settings; prefs persisted + reapplied on load (after SNAP_T init to avoid the ordering trap). Verified: grid 10 snaps 127→130, snap dist 20 (dim 22), persisted, no errors. (Snap on/off remains the existing toolbar toggle.)
 
 ### J-Block 4 — Onboarding + sample projects (J2) ⬜
 First-visit welcome modal, tips, one-click samples (templates), Help reopen.
