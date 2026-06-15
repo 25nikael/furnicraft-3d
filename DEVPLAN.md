@@ -165,8 +165,9 @@ Add redo; snapshot/restore helpers; history panel with click-to-jump; toolbar un
 Snap on/off, snap distance, grid increment (round positions); persisted.
 **Done:** `_gridSize` + `snapToGrid` (drag positions round to the grid); `setSnapDist`/`setGridSize` adjust `SNAP_T`/`SNAP_T_DIM` and grid; Snap & Grid section in settings; prefs persisted + reapplied on load (after SNAP_T init to avoid the ordering trap). Verified: grid 10 snaps 127→130, snap dist 20 (dim 22), persisted, no errors. (Snap on/off remains the existing toolbar toggle.)
 
-### J-Block 4 — Onboarding + sample projects (J2) ⬜
+### J-Block 4 — Onboarding + sample projects (J2) ✅
 First-visit welcome modal, tips, one-click samples (templates), Help reopen.
+**Done:** welcome modal (tips + 4 one-click samples via `loadSample` reusing templates + Start blank + Don't-show-again); auto-shows on first visit (`fc3d_seen` flag); reopen from the cheatsheet (Show welcome guide). Verified: 4 sample buttons, loading Table replaces with 5 panels, seen flag persists, reopen + don't-show work, no errors.
 
 ### J-Block 5 — Integration, polish & docs ⬜
 Coexist with FPS/measure; mobile/theme; regression; README + DEVPLAN.

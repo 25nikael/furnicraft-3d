@@ -208,6 +208,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 
 /* ── Hardware catalog ─────────────────────────────── */
 .hw-catalog-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.welcome-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 .hw-cat-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 10px;background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;color:var(--txt);cursor:pointer;transition:all .12s;}
 .hw-cat-btn:hover{border-color:var(--teal);background:var(--teal-dim);color:var(--teal);}
 .hw-cat-icon{font-size:26px;line-height:1;}
@@ -696,6 +697,33 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   </div>
 </div>
 
+<!-- ── Welcome / onboarding modal ────────────────────── -->
+<div class="overlay-modal" id="welcome-modal">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-hdr"><span style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Welcome to FurniCraft 3D</span><button class="modal-close" onclick="closeWelcome()">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:10px;">Design panel furniture in 3D, then export cut sheets, assembly guides and PDFs. A few tips:</div>
+      <ul style="font-size:12px;color:var(--txt2);line-height:1.7;margin:0 0 14px 18px;">
+        <li>Click a panel to select; click again and drag to move it.</li>
+        <li>Drag the blue handles to resize. Press <strong>?</strong> any time for shortcuts.</li>
+        <li>Use <strong>📐 Templates</strong> or <strong>✦ AI Design</strong> to start quickly.</li>
+        <li>Sign in to save projects to your account.</li>
+      </ul>
+      <div class="prop-title">Start from a sample</div>
+      <div class="welcome-grid">
+        <button class="hw-cat-btn" onclick="loadSample('bookcase')"><span class="hw-cat-icon">📚</span><span class="hw-cat-label">Bookcase</span></button>
+        <button class="hw-cat-btn" onclick="loadSample('basecabinet')"><span class="hw-cat-icon">🗄</span><span class="hw-cat-label">Cabinet</span></button>
+        <button class="hw-cat-btn" onclick="loadSample('table')"><span class="hw-cat-icon">🪵</span><span class="hw-cat-label">Table</span></button>
+        <button class="hw-cat-btn" onclick="loadSample('drawerunit')"><span class="hw-cat-icon">🗃</span><span class="hw-cat-label">Drawers</span></button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
+        <label style="font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="welcome-dontshow"> Don't show again</label>
+        <button class="btn" style="width:auto;margin:0;" onclick="closeWelcome()">Start blank</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── History modal ─────────────────────────────────── -->
 <div class="overlay-modal" id="history-modal">
   <div class="modal-box" style="max-width:320px;">
@@ -728,6 +756,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <kbd>?</kbd><span>This cheatsheet</span>
       </div>
       <div style="font-size:11px;color:var(--txt3);margin-top:10px;">Shortcuts are disabled while typing in a field or in FPS navigation.</div>
+      <button class="btn" style="margin-top:10px;" onclick="closeCheatsheet();openWelcome();">👋 Show welcome guide</button>
     </div>
   </div>
 </div>
@@ -2859,6 +2888,21 @@ function applyTemplate(replace) {
   var tpl = TPL_GEN[k](W, H, D);
   _applyPanelSet(tpl.name, tpl.panels, replace);
   closeTemplates();
+}
+
+// ── Onboarding / welcome (J-series J2) ──────────────────
+function openWelcome()  { document.getElementById('welcome-modal').classList.add('active'); }
+function closeWelcome() {
+  var dn = document.getElementById('welcome-dontshow');
+  if (dn && dn.checked) localStorage.setItem('fc3d_seen', '1');
+  document.getElementById('welcome-modal').classList.remove('active');
+}
+function loadSample(key) {
+  var d = TPL_DEFAULTS[key] || [800, 800, 400];
+  var t = TPL_GEN[key](d[0], d[1], d[2]);
+  _applyPanelSet(t.name, t.panels, true);
+  localStorage.setItem('fc3d_seen', '1');
+  closeWelcome();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5040,6 +5084,7 @@ function animate() {
 buildNightstand();
 fitCamera();
 renderer.setAnimationLoop(animate);  // XR-compatible loop (works without XR too)
+if (!localStorage.getItem('fc3d_seen')) setTimeout(openWelcome, 400);  // first-visit onboarding
 
 // ═══════════════════════════════════════════════════════════════
 //  CUT SHEET TABS
