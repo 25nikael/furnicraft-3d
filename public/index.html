@@ -4006,12 +4006,16 @@ document.addEventListener('mousemove', function(e) {
     var groupIds = selectedGroup.map(function(g){ return g.id; });
 
     if (e.shiftKey) {
-      // ── Shift: vertical (Y) movement ────────────────────────
+      // ── Shift: vertical (Y) movement; Alt+Shift = magnetic ──
       var ddy = _axisScreenProject(dmx, dmy, new THREE.Vector3(0,1,0), startWP, r0);
-      var fdy = Math.round(ddy);
+      var rawNy = Math.round(sp.y + ddy);
+      var ny = _altDown
+        ? magnetSnapY(p, sp.x, rawNy, sp.z)
+        : rawNy;
+      var fdy = ny - sp.y;
       groupStart.forEach(function(gs) {
-        var ny = Math.max(Math.round(gs.panel.h/2), Math.round(gs.y + fdy));
-        gs.panel.y = ny;
+        var gy = Math.max(Math.round(gs.panel.h/2), Math.round(gs.y + fdy));
+        gs.panel.y = gy;
         syncPos(gs.panel);
       });
       refreshHandlePos(); showProps(selected); refreshOverall();
@@ -4331,6 +4335,38 @@ function magnetSnapPos(p, nx, ny, nz) {
     return [Math.round(best[0]), Math.round(best[1])];
   }
   return [Math.round(nx), Math.round(nz)];
+}
+
+// Magnetic snap for Y-axis (vertical). Returns best snapped Y value.
+function magnetSnapY(p, nx, ny, nz) {
+  var RANGE = 80; // mm
+  var eps   = 0.5;
+  var ph = p.h;
+
+  var yCands = [ny];
+  panels.forEach(function(o) {
+    if (o === p) return;
+    yCands.push(o.y + o.h/2 + ph/2);  // p sits on top of o
+    yCands.push(o.y - o.h/2 - ph/2);  // p sits below o
+    yCands.push(o.y - o.h/2 + ph/2);  // p.yMin flush with o.yMin
+    yCands.push(o.y + o.h/2 - ph/2);  // p.yMax flush with o.yMax
+  });
+
+  yCands = yCands.filter(function(y) { return Math.abs(y - ny) <= RANGE; });
+
+  var best = null, bestScore = -Infinity;
+  yCands.forEach(function(cy) {
+    var dist = Math.abs(cy - ny);
+    var flush = _countFlushFaces(p, nx, cy, nz);
+    var score = flush * 10000 - dist;
+    if (score > bestScore) { bestScore = score; best = cy; }
+  });
+
+  if (best !== null && Math.abs(best - ny) > eps) {
+    flashSnap('🧲 Magnetic');
+    return Math.round(best);
+  }
+  return Math.round(ny);
 }
 
 // ═══════════════════════════════════════════════════════════════
