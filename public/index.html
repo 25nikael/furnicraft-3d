@@ -5589,6 +5589,31 @@ function toggleExplode() {
   var b = document.getElementById('btn-explode');
   if (b) b.classList.toggle('on', _explodeTarget > 0);
 }
+// World axis (0=X,1=Y,2=Z) of a panel's thickness (its smallest dimension).
+function _panelNormalAxis(p) {
+  var mn = Math.min(p.w, p.h, p.d);
+  var li = (mn === p.w) ? 0 : (mn === p.h) ? 1 : 2;
+  var v = new THREE.Vector3(li === 0 ? 1 : 0, li === 1 ? 1 : 0, li === 2 ? 1 : 0);
+  if (p.rx || p.ry || p.rz) v.applyEuler(new THREE.Euler((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180, 'XYZ'));
+  var ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+  return (ax >= ay && ax >= az) ? 0 : (ay >= ax && ay >= az) ? 1 : 2;
+}
+// Full world-space extent of a panel along a world axis.
+function _panelExtentAlong(p, axis) {
+  var e = panelWorldHalfExtents(p.rx||0, p.ry||0, p.rz||0, p.w/2, p.h/2, p.d/2);
+  return 2 * (axis === 0 ? e.hw : axis === 1 ? e.hh : e.hd);
+}
+// Do two panels overlap on BOTH of the given perpendicular axes? (i.e. they stack)
+function _overlapPerp(a, b, perp) {
+  var ea = panelWorldHalfExtents(a.rx||0, a.ry||0, a.rz||0, a.w/2, a.h/2, a.d/2);
+  var eb = panelWorldHalfExtents(b.rx||0, b.ry||0, b.rz||0, b.w/2, b.h/2, b.d/2);
+  return perp.every(function (ax) {
+    var k = ['x','y','z'][ax];
+    var ha = (ax===0?ea.hw:ax===1?ea.hh:ea.hd), hb = (ax===0?eb.hw:ax===1?eb.hh:eb.hd);
+    return Math.abs(a[k] - b[k]) < ha + hb;
+  });
+}
+
 function tickExplode(dt) {
   if (_explode !== _explodeTarget) {
     var dir = _explodeTarget > _explode ? 1 : -1;
@@ -5601,15 +5626,64 @@ function tickExplode(dt) {
   }
   if (!panels.length) return;
   _explodeActive = true;
+
   var bb = furnitureBBox();
-  var cx = (bb.minX+bb.maxX)/2, cy = (bb.minY+bb.maxY)/2, cz = (bb.minZ+bb.maxZ)/2;
-  var mag = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ) * 0.6;
+  var maxDim = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ);
+  var MINGAP = Math.max(50, maxDim * 0.06); // min clear space between adjacent panel faces
+  var SPREAD = 1.35;                          // exaggerate already-separated panels a little
+
+  // Bucket panels by the world axis of their thickness (sides→X, shelves→Y, backs→Z).
+  var buckets = { 0:[], 1:[], 2:[] };
+  panels.forEach(function (p) { buckets[_panelNormalAxis(p)].push(p); });
+
+  var off = {}; // panel.id -> [dx,dy,dz] fully-exploded displacement
+
+  [0,1,2].forEach(function (axis) {
+    var list = buckets[axis];
+    if (list.length < 2) return;
+    var key  = ['x','y','z'][axis];
+    var perp = [0,1,2].filter(function (a) { return a !== axis; });
+
+    // Group panels that actually overlap (a "stack") so side-by-side panels aren't pushed apart.
+    var stacks = [];
+    list.forEach(function (p) {
+      var hit = null;
+      for (var s = 0; s < stacks.length; s++) {
+        if (stacks[s].some(function (q) { return _overlapPerp(p, q, perp); })) {
+          if (hit === null) { stacks[s].push(p); hit = s; }
+          else { stacks[hit] = stacks[hit].concat(stacks[s]); stacks.splice(s, 1); s--; } // merge bridged stacks
+        }
+      }
+      if (hit === null) stacks.push([p]);
+    });
+
+    stacks.forEach(function (stack) {
+      if (stack.length < 2) return;
+      stack.sort(function (a, b) { return a[key] - b[key]; });
+      var thick = stack.map(function (p) { return _panelExtentAlong(p, axis); });
+      var center = stack.reduce(function (a, p) { return a + p[key]; }, 0) / stack.length;
+      // Cumulative centre positions, expand-only: keep original spacing (exaggerated) but
+      // never less than thickness/2 + MINGAP between neighbours.
+      var pos = [0];
+      for (var i = 1; i < stack.length; i++) {
+        var orig = stack[i][key] - stack[i-1][key];
+        var need = (thick[i] + thick[i-1]) / 2 + MINGAP;
+        pos[i] = pos[i-1] + Math.max(orig * SPREAD, need);
+      }
+      var mid = pos[pos.length-1] / 2;
+      stack.forEach(function (p, i) {
+        var o = [0,0,0];
+        o[axis] = (center + pos[i] - mid) - p[key];
+        off[p.id] = o;
+      });
+    });
+  });
+
   panels.forEach(function (p) {
     if (!p.mesh) return;
-    var dx = p.x-cx, dy = p.y-cy, dz = p.z-cz, len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
-    var k = _explode * mag / len;
-    var bp = new THREE.Vector3(p.x + dx*k, p.y + dy*k, p.z + dz*k);
-    [p.mesh, p.edges, p.selBox].forEach(function (o) { if (o) o.position.copy(bp); });
+    var o = off[p.id] || [0,0,0];
+    var bp = new THREE.Vector3(p.x + o[0]*_explode, p.y + o[1]*_explode, p.z + o[2]*_explode);
+    [p.mesh, p.edges, p.selBox].forEach(function (m) { if (m) m.position.copy(bp); });
     if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(bp); });
     if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(bp); });
   });
