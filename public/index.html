@@ -1091,6 +1091,7 @@ var activeHandle  = null;
 var dragStart     = null;
 var panelStart    = null;
 var groupStart    = [];   // [{panel,x,y,z}] for all selected panels during drag
+var groupStartHw  = [];   // [{hw,x,y,z}] for hardware grouped with those panels
 var hoveredHandle = null;
 var snapTimer;
 var lastDimMs     = 0;
@@ -1939,6 +1940,25 @@ function getGroupPanels(p) {
   return panels.filter(function (q) { return q.groupId != null && _rootGroup(q.groupId) === root; });
 }
 
+// Hardware that belongs to the same (root) group as gid — moves with the group.
+function getGroupHardware(gid) {
+  if (gid == null) return [];
+  var root = _rootGroup(gid);
+  return hardware.filter(function (h) { return h.groupId != null && _rootGroup(h.groupId) === root; });
+}
+
+// World-space AABB enclosing a list of panels.
+function _panelsBounds(list) {
+  var b = { minX:1e9, maxX:-1e9, minY:1e9, maxY:-1e9, minZ:1e9, maxZ:-1e9 };
+  list.forEach(function (p) {
+    var e = panelWorldHalfExtents(p.rx||0, p.ry||0, p.rz||0, p.w/2, p.h/2, p.d/2);
+    b.minX = Math.min(b.minX, p.x-e.hw); b.maxX = Math.max(b.maxX, p.x+e.hw);
+    b.minY = Math.min(b.minY, p.y-e.hh); b.maxY = Math.max(b.maxY, p.y+e.hh);
+    b.minZ = Math.min(b.minZ, p.z-e.hd); b.maxZ = Math.max(b.maxZ, p.z+e.hd);
+  });
+  return b;
+}
+
 // ── Scene ──────────────────────────────────────────────────────
 var canvas = document.getElementById('three-canvas');
 var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
@@ -2762,7 +2782,12 @@ function deleteSelected() {
   // If panel was in a group and only 1 will remain, disband the group
   if (del.groupId) {
     var remaining = panels.filter(function(p){ return p !== del && p.groupId === del.groupId; });
-    if (remaining.length === 1) remaining[0].groupId = null;
+    if (remaining.length === 1) {
+      var root = _rootGroup(del.groupId);
+      remaining[0].groupId = null;
+      // Release hardware that was grouped with the now-disbanded group
+      hardware.forEach(function(h){ if (h.groupId != null && _rootGroup(h.groupId) === root) h.groupId = null; });
+    }
   }
   removeMesh(del);
   panels = panels.filter(function(p){ return p !== del; });
@@ -3227,6 +3252,7 @@ function mkHardware(o) {
     params:   params,
     finish:   o.finish || def.finish || 'steel',
     attachedTo: o.attachedTo !== undefined ? o.attachedTo : null, // reserved for Block 2/3
+    groupId:  o.groupId !== undefined ? o.groupId : null, // shares panel group ids
     mesh:     null
   };
 }
@@ -3236,7 +3262,7 @@ function snapHardware(hw) {
     id: hw.id, type: hw.type, name: hw.name,
     x: hw.x, y: hw.y, z: hw.z, rx: hw.rx, ry: hw.ry, rz: hw.rz,
     params: JSON.parse(JSON.stringify(hw.params)),
-    finish: hw.finish, attachedTo: hw.attachedTo
+    finish: hw.finish, attachedTo: hw.attachedTo, groupId: hw.groupId
   };
 }
 
@@ -3325,8 +3351,11 @@ function refreshHwList() {
   }
   wrap.innerHTML = hardware.map(function (hw) {
     var sel = (selectedHw === hw) ? ' sel' : '';
+    var groupBadge = hw.groupId
+      ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+groupColor(_rootGroup(hw.groupId))+';margin-right:4px;flex-shrink:0;" title="Grouped with panels (Group '+_rootGroup(hw.groupId)+')"></span>'
+      : '';
     return '<li class="comp-item' + sel + '" style="justify-content:space-between;">'
-      + '<span class="comp-name" title="' + hw.name + '" onclick="selectHardwareById(\'' + hw.id + '\')">' + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
+      + '<span class="comp-name" title="' + hw.name + '" onclick="selectHardwareById(\'' + hw.id + '\')">' + groupBadge + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
       + '<button class="pi-btn del" onclick="event.stopPropagation();deleteHardware(\'' + hw.id + '\')" style="flex:0 0 auto;">✕</button>'
       + '</li>';
   }).join('');
@@ -3902,6 +3931,7 @@ canvas.addEventListener('mousedown', function(e) {
         dragStart  = { mx: e.clientX, my: e.clientY };
         panelStart = { x: selected.x, y: selected.y, z: selected.z };
         groupStart = selectedGroup.map(function(q) { return { panel:q, x:q.x, y:q.y, z:q.z }; });
+        groupStartHw = getGroupHardware(selected.groupId).map(function(h) { return { hw:h, x:h.x, y:h.y, z:h.z }; });
       }
     }
     return;
@@ -4015,6 +4045,7 @@ document.addEventListener('mousemove', function(e) {
         gs.panel.y = gy;
         syncPos(gs.panel);
       });
+      groupStartHw.forEach(function(hs) { hs.hw.y = Math.round(hs.y + fdy); syncHwPos(hs.hw); });
       refreshHandlePos(); showProps(selected); refreshOverall();
     } else {
       // ── XZ movement (works from any camera angle) ────────────
@@ -4051,6 +4082,11 @@ document.addEventListener('mousemove', function(e) {
         gs.panel.x = snapToGrid(gs.x + fdx);
         gs.panel.z = snapToGrid(gs.z + fdz);
         syncPos(gs.panel);
+      });
+      groupStartHw.forEach(function(hs) {
+        hs.hw.x = snapToGrid(hs.x + fdx);
+        hs.hw.z = snapToGrid(hs.z + fdz);
+        syncHwPos(hs.hw);
       });
       refreshHandlePos(); showProps(selected); refreshOverall();
     }
@@ -4891,6 +4927,7 @@ document.addEventListener('keydown', function(e) {
     var dz = (k==='ArrowUp'?-step:(k==='ArrowDown'?step:0));
     saveUndo();
     selectedGroup.forEach(function(p){ p.x = Math.round(p.x+dx); p.z = Math.round(p.z+dz); syncPos(p); rebuildSelBox(p); });
+    getGroupHardware(selected.groupId).forEach(function(h){ h.x = Math.round(h.x+dx); h.z = Math.round(h.z+dz); syncHwPos(h); });
     refreshHandlePos(); showProps(selected); refreshOverall();
     return;
   }
@@ -4923,19 +4960,39 @@ function groupSelected() {
   var gid = nextGroupId++;
   groupMeta[gid] = { name: 'Group ' + gid, parent: null };
   selectedGroup.forEach(function(p) { p.groupId = gid; });
-  refreshCompList();
+  // Pull in related hardware so it moves with the group:
+  //  • hardware attached to one of the grouped panels (e.g. drawer slides), or
+  //  • hardware sitting within the grouped panels' bounding box (knobs, handles).
+  var ids = {}; selectedGroup.forEach(function(p) { ids[p.id] = true; });
+  var bb = _panelsBounds(selectedGroup);
+  var tol = 30; // mm — knobs/handles often sit slightly proud of the carcass
+  hardware.forEach(function(h) {
+    if (h.groupId != null) return; // leave already-grouped hardware alone
+    var attached = (h.attachedTo != null && ids[h.attachedTo]);
+    var inside = h.x >= bb.minX-tol && h.x <= bb.maxX+tol &&
+                 h.y >= bb.minY-tol && h.y <= bb.maxY+tol &&
+                 h.z >= bb.minZ-tol && h.z <= bb.maxZ+tol;
+    if (attached || inside) h.groupId = gid;
+  });
+  refreshCompList(); refreshHwList();
 }
 
 function ungroupSelected() {
   if (!selectedGroup.length) return;
   saveUndo();
+  // Release any hardware grouped with these panels
+  var roots = {};
+  selectedGroup.forEach(function(p) { if (p.groupId != null) roots[_rootGroup(p.groupId)] = true; });
+  hardware.forEach(function(h) {
+    if (h.groupId != null && roots[_rootGroup(h.groupId)]) h.groupId = null;
+  });
   selectedGroup.forEach(function(p) { p.groupId = null; });
   // Rebuild selection as single panel only
   var p = selected;
   clearSelBoxes();
   selectedGroup = [p];
   rebuildSelBox(p);
-  refreshCompList();
+  refreshCompList(); refreshHwList();
 }
 
 // ── Sub-assemblies / nested grouping (F-series F6) ──────
