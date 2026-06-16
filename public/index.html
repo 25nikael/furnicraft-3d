@@ -4211,19 +4211,37 @@ function snapPos(p, nx, ny, nz) {
 
 // Returns true if a panel placed at (nx,ny,nz) with dims (nw,nh,nd) would overlap
 // any other panel. eps=0.5 means panels may touch (snap) but not penetrate.
-// Per-face mitre clearance: how much AABB overlap the mitred face allows.
-// Only applied for non-rotated panels (rotated panels use raw AABB).
+// Per-face mitre clearance: how much AABB overlap the mitred face allows, keyed by
+// the WORLD axis/face the mitre points toward. The panel's rotation is applied to each
+// mitred face normal, so rotated panels (e.g. a side flipped 180° about Y) still get the
+// correct clearance — for 90°-multiple rotations this is exact, for arbitrary angles it
+// approximates by the dominant world axis.
 function mitreFaceClearance(p) {
   var z = { xMin:0, xMax:0, yMin:0, yMax:0, zMin:0, zMax:0 };
-  if (!p || p.rx || p.ry || p.rz) return z;
+  if (!p) return z;
   if (!p.mitreXMin && !p.mitreXMax && !p.mitreYMin && !p.mitreYMax && !p.mitreZMin && !p.mitreZMax) return z;
   var T = panelThickness(p);
   var shift = T / Math.tan(((p.mitreAngle||45)*Math.PI)/180);
-  return {
-    xMin: p.mitreXMin ? shift : 0,  xMax: p.mitreXMax ? shift : 0,
-    yMin: p.mitreYMin ? shift : 0,  yMax: p.mitreYMax ? shift : 0,
-    zMin: p.mitreZMin ? shift : 0,  zMax: p.mitreZMax ? shift : 0,
-  };
+  var faces = [
+    ['mitreXMin', -1, 0, 0], ['mitreXMax', 1, 0, 0],
+    ['mitreYMin', 0, -1, 0], ['mitreYMax', 0, 1, 0],
+    ['mitreZMin', 0, 0, -1], ['mitreZMax', 0, 0, 1]
+  ];
+  var eu = (p.rx || p.ry || p.rz)
+    ? new THREE.Euler((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180, 'XYZ')
+    : null;
+  var v = new THREE.Vector3();
+  faces.forEach(function(f) {
+    if (!p[f[0]]) return;
+    v.set(f[1], f[2], f[3]);
+    if (eu) v.applyEuler(eu);
+    var ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+    var key = (ax >= ay && ax >= az) ? (v.x >= 0 ? 'xMax' : 'xMin')
+            : (ay >= ax && ay >= az) ? (v.y >= 0 ? 'yMax' : 'yMin')
+            :                          (v.z >= 0 ? 'zMax' : 'zMin');
+    if (shift > z[key]) z[key] = shift;
+  });
+  return z;
 }
 
 function wouldCollide(panel, nx, ny, nz, nw, nh, nd, excludeIds) {
@@ -4235,10 +4253,14 @@ function wouldCollide(panel, nx, ny, nz, nw, nh, nd, excludeIds) {
     if (excludeIds && excludeIds.indexOf(o.id) >= 0) return false;
     var oe = panelWorldHalfExtents(o.rx||0, o.ry||0, o.rz||0, o.w/2, o.h/2, o.d/2);
     var oc = mitreFaceClearance(o);
-    // Clearance is face-directional: use the face of each panel that points toward the other
-    var xc = nx < o.x ? mc.xMax + oc.xMin : mc.xMin + oc.xMax;
-    var yc = ny < o.y ? mc.yMax + oc.yMin : mc.yMin + oc.yMax;
-    var zc = nz < o.z ? mc.zMax + oc.zMin : mc.zMin + oc.zMax;
+    // Non-directional clearance: on each axis allow AABB overlap up to the largest
+    // mitre shift either panel declares on that axis. This permits two mitred ends to
+    // interpenetrate by their cut depth without depending on which face points which
+    // way (the old directional version could pick a zero-shift face and wrongly block).
+    // The shift equals T/tan(angle), so it is correct for any mitre angle, not just 45°.
+    var xc = Math.max(mc.xMin, mc.xMax, oc.xMin, oc.xMax);
+    var yc = Math.max(mc.yMin, mc.yMax, oc.yMin, oc.yMax);
+    var zc = Math.max(mc.zMin, mc.zMax, oc.zMin, oc.zMax);
     return Math.abs(nx - o.x) < pe.hw + oe.hw - eps - xc &&
            Math.abs(ny - o.y) < pe.hh + oe.hh - eps - yc &&
            Math.abs(nz - o.z) < pe.hd + oe.hd - eps - zc;
