@@ -2753,7 +2753,6 @@ function addPanel(o) {
   buildMesh(p);
   refreshUI();
   doSelect(p);
-  fitCamera();
 }
 
 function deleteSelected() {
@@ -2770,7 +2769,6 @@ function deleteSelected() {
   doSelect(null);
   clearHandles();
   refreshUI();
-  if (panels.length) fitCamera();
 }
 
 function duplicateSelected() {
@@ -3284,7 +3282,6 @@ function addHardware(type) {
   hardware.push(hw);
   buildHardwareMesh(hw);
   refreshHwList();
-  fitCamera();
   closeHwCatalog();
 }
 
