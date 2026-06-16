@@ -826,6 +826,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <kbd>D</kbd><span>Duplicate</span>
         <kbd>G / U</kbd><span>Group / Ungroup</span>
         <kbd>Arrows</kbd><span>Nudge (⇧ = 50mm)</span>
+        <kbd>⇧ + Drag</kbd><span>Move panel vertically (Y axis)</span>
+        <kbd>Alt + Drag</kbd><span>Magnetic face snap</span>
         <kbd>S</kbd><span>Toggle snap</span>
         <kbd>W</kbd><span>Toggle wireframe</span>
         <kbd>M</kbd><span>Measure mode</span>
@@ -3992,30 +3994,31 @@ document.addEventListener('mousemove', function(e) {
     return;
   }
 
-  // ── Panel drag (XZ plane) ────────────────────────────────────
+  // ── Panel drag ───────────────────────────────────────────────
+  // Uses screen-space axis projection so movement works at ANY camera angle.
+  // Shift+drag = Y axis (vertical). Plain drag = XZ plane.
   if (isDragging && selected) {
-    var p   = selected;
-    var sp  = panelStart;
-    var plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -sp.y);
-    var r0  = canvas.getBoundingClientRect();
+    var p  = selected;
+    var sp = panelStart;
+    var r0 = canvas.getBoundingClientRect();
+    var dmx = e.clientX - dragStart.mx, dmy = e.clientY - dragStart.my;
+    var startWP = new THREE.Vector3(sp.x, sp.y, sp.z);
+    var groupIds = selectedGroup.map(function(g){ return g.id; });
 
-    var startRay = new THREE.Raycaster();
-    startRay.setFromCamera(new THREE.Vector2(
-      ((dragStart.mx - r0.left) / r0.width)  *  2 - 1,
-      ((dragStart.my - r0.top)  / r0.height) * -2 + 1
-    ), camera);
-    ray.setFromCamera(new THREE.Vector2(
-      ((e.clientX - r0.left) / r0.width)  *  2 - 1,
-      ((e.clientY - r0.top)  / r0.height) * -2 + 1
-    ), camera);
-
-    var si = new THREE.Vector3(), ci = new THREE.Vector3();
-    startRay.ray.intersectPlane(plane, si);
-    ray.ray.intersectPlane(plane, ci);
-
-    if (si.lengthSq() || ci.lengthSq()) {
-      var ddx = ci.x - si.x, ddz = ci.z - si.z;
-      // Snap on primary panel, derive delta, apply to whole group
+    if (e.shiftKey) {
+      // ── Shift: vertical (Y) movement ────────────────────────
+      var ddy = _axisScreenProject(dmx, dmy, new THREE.Vector3(0,1,0), startWP, r0);
+      var fdy = Math.round(ddy);
+      groupStart.forEach(function(gs) {
+        var ny = Math.max(Math.round(gs.panel.h/2), Math.round(gs.y + fdy));
+        gs.panel.y = ny;
+        syncPos(gs.panel);
+      });
+      refreshHandlePos(); showProps(selected); refreshOverall();
+    } else {
+      // ── XZ movement (works from any camera angle) ────────────
+      var ddx = _axisScreenProject(dmx, dmy, new THREE.Vector3(1,0,0), startWP, r0);
+      var ddz = _axisScreenProject(dmx, dmy, new THREE.Vector3(0,0,1), startWP, r0);
       var nx = Math.round(sp.x + ddx), nz = Math.round(sp.z + ddz);
       if (_altDown) {
         var sn = magnetSnapPos(p, nx, sp.y, nz); nx=sn[0]; nz=sn[1];
@@ -4024,8 +4027,6 @@ document.addEventListener('mousemove', function(e) {
       }
       var fdx = nx - sp.x, fdz = nz - sp.z;
 
-      // Collision resolution: try full move, then slide along each axis, then stop
-      var groupIds = selectedGroup.map(function(g){ return g.id; });
       function grpOK(dx, dz) {
         return !groupStart.some(function(gs) {
           return wouldCollide(gs.panel, Math.round(gs.x+dx), gs.panel.y,
@@ -4045,15 +4046,12 @@ document.addEventListener('mousemove', function(e) {
           else { fdx = 0; fdz = 0; }
         }
       }
-
       groupStart.forEach(function(gs) {
         gs.panel.x = snapToGrid(gs.x + fdx);
         gs.panel.z = snapToGrid(gs.z + fdz);
         syncPos(gs.panel);
       });
-      refreshHandlePos();
-      showProps(selected);
-      refreshOverall();
+      refreshHandlePos(); showProps(selected); refreshOverall();
     }
     return;
   }
@@ -4244,6 +4242,20 @@ function wouldCollide(panel, nx, ny, nz, nw, nh, nd, excludeIds) {
            Math.abs(ny - o.y) < pe.hh + oe.hh - eps - yc &&
            Math.abs(nz - o.z) < pe.hd + oe.hd - eps - zc;
   });
+}
+
+// Projects mouse pixel delta onto a world axis direction, returns world-unit movement.
+// Works at any camera angle — no ray-plane intersection needed.
+function _axisScreenProject(dmx, dmy, worldAxis, worldPos, rect) {
+  var REF = 200; // reference length in world mm
+  var sp0 = worldPos.clone().project(camera);
+  var sp1 = worldPos.clone().add(worldAxis.clone().multiplyScalar(REF)).project(camera);
+  var sdx = sp1.x - sp0.x, sdy = sp1.y - sp0.y;
+  var slen2 = sdx*sdx + sdy*sdy;
+  if (slen2 < 1e-8) return 0; // axis points straight at camera
+  // Mouse delta in NDC (flip Y: screen-down = NDC-negative)
+  var mdx = dmx / rect.width * 2, mdy = -dmy / rect.height * 2;
+  return (mdx*sdx + mdy*sdy) / slen2 * REF;
 }
 
 function flashSnap(label) {
