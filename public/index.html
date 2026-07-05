@@ -1213,6 +1213,11 @@ var hoveredHandle = null;
 var snapTimer;
 var lastDimMs     = 0;
 var cameraMoving  = false;
+// Bumped whenever panel geometry/position/set changes (buildMesh, syncPos, removeMesh).
+// Used to invalidate the updateDims() and explode-offset caches cheaply.
+var _sceneRev     = 0;
+// Reusable scratch vectors for updateDims() to avoid per-frame allocations.
+var _sv1 = null, _sv2 = null, _sv3 = null, _svTop = null, _svFront = null, _svTmp = null;
 
 var GROUP_PALETTE = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
 function groupColor(gid) { return GROUP_PALETTE[(gid - 1) % GROUP_PALETTE.length]; }
@@ -2826,14 +2831,49 @@ function buildMesh(p) {
 
   buildMitreLines(p);
   buildJointMarkers(p);
+  _sceneRev++;
+}
+
+// Dispose an object's material(s) plus any texture maps. Handles both a single
+// material and a material array. buildMesh/rebuildSelBox/buildMitreLines create
+// FRESH materials on every rebuild, so these are safe (and necessary) to dispose.
+function _disposeMaterial(mat) {
+  if (!mat) return;
+  var list = Array.isArray(mat) ? mat : [mat];
+  list.forEach(function (m) {
+    if (!m) return;
+    if (m.map)          m.map.dispose();
+    if (m.normalMap)    m.normalMap.dispose();
+    if (m.roughnessMap) m.roughnessMap.dispose();
+    if (m.metalnessMap) m.metalnessMap.dispose();
+    m.dispose();
+  });
 }
 
 function removeMesh(p) {
-  if (p.mesh)   { scene.remove(p.mesh);   p.mesh.geometry.dispose();   p.mesh   = null; }
-  if (p.edges)  { scene.remove(p.edges);  p.edges.geometry.dispose();  p.edges  = null; }
-  if (p.selBox) { scene.remove(p.selBox); p.selBox.geometry.dispose(); p.selBox = null; }
-  if (p.mitreLines) { p.mitreLines.forEach(function(l){ scene.remove(l); l.geometry.dispose(); }); p.mitreLines = []; }
-  if (p.jointMarkers) { p.jointMarkers.forEach(function(m){ scene.remove(m); if (m.geometry) m.geometry.dispose(); }); p.jointMarkers = []; }
+  if (p.mesh)   { scene.remove(p.mesh);   p.mesh.geometry.dispose();   _disposeMaterial(p.mesh.material);   p.mesh   = null; }
+  if (p.edges)  { scene.remove(p.edges);  p.edges.geometry.dispose();  _disposeMaterial(p.edges.material);  p.edges  = null; }
+  if (p.selBox) { scene.remove(p.selBox); p.selBox.geometry.dispose(); _disposeMaterial(p.selBox.material); p.selBox = null; }
+  // mitreLines all share ONE material (see buildMitreLines) — dispose it once.
+  if (p.mitreLines) {
+    var mlMat = p.mitreLines.length ? p.mitreLines[0].material : null;
+    p.mitreLines.forEach(function(l){ scene.remove(l); l.geometry.dispose(); });
+    _disposeMaterial(mlMat);
+    p.mitreLines = [];
+  }
+  // jointMarkers share at most two materials (dowelMat/pocketMat, per buildJointMarkers) —
+  // collect unique materials and dispose each once so we don't double-dispose.
+  if (p.jointMarkers) {
+    var jmMats = [];
+    p.jointMarkers.forEach(function(m){
+      scene.remove(m);
+      if (m.geometry) m.geometry.dispose();
+      if (m.material && jmMats.indexOf(m.material) === -1) jmMats.push(m.material);
+    });
+    jmMats.forEach(_disposeMaterial);
+    p.jointMarkers = [];
+  }
+  _sceneRev++;
 }
 
 function syncPos(p) {
@@ -2843,6 +2883,7 @@ function syncPos(p) {
   if (p.selBox) { p.selBox.position.set(p.x,p.y,p.z); p.selBox.rotation.set(rx,ry,rz); }
   if (p.mitreLines) p.mitreLines.forEach(function(l){ l.position.set(p.x,p.y,p.z); l.rotation.set(rx,ry,rz); });
   if (p.jointMarkers) p.jointMarkers.forEach(function(m){ m.position.set(p.x,p.y,p.z); m.rotation.set(rx,ry,rz); });
+  _sceneRev++;
 }
 
 function buildMitreLines(p) {
@@ -3480,7 +3521,15 @@ function buildHardwareMesh(hw) {
 
 function removeHardwareMesh(hw) {
   if (hw.mesh) {
-    hw.mesh.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+    // _hwMaterial() builds a FRESH material per buildHardwareMesh call and shares
+    // that ONE material across all sub-meshes of this group (see buildHardwareMesh).
+    // Dispose geometry per sub-mesh, and the shared material(s) once each.
+    var hwMats = [];
+    hw.mesh.traverse(function (o) {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material && hwMats.indexOf(o.material) === -1) hwMats.push(o.material);
+    });
+    hwMats.forEach(_disposeMaterial);
     scene.remove(hw.mesh);
     hw.mesh = null;
   }
@@ -4685,11 +4734,41 @@ function drawDimLine(v1, v2, label, color) {
   dimSvg.appendChild(txt);
 }
 
+// Cheap change-signature so the animate() loop can skip the full SVG/DOM rebuild
+// when nothing that affects the dimension overlay has changed. Captures camera
+// pose, panel-geometry revision, visibility toggles, selection, measurement state,
+// explode progress and canvas size — i.e. every input updateDims() reads.
+var _dimsSig = null;
+// Instrumentation counters (harmless; used by perf verification).
+var _dimsCalls = 0, _dimsRebuilds = 0;
+function _dimsSignature() {
+  var cp = camera.position, cq = camera.quaternion;
+  return cp.x.toFixed(2)+','+cp.y.toFixed(2)+','+cp.z.toFixed(2)+'|'
+       + cq.x.toFixed(4)+','+cq.y.toFixed(4)+','+cq.z.toFixed(4)+','+cq.w.toFixed(4)+'|'
+       + _sceneRev+'|'
+       + (dimsEnabled?1:0)+(_showLabels?1:0)+'|'
+       + (selected ? selected.id : '-')+'|'
+       + measurements.length+'|'+(_measureA?1:0)+'|'
+       + _explode.toFixed(3)+'|'
+       + _unit+'|'
+       + canvas.clientWidth+'x'+canvas.clientHeight;
+}
+
 function updateDims() {
+  _dimsCalls++;
+  var sig = _dimsSignature();
+  if (sig === _dimsSig) return;   // nothing changed since last rebuild → skip DOM work
+  _dimsSig = sig;
+  _dimsRebuilds++;
+  // Lazily init reusable scratch vectors (THREE is available by first call).
+  if (!_sv1) {
+    _sv1 = new THREE.Vector3(); _sv2 = new THREE.Vector3(); _sv3 = new THREE.Vector3();
+    _svTop = new THREE.Vector3(); _svFront = new THREE.Vector3(); _svTmp = new THREE.Vector3();
+  }
   clearDims();
   // Persistent measurement annotations (always drawn, even with dims off)
   measurements.forEach(function (m) {
-    var a = new THREE.Vector3(m.ax, m.ay, m.az), b = new THREE.Vector3(m.bx, m.by, m.bz);
+    var a = _sv1.set(m.ax, m.ay, m.az), b = _sv2.set(m.bx, m.by, m.bz);
     drawDimLine(a, b, fmtLenLabel(a.distanceTo(b)), '#ffcc00');
   });
   // Part-number badges (C5)
@@ -4707,17 +4786,17 @@ function updateDims() {
   var bb = furnitureBBox();
   var minX=bb.minX,maxX=bb.maxX,minY=bb.minY,maxY=bb.maxY,minZ=bb.minZ,maxZ=bb.maxZ;
   var OF=40;
-  drawDimLine(new THREE.Vector3(minX,minY-OF,maxZ), new THREE.Vector3(maxX,minY-OF,maxZ), fmtLenLabel(maxX-minX));
-  drawDimLine(new THREE.Vector3(maxX+OF,minY,maxZ), new THREE.Vector3(maxX+OF,maxY,maxZ), fmtLenLabel(maxY-minY));
-  drawDimLine(new THREE.Vector3(maxX+OF*2,minY-OF,minZ), new THREE.Vector3(maxX+OF*2,minY-OF,maxZ), fmtLenLabel(maxZ-minZ));
+  drawDimLine(_sv1.set(minX,minY-OF,maxZ),      _sv2.set(maxX,minY-OF,maxZ),      fmtLenLabel(maxX-minX));
+  drawDimLine(_sv1.set(maxX+OF,minY,maxZ),      _sv2.set(maxX+OF,maxY,maxZ),      fmtLenLabel(maxY-minY));
+  drawDimLine(_sv1.set(maxX+OF*2,minY-OF,minZ), _sv2.set(maxX+OF*2,minY-OF,maxZ), fmtLenLabel(maxZ-minZ));
   if (selected) {
     var p = selected;
     var euler = new THREE.Euler((p.rx||0)*Math.PI/180, (p.ry||0)*Math.PI/180, (p.rz||0)*Math.PI/180, 'XYZ');
-    var wHalf = new THREE.Vector3(p.w/2, 0, 0).applyEuler(euler);
-    var hHalf = new THREE.Vector3(0, p.h/2, 0).applyEuler(euler);
-    var dHalf = new THREE.Vector3(0, 0, p.d/2).applyEuler(euler);
-    var top = new THREE.Vector3(p.x, p.y, p.z).add(hHalf);
-    var dFront = new THREE.Vector3(p.x, p.y, p.z).add(dHalf);
+    var wHalf = _sv1.set(p.w/2, 0, 0).applyEuler(euler);
+    var hHalf = _sv2.set(0, p.h/2, 0).applyEuler(euler);
+    var dHalf = _sv3.set(0, 0, p.d/2).applyEuler(euler);
+    var top    = _svTop.set(p.x, p.y, p.z).add(hHalf);
+    var dFront = _svFront.set(p.x, p.y, p.z).add(dHalf);
     drawDimLine(
       top.clone().sub(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
       top.clone().add(wHalf).add(new THREE.Vector3(0, OF*0.7, 0)),
@@ -5876,18 +5955,17 @@ function _overlapPerp(a, b, perp) {
   });
 }
 
-function tickExplode(dt) {
-  if (_explode !== _explodeTarget) {
-    var dir = _explodeTarget > _explode ? 1 : -1;
-    _explode += dir * dt * 1.6;
-    if ((dir > 0 && _explode >= _explodeTarget) || (dir < 0 && _explode <= _explodeTarget)) _explode = _explodeTarget;
-  }
-  if (_explode <= 0.0001) {
-    if (_explodeActive) { panels.forEach(function (p) { syncPos(p); }); _explodeActive = false; }
-    return;
-  }
-  if (!panels.length) return;
-  _explodeActive = true;
+// Cache of fully-exploded per-panel offsets. Recomputed only when the panel set /
+// geometry changes (_sceneRev) or the explode target flips — NOT every frame.
+var _explodeOffsets = {};   // panel.id -> [dx,dy,dz] fully-exploded displacement
+var _explodeCacheKey = null;
+var _explodeBp = null;      // reusable scratch position
+
+// Heavy computation: bucket panels by thickness axis, group overlapping stacks,
+// and derive each panel's fully-exploded displacement. Result cached by caller.
+function _computeExplodeOffsets() {
+  var off = {};
+  if (!panels.length) return off;
 
   var bb = furnitureBBox();
   var maxDim = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ);
@@ -5897,8 +5975,6 @@ function tickExplode(dt) {
   // Bucket panels by the world axis of their thickness (sides→X, shelves→Y, backs→Z).
   var buckets = { 0:[], 1:[], 2:[] };
   panels.forEach(function (p) { buckets[_panelNormalAxis(p)].push(p); });
-
-  var off = {}; // panel.id -> [dx,dy,dz] fully-exploded displacement
 
   [0,1,2].forEach(function (axis) {
     var list = buckets[axis];
@@ -5940,12 +6016,39 @@ function tickExplode(dt) {
       });
     });
   });
+  return off;
+}
 
+function tickExplode(dt) {
+  if (_explode !== _explodeTarget) {
+    var dir = _explodeTarget > _explode ? 1 : -1;
+    _explode += dir * dt * 1.6;
+    if ((dir > 0 && _explode >= _explodeTarget) || (dir < 0 && _explode <= _explodeTarget)) _explode = _explodeTarget;
+  }
+  if (_explode <= 0.0001) {
+    if (_explodeActive) { panels.forEach(function (p) { syncPos(p); }); _explodeActive = false; _explodeCacheKey = null; }
+    return;
+  }
+  if (!panels.length) return;
+  _explodeActive = true;
+
+  // Recompute offsets ONLY when the panel set/geometry or explode target changes.
+  var key = _explodeTarget + '|' + _sceneRev;
+  if (key !== _explodeCacheKey) {
+    _explodeOffsets = _computeExplodeOffsets();
+    _explodeCacheKey = key;
+  }
+  var off = _explodeOffsets;
+  if (!_explodeBp) _explodeBp = new THREE.Vector3();
+
+  // Per frame: only lerp each panel's meshes by the current _explode factor.
   panels.forEach(function (p) {
     if (!p.mesh) return;
     var o = off[p.id] || [0,0,0];
-    var bp = new THREE.Vector3(p.x + o[0]*_explode, p.y + o[1]*_explode, p.z + o[2]*_explode);
-    [p.mesh, p.edges, p.selBox].forEach(function (m) { if (m) m.position.copy(bp); });
+    var bp = _explodeBp.set(p.x + o[0]*_explode, p.y + o[1]*_explode, p.z + o[2]*_explode);
+    if (p.mesh)   p.mesh.position.copy(bp);
+    if (p.edges)  p.edges.position.copy(bp);
+    if (p.selBox) p.selBox.position.copy(bp);
     if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(bp); });
     if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(bp); });
   });
@@ -6034,8 +6137,8 @@ function animate() {
     updateDims();
     cameraMoving = false;
   } else {
-    var now = Date.now();
-    if (now - lastDimMs > 100) { updateDims(); lastDimMs = now; }
+    var nowMs = Date.now();
+    if (nowMs - lastDimMs > 100) { updateDims(); lastDimMs = nowMs; }
   }
 }
 
