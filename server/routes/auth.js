@@ -8,6 +8,10 @@ const db = require('../db');
 const { sign } = require('../utils/jwt');
 const { sendOTP } = require('../utils/email');
 const { requireAuth } = require('../middleware/auth');
+// Single source of truth for admin identity lives in the admin route module.
+// admin.js only requires ../db and ../middleware/auth (not this file), so this
+// require does not create a cycle.
+const { ADMIN_EMAIL } = require('./admin');
 
 const router = express.Router();
 
@@ -24,7 +28,7 @@ function dbGuard(req, res, next) {
 }
 
 function publicUser(row) {
-  return { id: row.id, email: row.email, name: row.name || '' };
+  return { id: row.id, email: row.email, name: row.name || '', isAdmin: row.email === ADMIN_EMAIL };
 }
 
 function isEmail(s) {

@@ -83,3 +83,4 @@ router.put('/flags/:key', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.ADMIN_EMAIL = ADMIN_EMAIL;

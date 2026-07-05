@@ -84,6 +84,24 @@ tr:hover td{background:rgba(255,255,255,.02);}
 #toast.show{transform:translateY(0);opacity:1;}
 #toast.ok{border-color:var(--green);color:var(--green);}
 #toast.err{border-color:var(--red);color:var(--red);}
+
+/* ── Table scroll wrapper (keeps wide tables from overflowing on mobile) ── */
+.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-wrap table{min-width:520px;}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  nav{padding:12px 16px;gap:10px;flex-wrap:wrap;}
+  .nav-right{gap:8px;}
+  main{padding:24px 14px;}
+  .page-sub{margin-bottom:24px;}
+  .section-head{padding:14px 16px;}
+  .stats-row{flex-wrap:wrap;gap:14px;padding:16px;}
+  .stat{flex:1;min-width:80px;}
+  .stat-val{font-size:22px;}
+  th{padding:8px 12px;}
+  td{padding:10px 12px;}
+}
 </style>
 </head>
 <body>
@@ -116,10 +134,12 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <h2>Feature Flags</h2>
       <span class="count" id="flags-count">—</span>
     </div>
-    <table>
-      <thead><tr><th>Feature</th><th>Description</th><th style="text-align:center;">Enabled</th></tr></thead>
-      <tbody id="flags-tbody"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Feature</th><th>Description</th><th style="text-align:center;">Enabled</th></tr></thead>
+        <tbody id="flags-tbody"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Users -->
@@ -129,10 +149,12 @@ tr:hover td{background:rgba(255,255,255,.02);}
       <span class="count" id="users-count">—</span>
     </div>
     <div class="stats-row" id="stats-row"></div>
-    <table>
-      <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-      <tbody id="users-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+        <tbody id="users-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </main>
 
@@ -141,7 +163,7 @@ tr:hover td{background:rgba(255,255,255,.02);}
 <script>
 'use strict';
 
-var ADMIN_EMAIL = '25nikael@gmail.com';
+var _adminEmail = '';   // the signed-in admin's own email (from /auth/me)
 var _users = [];
 var _flags = [];
 
@@ -186,7 +208,6 @@ function doLogout() {
 // ── Feature flags ────────────────────────────────────────────
 var FLAG_LABELS = {
   ai_design:       'AI Design Assistant',
-  image_to_design: 'AI Design from Image',
   public_gallery:  'Public Gallery',
   version_history: 'Version History',
   pdf_export:      'PDF / Cut Sheet Export',
@@ -194,7 +215,6 @@ var FLAG_LABELS = {
 };
 var FLAG_DESCS = {
   ai_design:       'AI-powered furniture design from text prompts',
-  image_to_design: 'Generate designs from uploaded photos or sketches',
   public_gallery:  'Browse and discover designs shared by other users',
   version_history: 'Save and restore previous project snapshots',
   pdf_export:      'Export cut sheets, parts lists and board layouts as PDF',
@@ -251,7 +271,7 @@ function renderUsers() {
   var tbody = document.getElementById('users-tbody');
   if (!_users.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No users yet.</td></tr>'; return; }
   tbody.innerHTML = _users.map(function(u) {
-    var isAdmin = u.email === ADMIN_EMAIL;
+    var isAdmin = u.email === _adminEmail;
     var statusBadge = isAdmin
       ? '<span class="badge badge-admin">Admin</span>'
       : u.disabled
@@ -314,13 +334,14 @@ async function loadUsers() {
   }
   try {
     var me = await api('/auth/me');
-    if (me.user.email !== ADMIN_EMAIL) {
+    if (!me.user.isAdmin) {
       document.getElementById('gate').innerHTML =
         '<div class="gate-icon">🚫</div>' +
         '<div class="gate-title">Access Denied</div>' +
         '<div class="gate-sub">This portal is restricted to the site administrator.</div>';
       return;
     }
+    _adminEmail = me.user.email;
     document.getElementById('nav-email').textContent = me.user.email;
     // Load data in parallel
     await Promise.all([loadFlags(), loadUsers()]);
