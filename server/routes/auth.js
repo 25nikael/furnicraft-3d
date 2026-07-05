@@ -127,6 +127,10 @@ router.post('/login', dbGuard, async (req, res) => {
     }
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+    // Disabled accounts cannot sign in (admin can toggle users.disabled).
+    if (user.disabled) {
+      return res.status(403).json({ error: 'This account has been disabled. Contact support if you believe this is a mistake.' });
+    }
 
     res.json({ token: sign(user), user: publicUser(user) });
   } catch (err) {
@@ -161,6 +165,10 @@ router.post('/google', dbGuard, async (req, res) => {
       user = inserted.rows[0];
     } else {
       user = result.rows[0];
+      // Disabled accounts cannot sign in, even via Google.
+      if (user.disabled) {
+        return res.status(403).json({ error: 'This account has been disabled. Contact support if you believe this is a mistake.' });
+      }
       // Backfill google_id if this email registered with a password first
       if (!user.google_id) {
         await db.query('UPDATE users SET google_id = $1 WHERE id = $2', [payload.sub, user.id]);
@@ -178,6 +186,11 @@ router.get('/me', requireAuth, async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (result.rowCount === 0) return res.status(401).json({ error: 'Account no longer exists.' });
+    // Kill sessions for a disabled account on the next app load (client clears the
+    // token on 401). We intentionally do NOT check this in requireAuth (see below).
+    if (result.rows[0].disabled) {
+      return res.status(401).json({ error: 'This account has been disabled. Contact support if you believe this is a mistake.' });
+    }
     res.json({ user: publicUser(result.rows[0]) });
   } catch (err) {
     console.error('[auth/me]', err);
