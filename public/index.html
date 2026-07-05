@@ -11,7 +11,7 @@
   --teal-dim:rgba(10,186,181,.14);--teal-dim2:rgba(10,186,181,.22);
   --bg0:#0d0d0d;--bg1:#141414;--bg2:#1a1a1a;--bg3:#222;--bg4:#2a2a2a;
   --bd:#2d2d2d;--bd2:#383838;
-  --txt:#e0e0e0;--txt2:#aaa;--txt3:#666;
+  --txt:#e0e0e0;--txt2:#aaa;--txt3:#8f8f8f;
 }
 /* ── Light theme overrides ─────────────────────────── */
 :root.theme-light{
@@ -19,7 +19,7 @@
   --teal-dim:rgba(42,125,111,.10);--teal-dim2:rgba(42,125,111,.20);
   --bg0:#f5f0e8;--bg1:#faf6ee;--bg2:#f0ead8;--bg3:#e8dfc8;--bg4:#ddd4bc;
   --bd:#d4c9b0;--bd2:#c4b898;
-  --txt:#2c2416;--txt2:#6b5a3e;--txt3:#a08060;
+  --txt:#2c2416;--txt2:#6b5a3e;--txt3:#8a6f4a;
 }
 /* ── Settings dropdown ─────────────────────────────── */
 #settings-wrap{position:relative;}
@@ -513,7 +513,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <div style="font-size:11px;color:#666;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Save current design as</div>
         <div class="proj-save-row">
           <input type="text" id="proj-save-name" placeholder="Project name…">
-          <button class="tbtn prim" onclick="saveProjectAs()">Save</button>
+          <button class="tbtn prim" id="proj-save-btn" onclick="saveProjectAs()">Save</button>
         </div>
         <div id="proj-save-err" class="auth-err" style="margin-top:6px;"></div>
       </div>
@@ -804,7 +804,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
         <li>Click a panel to select; click again and drag to move it.</li>
         <li>Drag the blue handles to resize. Press <strong>?</strong> any time for shortcuts.</li>
         <li>Use <strong>📐 Templates</strong> or <strong>✦ AI Design</strong> to start quickly.</li>
-        <li>Sign in to save projects to your account.</li>
+        <li id="welcome-save-tip">Sign in to save projects to your account.</li>
       </ul>
       <div class="prop-title">Start from a sample</div>
       <div class="welcome-grid">
@@ -1171,7 +1171,21 @@ function uiConfirm(message, opts) {
   });
 }
 
+// ── HTML escaping (XSS guard for user-controlled strings) ─────
+// Route EVERY user string (panel/hardware/project/group names, gallery
+// entries, thumb data URLs) through this before innerHTML interpolation.
+// Safe for both text and attribute-value contexts.
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── State ──────────────────────────────────────────────────────
+var _dirty        = false; // unsaved-changes flag (set in saveUndo, cleared on save/load/new)
 var panels        = [];
 var selected      = null;
 var undoStack     = [];
@@ -1227,11 +1241,27 @@ async function api(path, opts) {
   var data = null;
   try { data = await resp.json(); } catch (e) { data = {}; }
   if (!resp.ok) {
+    // Mid-session token expiry: recover in place without losing the in-memory design.
+    if (resp.status === 401 && tok && !opts._noAuthRecover) _handleSessionExpired();
     var err = new Error(data.error || ('Request failed (' + resp.status + ')'));
     err.status = resp.status;
     throw err;
   }
   return data;
+}
+
+// Called when a request 401s with a token present (session expired mid-use).
+// Clears auth state and reopens the sign-in modal; the current design stays in memory.
+var _sessionExpiredShown = false;
+function _handleSessionExpired() {
+  _clearToken();
+  _currentUser   = null;
+  if (typeof _updateTopbar === 'function') _updateTopbar();
+  if (!_sessionExpiredShown) {
+    _sessionExpiredShown = true;
+    uiToast('Your session expired — please sign in again.', 'error');
+    if (typeof openAuth === 'function') openAuth();
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -1553,13 +1583,17 @@ async function doLogin() {
 function _applyAuth(res) {
   _setToken(res.token);
   _currentUser = res.user;   // { id, email, name }
+  _sessionExpiredShown = false;  // fresh session — allow a future expiry to re-notify
   _updateTopbar();
 }
 
 async function logoutUser() {
-  if (!(await uiConfirm('Sign out of ' + _currentUser.email + '?', { title: 'Sign out', okLabel: 'Sign out' }))) return;
+  var msg = 'Sign out of ' + _currentUser.email + '?';
+  if (_dirty && panels.length) msg += ' You have unsaved changes that will be lost.';
+  if (!(await uiConfirm(msg, { title: 'Sign out', okLabel: 'Sign out' }))) return;
   _currentUser   = null;
   _currentProjId = null;
+  _dirty         = false;   // leaving the app; don't warn on the navigation below
   _clearToken();
   window.location.href = '/landing';
 }
@@ -1790,17 +1824,30 @@ function _loadProjectState(state) {
   doSelect(null);
   refreshUI();
   updateDims();
+  _dirty = false;   // a freshly loaded/restored design starts clean
 }
 
+var _saving = false;   // guards against double-submit while a save is in flight
 async function saveCurrentProject() {
   if (!_currentUser)   { openAuth(); return; }
   if (!_currentProjId) { openProjectManager(); return; }
+  if (_saving) return;
+  _saving = true;
+  var btn = document.getElementById('tb-save');
+  var origLbl = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     await api('/projects/' + _currentProjId, { method:'PUT', body:{ state:_projectState(), thumb:_captureThumb() } });
+    _dirty = false;
+    if (btn) btn.textContent = origLbl;   // restore before _flashSave swaps in "Saved ✓"
     _flashSave();
   } catch(e) {
+    if (btn) btn.textContent = origLbl;
     if (e.status === 404) { _currentProjId = null; openProjectManager(); }
     else uiToast('Could not save your project. ' + e.message, 'error');
+  } finally {
+    _saving = false;
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1882,8 +1929,8 @@ async function openGallery() {
     var res = await api('/public/gallery');
     if (!res.projects.length) { body.innerHTML = '<div class="proj-empty">No public designs yet. Publish one via Share!</div>'; return; }
     body.innerHTML = '<div class="welcome-grid" style="grid-template-columns:repeat(3,1fr);">' + res.projects.map(function (p) {
-      var th = p.thumb ? '<img src="' + p.thumb + '" style="width:100%;height:60px;object-fit:cover;border-radius:6px 6px 0 0;">' : '<div style="height:60px;background:var(--bg3);border-radius:6px 6px 0 0;"></div>';
-      return '<button class="hw-cat-btn" style="padding:0;overflow:hidden;" onclick="openPublic(\'' + p.token + '\')">' + th + '<span class="hw-cat-label" style="padding:6px;">' + p.name + '</span></button>';
+      var th = p.thumb ? '<img src="' + escHtml(p.thumb) + '" style="width:100%;height:60px;object-fit:cover;border-radius:6px 6px 0 0;">' : '<div style="height:60px;background:var(--bg3);border-radius:6px 6px 0 0;"></div>';
+      return '<button class="hw-cat-btn" style="padding:0;overflow:hidden;" onclick="openPublic(\'' + escHtml(p.token) + '\')">' + th + '<span class="hw-cat-label" style="padding:6px;">' + escHtml(p.name) + '</span></button>';
     }).join('') + '</div>';
   } catch (e) { body.innerHTML = '<div class="proj-empty">Could not load gallery.<br>' + e.message + '</div>'; }
 }
@@ -1926,12 +1973,13 @@ function _renderProjectList() {
     var lbl = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     var isCur = String(proj.id) === String(_currentProjId);
     var bg = isCur ? 'background:var(--teal-dim);' : '';
-    var thumb = proj.thumb ? '<img src="'+proj.thumb+'" alt="" style="width:54px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--bd2);flex:0 0 auto;margin-right:8px;">'
+    var thumb = proj.thumb ? '<img src="'+escHtml(proj.thumb)+'" alt="" style="width:54px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--bd2);flex:0 0 auto;margin-right:8px;">'
                            : '<div style="width:54px;height:34px;border-radius:4px;background:var(--bg3);flex:0 0 auto;margin-right:8px;"></div>';
+    var pnameEsc = escHtml(proj.name);
     return '<div class="proj-item" style="display:flex;align-items:center;' + bg + '">'
       + thumb
       + '<div style="flex:1;min-width:0;">'
-      + '<div class="proj-item-name" title="'+proj.name+'">'+proj.name+(isCur?' ●':'')+'</div>'
+      + '<div class="proj-item-name" title="'+pnameEsc+'">'+pnameEsc+(isCur?' ●':'')+'</div>'
       + '<div class="proj-item-date">'+lbl+'</div></div>'
       + '<div class="proj-item-btns">'
       + '<button class="pi-btn" onclick="loadProject(\''+proj.id+'\')">Open</button>'
@@ -1946,7 +1994,12 @@ async function saveProjectAs() {
   var name = document.getElementById('proj-save-name').value.trim();
   var err  = document.getElementById('proj-save-err');
   if (!name) { err.textContent = 'Enter a project name.'; return; }
+  if (_saving) return;
+  _saving = true;
   err.textContent = '';
+  var btn = document.getElementById('proj-save-btn');
+  var origLbl = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   try {
     var thumb = _captureThumb();
     if (_currentProjId) {
@@ -1956,10 +2009,14 @@ async function saveProjectAs() {
       _currentProjId = res.project.id;
     }
     document.getElementById('topbar-proj-name').textContent = name;
+    _dirty = false;
     await _refreshProjectList();
     _flashSave();
   } catch(e) {
     err.textContent = e.message;
+  } finally {
+    _saving = false;
+    if (btn) { btn.disabled = false; btn.textContent = origLbl; }
   }
 }
 
@@ -2002,7 +2059,7 @@ async function deleteProject(projId) {
   // Auth gate — redirect to landing if no valid session
   if (_getToken()) {
     try {
-      var res = await api('/auth/me');
+      var res = await api('/auth/me', { _noAuthRecover: true });
       _currentUser = res.user;
     } catch(e) {
       _clearToken();
@@ -2150,8 +2207,10 @@ scene.add(_gridHelper);
 // Apply saved theme now that scene exists
 _applyPrefs();
 
-// Axis lines
-[[500,0,0,0xff4444],[0,500,0,0x44cc44],[0,0,500,0x4488ff]].forEach(function(a) {
+// Ground-plane axis lines (X = red, Z = blue). The vertical Y axis is intentionally
+// omitted: it drew a thin line straight up through the model from the origin, which
+// testers saw protruding above the cabinet on first load.
+[[500,0,0,0xff4444],[0,0,500,0x4488ff]].forEach(function(a) {
   var g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(a[0],a[1],a[2])]);
   scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: a[3] })));
 });
@@ -2351,6 +2410,7 @@ function saveUndo() {
   undoStack.push(_snapshot());
   if (undoStack.length > MAX_UNDO) undoStack.shift();
   redoStack = [];                 // a fresh action invalidates the redo branch
+  _dirty = true;                  // any mutation marks the design unsaved
   _refreshHistoryPanel();
 }
 
@@ -3134,6 +3194,8 @@ function _applyPanelSet(name, list, replace, hwList) {
   (hwList || []).forEach(function (hd) { var hw = mkHardware(hd); hardware.push(hw); buildHardwareMesh(hw); });
   refreshUI(); fitCamera();
   document.getElementById('topbar-proj-name').textContent = name;
+  // A full replace (template / sample) establishes a fresh baseline.
+  if (replace) _dirty = false;
 }
 
 function _tplDefaults() {
@@ -3156,7 +3218,14 @@ async function applyTemplate(replace) {
 }
 
 // ── Onboarding / welcome (J-series J2) ──────────────────
-function openWelcome()  { document.getElementById('welcome-modal').classList.add('active'); }
+function openWelcome()  {
+  // Keep the save tip accurate for the current auth state.
+  var tip = document.getElementById('welcome-save-tip');
+  if (tip) tip.textContent = _currentUser
+    ? 'Use Save (Ctrl+S) to store projects to your account.'
+    : 'Sign in to save projects to your account.';
+  document.getElementById('welcome-modal').classList.add('active');
+}
 function closeWelcome() {
   var dn = document.getElementById('welcome-dontshow');
   if (dn && dn.checked) localStorage.setItem('fc3d_seen', '1');
@@ -3456,8 +3525,9 @@ function refreshHwList() {
     var groupBadge = hw.groupId
       ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+groupColor(_rootGroup(hw.groupId))+';margin-right:4px;flex-shrink:0;" title="Grouped with panels (Group '+_rootGroup(hw.groupId)+')"></span>'
       : '';
+    var hwNameEsc = escHtml(hw.name);
     return '<li class="comp-item' + sel + '" style="justify-content:space-between;">'
-      + '<span class="comp-name" title="' + hw.name + '" onclick="selectHardwareById(\'' + hw.id + '\')">' + groupBadge + (HW_DEFS[hw.type] || {}).icon + ' ' + hw.name + '</span>'
+      + '<span class="comp-name" title="' + hwNameEsc + '" onclick="selectHardwareById(\'' + hw.id + '\')">' + groupBadge + (HW_DEFS[hw.type] || {}).icon + ' ' + hwNameEsc + '</span>'
       + '<button class="pi-btn del" onclick="event.stopPropagation();deleteHardware(\'' + hw.id + '\')" style="flex:0 0 auto;">✕</button>'
       + '</li>';
   }).join('');
@@ -4899,7 +4969,7 @@ function refreshCompList() {
       : '<span style="display:inline-block;width:8px;height:8px;margin-right:4px;flex-shrink:0;"></span>';
     li.innerHTML = groupBadge
                  + '<div class="comp-dot" style="background:'+p.color+';border:1.5px solid '+p.edgeColor+';"></div>'
-                 + '<span class="comp-name" title="Double-click to rename">'+p.name+'</span>';
+                 + '<span class="comp-name" title="Double-click to rename">'+escHtml(p.name)+'</span>';
     li.addEventListener('click', (function(pp){ return function(e){ doSelect(pp, e.ctrlKey||e.metaKey); }; })(p));
     // Double-click on name to rename inline
     li.querySelector('.comp-name').addEventListener('dblclick', (function(pp, liEl){
@@ -5022,6 +5092,12 @@ document.addEventListener('keydown', function(e) {
     return;
   }
   if ((e.ctrlKey||e.metaKey) && (k==='y'||k==='Y')) { e.preventDefault(); if (typeof redo === 'function') redo(); return; }
+  // Ctrl/Cmd+S — save (or prompt sign-in), never the browser's save dialog
+  if ((e.ctrlKey||e.metaKey) && (k==='s'||k==='S')) {
+    e.preventDefault();
+    if (_currentUser) saveCurrentProject(); else openAuth();
+    return;
+  }
   // Arrow-key nudge of the selection (Shift = coarse)
   if (selected && (k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown')) {
     e.preventDefault();
@@ -5034,11 +5110,19 @@ document.addEventListener('keydown', function(e) {
     refreshHandlePos(); showProps(selected); refreshOverall();
     return;
   }
+  // Esc: close the topmost open modal first; otherwise deselect + close cheatsheet.
+  if (k==='Escape') {
+    if (_closeTopModal()) { e.preventDefault(); return; }
+    doSelect(null); closeCheatsheet();
+    return;
+  }
+  // The remaining single-key shortcuts must NOT fire when a command modifier is held
+  // (e.g. Ctrl+S is save, not snap; Ctrl+D is a browser bookmark, etc.).
+  if (e.ctrlKey || e.metaKey) return;
   if (k==='Delete'||k==='Backspace') { deleteSelected(); return; }
   else if (k==='d'||k==='D') duplicateSelected();
   else if (k==='g'||k==='G') groupSelected();
   else if (k==='u'||k==='U') ungroupSelected();
-  else if (k==='Escape') { doSelect(null); closeCheatsheet(); }
   else if (k==='r'||k==='R') resetCamera();
   else if (k==='f'||k==='F') fitCamera();
   else if (k==='w'||k==='W') toggleWireframe();
@@ -5053,6 +5137,59 @@ document.addEventListener('keyup', function(e) {
 // ── Cheatsheet overlay (J-series J1) ────────────────────
 function toggleCheatsheet() { document.getElementById('cheatsheet-modal').classList.toggle('active'); }
 function closeCheatsheet()  { document.getElementById('cheatsheet-modal').classList.remove('active'); }
+
+// ── Shared modal close (Esc + backdrop) ─────────────────
+// Every .overlay-modal is closable with Esc (topmost first) and by clicking the
+// backdrop. Each entry maps a modal id to a close fn that runs its own cleanup.
+// confirm-modal is intentionally excluded — uiConfirm() owns its own Esc/backdrop.
+// The auth modal is included: closing it just hides the dialog; the in-memory
+// design is untouched, so a 401-triggered auth prompt stays dismissible.
+var _MODAL_CLOSERS = {
+  'auth-modal':      closeAuth,
+  'proj-modal':      closeProjectManager,
+  'pubshare-modal':  closeShare,
+  'gallery-modal':   closeGallery,
+  'versions-modal':  closeVersions,
+  'export-modal':    closeExport,
+  'quote-modal':     closeQuote,
+  'welcome-modal':   closeWelcome,
+  'history-modal':   closeHistory,
+  'cheatsheet-modal':closeCheatsheet,
+  'gm-modal':        closeGroupManager,
+  'tpl-modal':       closeTemplates,
+  'array-modal':     closeArrayModal,
+  'hw-modal':        closeHwCatalog,
+  'ai-modal':        closeAIDesign,
+  'cs-modal':        hideCutSheet   // uses style.display, not .active
+};
+function _modalIsOpen(id) {
+  var el = document.getElementById(id);
+  if (!el) return false;
+  if (id === 'cs-modal') return el.style.display && el.style.display !== 'none';
+  return el.classList.contains('active');
+}
+// Close the topmost open modal (last in DOM order = visually on top). Returns
+// true if one was closed, so callers (Esc) can stop before deselecting.
+function _closeTopModal() {
+  var ids = Object.keys(_MODAL_CLOSERS);
+  // Walk .overlay-modal DOM order so a modal opened over another closes first.
+  var nodes = document.querySelectorAll('.overlay-modal, #cs-modal');
+  for (var i = nodes.length - 1; i >= 0; i--) {
+    var id = nodes[i].id;
+    if (_MODAL_CLOSERS[id] && _modalIsOpen(id)) { _MODAL_CLOSERS[id](); return true; }
+  }
+  return false;
+}
+// Wire backdrop mousedown on each overlay (click on the overlay itself, not its box).
+(function _wireModalBackdrops() {
+  Object.keys(_MODAL_CLOSERS).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || id === 'cs-modal') return;   // cs-modal already has its own handler
+    el.addEventListener('mousedown', function (e) {
+      if (e.target === el) _MODAL_CLOSERS[id]();
+    });
+  });
+})();
 
 // ═══════════════════════════════════════════════════════════════
 //  GROUPING
@@ -5165,7 +5302,7 @@ function renderGroupManager() {
     var depth = _groupDepth(gid), count = _groupSubtreeCount(gid);
     return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0 4px ' + (8 + depth * 16) + 'px;">'
       + '<span style="width:9px;height:9px;border-radius:50%;background:' + groupColor(gid) + ';flex:0 0 auto;"></span>'
-      + '<input value="' + String(meta.name || ('Group ' + gid)).replace(/"/g, '&quot;') + '" onchange="renameGroup(' + gid + ',this.value)" style="flex:1;min-width:0;padding:3px 6px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:12px;">'
+      + '<input value="' + escHtml(meta.name || ('Group ' + gid)) + '" onchange="renameGroup(' + gid + ',this.value)" style="flex:1;min-width:0;padding:3px 6px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:12px;">'
       + '<span style="font-size:11px;color:var(--txt3);">' + count + '</span>'
       + '<button class="pi-btn" onclick="selectAssembly(' + gid + ')">Select</button>'
       + '<button class="pi-btn del" onclick="ungroupGroup(' + gid + ')">Ungroup</button>'
@@ -5433,7 +5570,7 @@ function exportSVG() {
   var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + maxX + 'mm" height="' + maxY + 'mm" viewBox="0 0 ' + maxX + ' ' + maxY + '">';
   L.forEach(function (it, i) {
     s += '<rect x="' + it.x + '" y="' + it.y + '" width="' + it.w + '" height="' + it.h + '" fill="none" stroke="black" stroke-width="1"/>';
-    s += '<text x="' + (it.x + it.w / 2) + '" y="' + (it.y + it.h / 2) + '" font-size="' + Math.max(10, Math.min(it.w, it.h) / 8) + '" text-anchor="middle" fill="#888">#' + (i + 1) + ' ' + it.p.name + '</text>';
+    s += '<text x="' + (it.x + it.w / 2) + '" y="' + (it.y + it.h / 2) + '" font-size="' + Math.max(10, Math.min(it.w, it.h) / 8) + '" text-anchor="middle" fill="#888">#' + (i + 1) + ' ' + escHtml(it.p.name) + '</text>';
   });
   s += '</svg>';
   _downloadBlob(s, _projName() + '.svg', 'image/svg+xml');
@@ -5529,7 +5666,7 @@ function showCutSheet() {
     var mitreTxt = _jointSummary(p, true);
     var rawStyle = (fd.rawL > fd.faceL || fd.rawW > fd.faceW) ? 'font-weight:600;color:#c0392b;' : '';
     var tr = document.createElement('tr');
-    tr.innerHTML = '<td>'+(i+1)+'</td><td>'+p.name+'</td>'
+    tr.innerHTML = '<td>'+(i+1)+'</td><td>'+escHtml(p.name)+'</td>'
       +'<td>'+fmtLenLabel(fd.faceL)+'</td><td>'+fmtLenLabel(fd.faceW)+'</td><td>'+thick+'</td>'
       +'<td>'+mitreTxt+'</td>'
       +'<td style="'+rawStyle+'">'+fmtLenLabel(fd.rawL)+'</td><td style="'+rawStyle+'">'+fmtLenLabel(fd.rawW)+'</td>'
@@ -5885,8 +6022,18 @@ buildNightstand();
 _loadSharedFromHash();    // self-contained #d= link
 _loadSharedFromQuery();   // server-backed ?share= link (read-only)
 fitCamera();
+_dirty = false;           // the default/first-load design is a clean baseline
 renderer.setAnimationLoop(animate);  // XR-compatible loop (works without XR too)
 if (!localStorage.getItem('fc3d_seen')) setTimeout(openWelcome, 400);  // first-visit onboarding
+
+// ── Unsaved-changes guard (warn before leaving with unsaved work) ──
+window.addEventListener('beforeunload', function (e) {
+  if (_dirty && panels.length) {
+    e.preventDefault();
+    e.returnValue = '';   // required by some browsers to trigger the native prompt
+    return '';
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 //  CUT SHEET TABS
@@ -6004,16 +6151,17 @@ function generateAssemblySteps() {
     tags.push({ label: Math.round(p.w)+'×'+Math.round(p.h)+'×'+Math.round(p.d)+' mm', cls:'' });
 
     var title, desc;
+    var pNameEsc = escHtml(p.name);
     if (placed.length === 0) {
-      title = 'Place ' + p.name + ' as the starting piece';
-      desc  = 'Lay the <strong>' + p.name + '</strong> on a flat, level work surface. ' +
+      title = 'Place ' + pNameEsc + ' as the starting piece';
+      desc  = 'Lay the <strong>' + pNameEsc + '</strong> on a flat, level work surface. ' +
               'This is your reference piece — ensure it is square before proceeding.';
     } else {
-      var adjNames = adj.map(function(q){ return '<strong>'+q.name+'</strong>'; });
+      var adjNames = adj.map(function(q){ return '<strong>'+escHtml(q.name)+'</strong>'; });
       var dir = _directionLabel(placed, p);
       var posStr = dir ? ' (' + dir + ' the existing assembly)' : '';
-      title = 'Attach ' + p.name;
-      desc  = 'Position the <strong>' + p.name + '</strong>' + posStr + '.';
+      title = 'Attach ' + pNameEsc;
+      desc  = 'Position the <strong>' + pNameEsc + '</strong>' + posStr + '.';
       if (adjNames.length) desc += ' It joins against ' + adjNames.join(' and ') + '.';
       desc += ' Secure with glue and appropriate fasteners (pocket screws, dowels, or biscuits). Check for square before the glue sets.';
       if (mitre) desc += ' <em>This joint has a ' + (p.mitreAngle||45) + '° mitre — align the cut edges carefully before clamping.</em>';
