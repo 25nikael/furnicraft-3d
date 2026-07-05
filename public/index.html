@@ -112,8 +112,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 #shared-banner{position:absolute;top:0;left:0;right:0;display:none;align-items:center;gap:12px;background:rgba(10,186,181,.14);border-bottom:1px solid rgba(10,186,181,.5);color:var(--txt);padding:9px 14px;font-size:12.5px;z-index:22;backdrop-filter:blur(3px);}
 #shared-banner.show{display:flex;}
 #shared-banner-text{flex:1;}
-#shared-banner-signin{background:var(--teal);color:#000;border:none;border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;}
-#shared-banner-signin:hover{background:var(--teal-lt);}
+#shared-banner-signin,#shared-banner-save{background:var(--teal);color:#000;border:none;border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;}
+#shared-banner-signin:hover,#shared-banner-save:hover{background:var(--teal-lt);}
+/* Share view-lock (F2): grey out + disable mutation controls while view-only.
+   The build-tools (#left-panel) and the properties form (#prop-panel) go inert;
+   orbit/zoom, view toggles, exports, measure, cut-sheet etc. stay live. */
+body.view-only #left-panel,
+body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);}
 #shared-banner-close{background:transparent;border:none;color:var(--txt2);font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;border-radius:6px;flex-shrink:0;}
 #shared-banner-close:hover{background:rgba(255,255,255,.08);}
 #shared-banner-close:hover{color:var(--txt);}
@@ -586,6 +591,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
     <div id="shared-banner">
       <span id="shared-banner-text">Viewing a shared design — edits here won't change the original.</span>
       <button id="shared-banner-signin" onclick="openAuth()" style="display:none;">Sign in to save your own copy</button>
+      <button id="shared-banner-save" onclick="saveSharedCopy()" style="display:none;">Save a copy</button>
       <button id="shared-banner-close" onclick="dismissSharedBanner()" title="Dismiss">×</button>
     </div>
     <div id="snap-hud">⚡ Snapped</div>
@@ -1258,6 +1264,7 @@ function escHtml(s) {
 }
 
 // ── State ──────────────────────────────────────────────────────
+var _viewOnly     = false; // true while viewing a shared/gallery design (read-only until saved as own copy)
 var _dirty        = false; // unsaved-changes flag (set in saveUndo, cleared on save/load/new)
 var panels        = [];
 var selected      = null;
@@ -1327,6 +1334,15 @@ async function api(path, opts) {
       _handleSessionExpired();
       err.sessionExpired = true;
     }
+    // Account disabled mid-session: requireAuth 403s with a 'disabled' message.
+    // End the session gracefully (design stays in memory) with that message.
+    // Scoped to the disabled case so admin routes' legitimate 403s (non-admin
+    // users) still surface as normal errors instead of a forced sign-out.
+    else if (resp.status === 403 && tok && !opts._noAuthRecover
+             && /disabled/i.test(data.error || '')) {
+      _handleSessionExpired(data.error);
+      err.sessionExpired = true;
+    }
     throw err;
   }
   return data;
@@ -1335,15 +1351,37 @@ async function api(path, opts) {
 // Called when a request 401s with a token present (session expired mid-use).
 // Clears auth state and reopens the sign-in modal; the current design stays in memory.
 var _sessionExpiredShown = false;
-function _handleSessionExpired() {
+function _handleSessionExpired(msg) {
   _clearToken();
   _currentUser   = null;
   if (typeof _updateTopbar === 'function') _updateTopbar();
   if (!_sessionExpiredShown) {
     _sessionExpiredShown = true;
-    uiToast('Your session expired — please sign in again.', 'error');
+    uiToast(msg || 'Your session expired — please sign in again.', 'error');
     if (typeof openAuth === 'function') openAuth();
   }
+}
+
+// ── Share view-lock (F2) ───────────────────────────────────────
+// A design opened via share link or the public gallery is genuinely read-only
+// until the viewer saves their own copy. _editBlocked() guards every mutation
+// entry point; _setViewOnly() toggles the flag + body class (CSS greys out the
+// build tools & properties inputs, except view controls / orbit / export etc.).
+var _viewOnlyNudgeAt = 0;
+function _viewOnlyNudge() {
+  var now = Date.now();
+  if (now - _viewOnlyNudgeAt < 2500) return;   // throttle: at most once per ~2.5s
+  _viewOnlyNudgeAt = now;
+  uiToast('View-only design — save your own copy to edit.', 'info');
+}
+function _editBlocked() {
+  if (!_viewOnly) return false;
+  _viewOnlyNudge();
+  return true;
+}
+function _setViewOnly(on) {
+  _viewOnly = !!on;
+  document.body.classList.toggle('view-only', _viewOnly);
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -1460,6 +1498,7 @@ async function _aiRun(prompt, currentDesign) {
 }
 
 async function applyAIDesign(replace) {
+  if (_editBlocked()) return;
   if (!_aiDesignResult) return;
   var design = _aiDesignResult;
 
@@ -1931,6 +1970,7 @@ function _loadProjectState(state) {
 var _saving = false;   // guards against double-submit while a save is in flight
 async function saveCurrentProject() {
   if (!_currentUser)   { openAuth(); return; }
+  if (_viewOnly)       { saveSharedCopy(); return; }   // shared design → save your own copy, don't overwrite
   if (!_currentProjId) { openProjectManager(); return; }
   if (_saving) return;
   _saving = true;
@@ -1998,6 +2038,7 @@ async function restoreVersion(vid) {
     var res = await api('/projects/' + _versionsProjId + '/versions/' + vid + '/restore', { method: 'POST' });
     _loadProjectState(res.state);
     _currentProjId = _versionsProjId;
+    _setViewOnly(false);
     closeVersions(); closeProjectManager();
     _flashSave();
   } catch (e) { uiToast('Could not restore that version. ' + e.message, 'error'); }
@@ -2042,6 +2083,7 @@ async function openPublic(token) {
     var res = await api('/public/' + token);
     _loadProjectState(res.state);
     _currentProjId = null;
+    _setViewOnly(true);   // shared/gallery designs are read-only until saved as own copy
     document.getElementById('topbar-proj-name').textContent = (res.name || 'Shared design') + ' (view)';
     closeGallery(); closeShare(); closeProjectManager();
     showSharedBanner();
@@ -2060,7 +2102,14 @@ function showSharedBanner() {
   var el = document.getElementById('shared-banner');
   if (!el) return;
   var signinBtn = document.getElementById('shared-banner-signin');
+  var saveBtn   = document.getElementById('shared-banner-save');
+  var txt       = document.getElementById('shared-banner-text');
+  // Signed-in viewers get a "Save a copy" action; signed-out get "Sign in".
   if (signinBtn) signinBtn.style.display = _currentUser ? 'none' : '';
+  if (saveBtn)   saveBtn.style.display   = _currentUser ? '' : 'none';
+  if (txt) txt.textContent = _viewOnly
+    ? "View-only — you're viewing a shared design."
+    : "Viewing a shared design — edits here won't change the original.";
   el.classList.add('show');
 }
 function dismissSharedBanner() {
@@ -2131,13 +2180,40 @@ async function saveProjectAs() {
     document.getElementById('topbar-proj-name').textContent = name;
     _dirty = false;
     await _refreshProjectList();
-    _flashSave();
+    // Saving a view-only shared design as your own copy unlocks editing.
+    if (_viewOnly) {
+      _setViewOnly(false);
+      dismissSharedBanner();
+      closeProjectManager();
+      uiToast('Saved — this copy is yours to edit.', 'success');
+    } else {
+      _flashSave();
+    }
   } catch(e) {
     err.textContent = e.message;
   } finally {
     _saving = false;
     if (btn) { btn.disabled = false; btn.textContent = origLbl; }
   }
+}
+
+// Banner "Save a copy" (signed-in viewer of a shared design). Reuses the
+// project-manager Save-As flow: a shared design has _currentProjId=null, so
+// saveProjectAs() POSTs a brand-new project owned by the current user, and its
+// success path (above) flips _viewOnly off. We just open the manager with a
+// sensible default name pre-filled.
+function saveSharedCopy() {
+  if (!_currentUser) { openAuth(); return; }
+  if (!_viewOnly) { openProjectManager(); return; }
+  document.getElementById('proj-save-err').textContent = '';
+  document.getElementById('proj-modal').classList.add('active');
+  document.getElementById('proj-list-wrap').innerHTML = '<div class="proj-empty">Loading…</div>';
+  var base = (document.getElementById('topbar-proj-name').textContent || 'Shared design')
+    .replace(/\s*\(view\)\s*$/, '').trim() || 'Shared design';
+  var nameEl = document.getElementById('proj-save-name');
+  nameEl.value = base + ' (my copy)';
+  _refreshProjectList();
+  nameEl.focus(); nameEl.select();
 }
 
 async function loadProject(projId) {
@@ -2147,6 +2223,8 @@ async function loadProject(projId) {
     var proj = res.project;
     _loadProjectState(proj.state);
     _currentProjId = proj.id;
+    _setViewOnly(false);   // this is the viewer's own project — fully editable
+    dismissSharedBanner();
     document.getElementById('topbar-proj-name').textContent = proj.name;
     closeProjectManager();
   } catch(e) {
@@ -2576,6 +2654,7 @@ function saveUndo() {
 }
 
 function undo() {
+  if (_editBlocked()) return;
   if (!undoStack.length) return;
   redoStack.push(_snapshot());
   _restoreSnapshot(undoStack.pop());
@@ -2583,6 +2662,7 @@ function undo() {
 }
 
 function redo() {
+  if (_editBlocked()) return;
   if (!redoStack.length) return;
   undoStack.push(_snapshot());
   _restoreSnapshot(redoStack.pop());
@@ -3120,6 +3200,7 @@ function buildNightstand() {
 
 // ── Add / Delete / Duplicate ───────────────────────────────────
 function addPanel(o) {
+  if (_editBlocked()) return;
   saveUndo();
   // Spawn above existing furniture so it never overlaps
   var defY = 59;
@@ -3135,6 +3216,7 @@ function addPanel(o) {
 }
 
 function deleteSelected() {
+  if (_editBlocked()) return;
   if (!selected) return;
   saveUndo();
   var del = selected;
@@ -3156,6 +3238,7 @@ function deleteSelected() {
 }
 
 function duplicateSelected() {
+  if (_editBlocked()) return;
   if (!selected) return;
   saveUndo();
   var s = selected;
@@ -3184,6 +3267,7 @@ function _axisBounds(p, key) {
 }
 
 function alignPanels(axis, mode) {
+  if (_editBlocked()) return;
   if (selectedGroup.length < 2) return;
   saveUndo();
   var key = axis.toUpperCase();
@@ -3206,6 +3290,7 @@ function alignPanels(axis, mode) {
 }
 
 function distributePanels(axis) {
+  if (_editBlocked()) return;
   if (selectedGroup.length < 3) return;
   saveUndo();
   var key = axis.toUpperCase();
@@ -3234,6 +3319,7 @@ function _clonePanelData(p, over) {
 
 // Mirror selection across the world origin plane of an axis (x=0 / y=0 / z=0)
 function mirrorPanels(axis) {
+  if (_editBlocked()) return;
   if (!selectedGroup.length) return;
   saveUndo();
   var made = [];
@@ -3249,6 +3335,7 @@ function mirrorPanels(axis) {
 }
 
 function arrayLinear(axis, count, spacing) {
+  if (_editBlocked()) return;
   if (!selectedGroup.length || count < 2) return;
   saveUndo();
   var base = selectedGroup.slice();
@@ -3263,6 +3350,7 @@ function arrayLinear(axis, count, spacing) {
 
 // Radial array about the vertical (Y) axis through the selection centre
 function arrayRadial(count, totalAngle) {
+  if (_editBlocked()) return;
   if (!selectedGroup.length || count < 2) return;
   saveUndo();
   var base = selectedGroup.slice();
@@ -3284,6 +3372,7 @@ function arrayRadial(count, totalAngle) {
 }
 
 function openArrayModal() {
+  if (_editBlocked()) return;
   if (!selectedGroup.length) { uiToast('Select at least one panel first.', 'info'); return; }
   document.getElementById('array-modal').classList.add('active');
 }
@@ -3390,6 +3479,9 @@ function _applyPanelSet(name, list, replace, hwList) {
   });
   (hwList || []).forEach(function (hd) { var hw = mkHardware(hd); hardware.push(hw); buildHardwareMesh(hw); });
   refreshUI(); fitCamera();
+  // A template/sample is the user's own new work — leave view-only mode if we
+  // somehow got here inside it, and drop the shared banner.
+  if (_viewOnly) { _setViewOnly(false); dismissSharedBanner(); }
   document.getElementById('topbar-proj-name').textContent = name;
   // A just-applied template/sample is unsaved work relative to the cloud — mark
   // dirty (both replace and add paths) so beforeunload protects it. Project LOAD
@@ -3406,6 +3498,7 @@ function _tplDefaults() {
 function openTemplates()  { _tplDefaults(); document.getElementById('tpl-modal').classList.add('active'); }
 function closeTemplates() { document.getElementById('tpl-modal').classList.remove('active'); }
 async function applyTemplate(replace) {
+  if (_editBlocked()) return;
   var k = document.getElementById('tpl-preset').value;
   var W = parseLen(document.getElementById('tpl-w').value) || 600;
   var H = parseLen(document.getElementById('tpl-h').value) || 800;
@@ -3678,6 +3771,7 @@ function syncHwPos(hw) {
 }
 
 function addHardware(type) {
+  if (_editBlocked()) return;
   saveUndo();
   // Spawn near the top of the current design so it's visible
   var y = 120;
@@ -3690,6 +3784,7 @@ function addHardware(type) {
 }
 
 function deleteHardware(id) {
+  if (_editBlocked()) return;
   var hw = hardware.filter(function (h) { return String(h.id) === String(id); })[0];
   if (!hw) return;
   saveUndo();
@@ -3829,6 +3924,7 @@ function updateHwParam(key, v) {
 }
 
 function duplicateSelectedHw() {
+  if (_editBlocked()) return;
   if (!selectedHw) return;
   saveUndo();
   var s = selectedHw;
@@ -3940,6 +4036,7 @@ function toggleFuncOpen() {
 
 function setFunc(field, value) {
   if (!selected) return;
+  if (_editBlocked()) return;   // central guard for door/drawer function inputs
   saveUndo();
   var p = selected;
   if (field === 'kind') {
@@ -4251,6 +4348,7 @@ canvas.addEventListener('mousedown', function(e) {
   // This avoids false positives from nearestHandle when clicking panel body.
   if (hoveredHandle && selected) {
     e.stopImmediatePropagation();
+    if (_editBlocked()) return;
     saveUndo();
     activeHandle = hoveredHandle;
     activeHandle.material.color.setHex(HANDLE_HOV);
@@ -4277,7 +4375,7 @@ canvas.addEventListener('mousedown', function(e) {
       e.stopImmediatePropagation();
       var alreadyHw = (selectedHw === hw);
       selectHardware(hw);
-      if (alreadyHw) {
+      if (alreadyHw && !_editBlocked()) {   // selecting is allowed in view-only; dragging is not
         saveUndo();
         dragPendingHw = true; isDraggingHw = false;
         orbitCtrl.enabled = false;
@@ -4302,7 +4400,7 @@ canvas.addEventListener('mousedown', function(e) {
         (p.groupId && selectedGroup.some(function(q){ return q === p; }))
       );
       doSelect(p, ctrl);
-      if (alreadySelected) {
+      if (alreadySelected && !_editBlocked()) {   // selecting is allowed in view-only; dragging is not
         saveUndo();
         dragPending = true;
         isDragging  = false;
@@ -4989,6 +5087,7 @@ function panelFaceDims(p) {
 var propBusy = false;
 
 function rotatePanel(axis, deg) {
+  if (_editBlocked()) return;
   if (!selected) return;
   saveUndo();
   var p = selected;
@@ -4999,6 +5098,7 @@ function rotatePanel(axis, deg) {
 }
 
 function resetRotation() {
+  if (_editBlocked()) return;
   if (!selected) return;
   saveUndo();
   var p = selected;
@@ -5079,6 +5179,7 @@ function renderJointsUI(p) {
 
 function setJoint(edgeKey, field, value) {
   if (!selected) return;
+  if (_editBlocked()) return;   // central guard for all joinery type/param inputs
   saveUndo();
   var p = selected;
   if (!p.joints) p.joints = {};
@@ -5109,6 +5210,7 @@ function setJoint(edgeKey, field, value) {
 
 function applyProps() {
   if (propBusy || !selected) return;
+  if (_editBlocked()) return;   // central guard for all 20 dimension/position/rotation/material/mitre inputs (shared 'change' listener)
   saveUndo();
   var p = selected;
   p.name      = document.getElementById('p-name').value;
@@ -5158,6 +5260,7 @@ function applyProps() {
 // Editing overall W/H/D proportionally refits every panel on that axis:
 // positions scale about the centre; in-plane dims scale; thickness preserved.
 function resizeOverall(axis, newSize) {
+  if (_editBlocked()) return;
   if (!panels.length) return;
   var key = axis.toUpperCase();
   var bb = furnitureBBox();
@@ -5325,19 +5428,23 @@ document.addEventListener('keydown', function(e) {
   // Undo / redo
   if ((e.ctrlKey||e.metaKey) && (k==='z'||k==='Z')) {
     e.preventDefault();
-    if (e.shiftKey) { if (typeof redo === 'function') redo(); } else undo();
+    if (e.shiftKey) { if (typeof redo === 'function') redo(); } else undo();   // undo/redo self-guard view-only
     return;
   }
   if ((e.ctrlKey||e.metaKey) && (k==='y'||k==='Y')) { e.preventDefault(); if (typeof redo === 'function') redo(); return; }
-  // Ctrl/Cmd+S — save (or prompt sign-in), never the browser's save dialog
+  // Ctrl/Cmd+S — save (or prompt sign-in), never the browser's save dialog.
+  // In view-only, a signed-in viewer's save routes to the save-a-copy flow.
   if ((e.ctrlKey||e.metaKey) && (k==='s'||k==='S')) {
     e.preventDefault();
-    if (_currentUser) saveCurrentProject(); else openAuth();
+    if (!_currentUser) openAuth();
+    else if (_viewOnly) saveSharedCopy();
+    else saveCurrentProject();
     return;
   }
   // Arrow-key nudge of the selection (Shift = coarse)
   if (selected && (k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown')) {
     e.preventDefault();
+    if (_editBlocked()) return;
     var step = e.shiftKey ? 50 : (typeof _gridSize !== 'undefined' ? _gridSize : 1);
     var dx = (k==='ArrowLeft'?-step:(k==='ArrowRight'?step:0));
     var dz = (k==='ArrowUp'?-step:(k==='ArrowDown'?step:0));
@@ -5432,6 +5539,7 @@ function _closeTopModal() {
 //  GROUPING
 // ═══════════════════════════════════════════════════════════════
 function groupSelected() {
+  if (_editBlocked()) return;
   if (selectedGroup.length < 2) return;
   saveUndo();
   var gid = nextGroupId++;
@@ -5455,6 +5563,7 @@ function groupSelected() {
 }
 
 function ungroupSelected() {
+  if (_editBlocked()) return;
   if (!selectedGroup.length) return;
   saveUndo();
   // Release any hardware grouped with these panels

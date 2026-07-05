@@ -184,13 +184,10 @@ router.post('/google', dbGuard, async (req, res) => {
 // ── Current user (validates the stored token) ───────────────────────────
 router.get('/me', requireAuth, async (req, res) => {
   try {
+    // requireAuth already rejected missing/disabled accounts (401/403) before we
+    // get here, so any row we load belongs to an active, enabled user.
     const result = await db.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     if (result.rowCount === 0) return res.status(401).json({ error: 'Account no longer exists.' });
-    // Kill sessions for a disabled account on the next app load (client clears the
-    // token on 401). We intentionally do NOT check this in requireAuth (see below).
-    if (result.rows[0].disabled) {
-      return res.status(401).json({ error: 'This account has been disabled. Contact support if you believe this is a mistake.' });
-    }
     res.json({ user: publicUser(result.rows[0]) });
   } catch (err) {
     console.error('[auth/me]', err);
