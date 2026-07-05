@@ -281,6 +281,24 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .modal-close{background:none;border:none;color:var(--txt2);font-size:22px;line-height:1;cursor:pointer;}
 .modal-close:hover{color:var(--teal);}
 .modal-body{padding:24px 28px;background:var(--bg2);}
+/* ── Toast notifications ───────────────────────────── */
+#toast-wrap{position:fixed;top:56px;right:16px;z-index:9000;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:340px;}
+.ui-toast{background:var(--bg3);border:1px solid var(--bd2);border-left:3px solid var(--teal);border-radius:8px;padding:11px 16px;font-size:13px;font-weight:500;line-height:1.45;color:var(--txt);box-shadow:0 6px 24px rgba(0,0,0,.45);opacity:0;transform:translateX(24px);transition:opacity .22s ease,transform .22s ease;pointer-events:auto;}
+.ui-toast.show{opacity:1;transform:translateX(0);}
+.ui-toast.success{border-left-color:var(--teal);}
+.ui-toast.error{border-left-color:#e05050;}
+.ui-toast.info{border-left-color:var(--txt2);}
+/* ── Confirm modal ─────────────────────────────────── */
+#confirm-modal .modal-body{padding:22px 26px;}
+.confirm-msg{font-size:13px;color:var(--txt2);line-height:1.6;white-space:pre-line;margin-bottom:20px;}
+.confirm-btns{display:flex;justify-content:flex-end;gap:10px;}
+.confirm-btn{padding:7px 16px;border-radius:6px;border:1px solid var(--bd2);background:var(--bg3);color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;}
+.confirm-btn:hover{background:var(--bg4);}
+.confirm-btn.primary{background:var(--teal);border-color:var(--teal);color:#000;}
+.confirm-btn.primary:hover{background:var(--teal-lt);}
+.confirm-btn.danger{background:#c23b3b;border-color:#c23b3b;color:#fff;}
+.confirm-btn.danger:hover{background:#d94d4d;}
+.confirm-btn:focus-visible{outline:2px solid var(--teal-lt);outline-offset:2px;}
 .auth-tabs{display:flex;border-bottom:2px solid var(--bd);margin-bottom:20px;}
 .auth-tab{padding:8px 20px;font-size:13px;cursor:pointer;color:var(--txt3);border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .12s;}
 .auth-tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
@@ -1051,6 +1069,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
   </div>
 </div>
 
+<!-- ── Toast + Confirm (in-app replacements for native dialogs) ── -->
+<div id="toast-wrap"></div>
+<div class="overlay-modal" id="confirm-modal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-hdr"><span id="confirm-title">Confirm</span></div>
+    <div class="modal-body">
+      <div class="confirm-msg" id="confirm-msg"></div>
+      <div class="confirm-btns">
+        <button class="confirm-btn" id="confirm-cancel">Cancel</button>
+        <button class="confirm-btn primary" id="confirm-ok">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Three.js r128 — UMD build with examples/js OrbitControls -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -1069,6 +1102,74 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 //  FurniCraft 3D  ·  1 unit = 1 mm
 // ═══════════════════════════════════════════════════════════════
 'use strict';
+
+// ── In-app dialogs (replace native alert/confirm/prompt) ──────
+// uiToast(msg,type): non-blocking notification. type = 'info'|'success'|'error'.
+// uiConfirm(msg,opts) -> Promise<boolean>. uiPrompt(msg,def) -> Promise<string|null>.
+var _uiConfirmOpen = false;   // guards editor keydown shortcuts while a dialog is open
+
+function uiToast(message, type) {
+  type = type || 'info';
+  var wrap = document.getElementById('toast-wrap');
+  if (!wrap) return;
+  var el = document.createElement('div');
+  el.className = 'ui-toast ' + type;
+  el.textContent = message;
+  wrap.appendChild(el);
+  // force reflow so the enter transition runs
+  void el.offsetWidth;
+  el.classList.add('show');
+  var life = (type === 'error') ? 5000 : 3500;
+  var t = setTimeout(dismiss, life);
+  function dismiss() {
+    clearTimeout(t);
+    el.classList.remove('show');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 250);
+  }
+  el.addEventListener('click', dismiss);
+}
+
+function uiConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var modal  = document.getElementById('confirm-modal');
+    var titleE = document.getElementById('confirm-title');
+    var msgE   = document.getElementById('confirm-msg');
+    var okBtn  = document.getElementById('confirm-ok');
+    var cxlBtn = document.getElementById('confirm-cancel');
+    titleE.textContent = opts.title || 'Confirm';
+    msgE.textContent = message;
+    okBtn.textContent = opts.okLabel || 'OK';
+    cxlBtn.textContent = opts.cancelLabel || 'Cancel';
+    okBtn.className = 'confirm-btn ' + (opts.danger ? 'danger' : 'primary');
+    modal.classList.add('active');
+    _uiConfirmOpen = true;
+
+    function cleanup(val) {
+      _uiConfirmOpen = false;
+      modal.classList.remove('active');
+      okBtn.removeEventListener('click', onOk);
+      cxlBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('mousedown', onBackdrop);
+      document.removeEventListener('keydown', onKey, true);
+      resolve(val);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBackdrop(e) { if (e.target === modal) cleanup(false); }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cleanup(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); cleanup(true); }
+      else { e.stopPropagation(); } // keep editor shortcuts from firing
+    }
+    okBtn.addEventListener('click', onOk);
+    cxlBtn.addEventListener('click', onCancel);
+    modal.addEventListener('mousedown', onBackdrop);
+    document.addEventListener('keydown', onKey, true); // capture phase, runs before editor handler
+    // Focus the safe button on open (cancel when the action is destructive).
+    (opts.danger ? cxlBtn : okBtn).focus();
+  });
+}
 
 // ── State ──────────────────────────────────────────────────────
 var panels        = [];
@@ -1246,12 +1347,12 @@ async function _aiRun(prompt, currentDesign) {
   }
 }
 
-function applyAIDesign(replace) {
+async function applyAIDesign(replace) {
   if (!_aiDesignResult) return;
   var design = _aiDesignResult;
 
   if (replace && panels.length > 0) {
-    if (!confirm('Replace the current design with "' + design.name + '"?\nThis cannot be undone.')) return;
+    if (!(await uiConfirm('Replace the current design with "' + design.name + '"?\nThis cannot be undone.', { title: 'Replace design', okLabel: 'Replace', danger: true }))) return;
     saveUndo();
     panels.slice().forEach(function(p) { removeMesh(p); });
     panels.length = 0;
@@ -1396,11 +1497,11 @@ function _googleClientId() { return _serverConfig ? _serverConfig.googleClientId
 function doGoogleSignIn() {
   var cid = _googleClientId();
   if (!cid) {
-    alert('Google Sign-In is not configured on the server.\n\nTo enable it:\n1. Create an OAuth 2.0 Client ID at console.cloud.google.com\n2. Set GOOGLE_CLIENT_ID in the server\'s .env file\n3. Restart the server');
+    uiToast('Google Sign-In is not configured on this server.', 'error');
     return;
   }
   if (typeof google === 'undefined' || !google.accounts) {
-    alert('Google Identity Services failed to load. Check your internet connection.');
+    uiToast('Google Sign-In failed to load. Check your internet connection.', 'error');
     return;
   }
   google.accounts.id.initialize({
@@ -1429,7 +1530,7 @@ async function _handleGoogleCredential(response) {
   } catch(e) {
     var el = document.getElementById('li-err');
     if (el) el.textContent = e.message;
-    else alert(e.message);
+    else uiToast(e.message, 'error');
   }
 }
 
@@ -1455,8 +1556,8 @@ function _applyAuth(res) {
   _updateTopbar();
 }
 
-function logoutUser() {
-  if (!confirm('Sign out of ' + _currentUser.email + '?')) return;
+async function logoutUser() {
+  if (!(await uiConfirm('Sign out of ' + _currentUser.email + '?', { title: 'Sign out', okLabel: 'Sign out' }))) return;
   _currentUser   = null;
   _currentProjId = null;
   _clearToken();
@@ -1699,7 +1800,7 @@ async function saveCurrentProject() {
     _flashSave();
   } catch(e) {
     if (e.status === 404) { _currentProjId = null; openProjectManager(); }
-    else alert('Could not save: ' + e.message);
+    else uiToast('Could not save your project. ' + e.message, 'error');
   }
 }
 
@@ -1750,7 +1851,7 @@ async function restoreVersion(vid) {
     _currentProjId = _versionsProjId;
     closeVersions(); closeProjectManager();
     _flashSave();
-  } catch (e) { alert('Could not restore: ' + e.message); }
+  } catch (e) { uiToast('Could not restore that version. ' + e.message, 'error'); }
 }
 
 // ── Share token + public gallery (R9 / H3, H4) ──────────
@@ -1770,7 +1871,7 @@ function copyShareLink() { var i = document.getElementById('pubshare-link'); i.s
 async function togglePublish(cb) {
   if (!_shareProjId) return;
   try { await api('/projects/' + _shareProjId + '/publish', { method: 'POST', body: { public: cb.checked } }); }
-  catch (e) { alert('Could not update: ' + e.message); cb.checked = !cb.checked; }
+  catch (e) { uiToast('Could not update the publish setting. ' + e.message, 'error'); cb.checked = !cb.checked; }
 }
 
 async function openGallery() {
@@ -1794,7 +1895,7 @@ async function openPublic(token) {
     _currentProjId = null;
     document.getElementById('topbar-proj-name').textContent = (res.name || 'Shared design') + ' (view)';
     closeGallery(); closeShare(); closeProjectManager();
-  } catch (e) { alert('Could not open shared design: ' + e.message); }
+  } catch (e) { uiToast('Could not open that shared design. ' + e.message, 'error'); }
 }
 function _loadSharedFromQuery() {
   var m = location.search.match(/[?&]share=([^&]+)/);
@@ -1863,7 +1964,7 @@ async function saveProjectAs() {
 }
 
 async function loadProject(projId) {
-  if (panels.length && !confirm('Load this project? Unsaved changes will be lost.')) return;
+  if (panels.length && !(await uiConfirm('Load this project? Unsaved changes will be lost.', { title: 'Load project', okLabel: 'Load' }))) return;
   try {
     var res = await api('/projects/' + projId);
     var proj = res.project;
@@ -1872,14 +1973,14 @@ async function loadProject(projId) {
     document.getElementById('topbar-proj-name').textContent = proj.name;
     closeProjectManager();
   } catch(e) {
-    alert('Could not open project: ' + e.message);
+    uiToast('Could not open your project. ' + e.message, 'error');
   }
 }
 
 async function deleteProject(projId) {
   var proj = _projectList.find(function(p){ return String(p.id) === String(projId); });
   var nm = proj ? proj.name : 'this project';
-  if (!confirm('Delete "' + nm + '"? This cannot be undone.')) return;
+  if (!(await uiConfirm('Delete "' + nm + '"? This cannot be undone.', { title: 'Delete project', okLabel: 'Delete', danger: true }))) return;
   try {
     await api('/projects/' + projId, { method:'DELETE' });
     if (String(_currentProjId) === String(projId)) {
@@ -1887,8 +1988,9 @@ async function deleteProject(projId) {
       document.getElementById('topbar-proj-name').textContent = 'Unsaved project';
     }
     await _refreshProjectList();
+    uiToast('Project deleted.', 'success');
   } catch(e) {
-    alert('Could not delete: ' + e.message);
+    uiToast('Could not delete your project. ' + e.message, 'error');
   }
 }
 
@@ -2925,7 +3027,7 @@ function arrayRadial(count, totalAngle) {
 }
 
 function openArrayModal() {
-  if (!selectedGroup.length) { alert('Select at least one panel first.'); return; }
+  if (!selectedGroup.length) { uiToast('Select at least one panel first.', 'info'); return; }
   document.getElementById('array-modal').classList.add('active');
 }
 function closeArrayModal() { document.getElementById('array-modal').classList.remove('active'); }
@@ -3042,12 +3144,12 @@ function _tplDefaults() {
 }
 function openTemplates()  { _tplDefaults(); document.getElementById('tpl-modal').classList.add('active'); }
 function closeTemplates() { document.getElementById('tpl-modal').classList.remove('active'); }
-function applyTemplate(replace) {
+async function applyTemplate(replace) {
   var k = document.getElementById('tpl-preset').value;
   var W = parseLen(document.getElementById('tpl-w').value) || 600;
   var H = parseLen(document.getElementById('tpl-h').value) || 800;
   var D = parseLen(document.getElementById('tpl-d').value) || 400;
-  if (replace && panels.length && !confirm('Replace the current design with this template?')) return;
+  if (replace && panels.length && !(await uiConfirm('Replace the current design with this template? This cannot be undone.', { title: 'Replace design', okLabel: 'Replace', danger: true }))) return;
   var tpl = TPL_GEN[k](W, H, D);
   _applyPanelSet(tpl.name, tpl.panels, replace, tpl.hardware);
   closeTemplates();
@@ -4907,6 +5009,7 @@ document.getElementById('cs-modal').addEventListener('click',  function(e){ if(e
 document.getElementById('btn-opt').addEventListener('click',   function(){ runOptimizer(); });
 
 document.addEventListener('keydown', function(e) {
+  if (_uiConfirmOpen) return; // an in-app confirm dialog owns the keyboard
   if (e.key === 'Alt') { _altDown = true; e.preventDefault(); return; }
   if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
   if (typeof _fpsActive !== 'undefined' && _fpsActive) return; // FPS mode owns WASD
@@ -5216,7 +5319,7 @@ function renderQuote() {
     + '</tbody></table>';
 }
 function exportQuotePDF() {
-  if (!window.jspdf) { alert('PDF library not loaded yet — please wait a moment and try again.'); return; }
+  if (!window.jspdf) { uiToast('The PDF library is still loading. Please try again in a moment.', 'error'); return; }
   var jsPDF = window.jspdf.jsPDF, doc = new jsPDF();
   var q = _quoteData(), name = document.getElementById('topbar-proj-name').textContent || 'FurniCraft Project', margin = 14;
   doc.setFontSize(18); doc.setTextColor(10, 186, 181); doc.setFont('helvetica', 'bold');
@@ -5253,18 +5356,18 @@ function _exportGroup() {
 }
 function exportModel(fmt) {
   var g = _exportGroup();
-  if (!g.children.length) { alert('Nothing to export — add some panels first.'); return; }
+  if (!g.children.length) { uiToast('Nothing to export yet — add some panels first.', 'info'); return; }
   var nm = _projName();
   if (fmt === 'glb') {
-    if (typeof THREE.GLTFExporter === 'undefined') { alert('GLTF exporter still loading — try again in a moment.'); return; }
+    if (typeof THREE.GLTFExporter === 'undefined') { uiToast('The GLTF exporter is still loading. Please try again in a moment.', 'error'); return; }
     new THREE.GLTFExporter().parse(g, function (res) {
       _downloadBlob(res instanceof ArrayBuffer ? res : JSON.stringify(res), nm + '.glb', 'model/gltf-binary');
     }, { binary: true });
   } else if (fmt === 'obj') {
-    if (typeof THREE.OBJExporter === 'undefined') { alert('OBJ exporter still loading — try again in a moment.'); return; }
+    if (typeof THREE.OBJExporter === 'undefined') { uiToast('The OBJ exporter is still loading. Please try again in a moment.', 'error'); return; }
     _downloadBlob(new THREE.OBJExporter().parse(g), nm + '.obj', 'text/plain');
   } else if (fmt === 'stl') {
-    if (typeof THREE.STLExporter === 'undefined') { alert('STL exporter still loading — try again in a moment.'); return; }
+    if (typeof THREE.STLExporter === 'undefined') { uiToast('The STL exporter is still loading. Please try again in a moment.', 'error'); return; }
     _downloadBlob(new THREE.STLExporter().parse(g), nm + '.stl', 'text/plain');
   }
   closeExport();
@@ -5304,7 +5407,7 @@ function importProjectJSON(input) {
       _currentProjId = null;
       document.getElementById('topbar-proj-name').textContent = 'Imported design';
       closeExport();
-    } catch (e) { alert('Invalid project file: ' + e.message); }
+    } catch (e) { uiToast('That project file could not be read. ' + e.message, 'error'); }
   };
   r.readAsText(input.files[0]);
   input.value = '';
@@ -5324,7 +5427,7 @@ function _panelLayout() {
 }
 function exportSVG() {
   var L = _panelLayout();
-  if (!L.length) { alert('Nothing to export — add some panels first.'); return; }
+  if (!L.length) { uiToast('Nothing to export yet — add some panels first.', 'info'); return; }
   var maxX = 0, maxY = 0;
   L.forEach(function (it) { maxX = Math.max(maxX, it.x + it.w); maxY = Math.max(maxY, it.y + it.h); });
   var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + maxX + 'mm" height="' + maxY + 'mm" viewBox="0 0 ' + maxX + ' ' + maxY + '">';
@@ -5338,7 +5441,7 @@ function exportSVG() {
 }
 function exportDXF() {
   var L = _panelLayout();
-  if (!L.length) { alert('Nothing to export — add some panels first.'); return; }
+  if (!L.length) { uiToast('Nothing to export yet — add some panels first.', 'info'); return; }
   var d = '0\nSECTION\n2\nENTITIES\n';
   function ln(x1, y1, x2, y2) { d += '0\nLINE\n8\nPANELS\n10\n' + x1 + '\n20\n' + y1 + '\n11\n' + x2 + '\n21\n' + y2 + '\n'; }
   L.forEach(function (it) {
@@ -5357,7 +5460,7 @@ function shareLink() {
     var msg = document.getElementById('share-msg');
     if (msg) msg.textContent = (url.length > 8000 ? '⚠ Link is large (' + url.length + ' chars) — may not work everywhere. ' : '✓ Link copied to clipboard! ');
     return url;
-  } catch (e) { alert('Could not create link: ' + e.message); }
+  } catch (e) { uiToast('Could not create a share link. ' + e.message, 'error'); }
 }
 function _loadSharedFromHash() {
   var h = location.hash;
@@ -5728,13 +5831,13 @@ function _applyRoomDims() {
 // ── AR view / WebXR (G-series G4) ───────────────────────
 var _arPrev = null;
 function viewInAR() {
-  if (!navigator.xr) { alert('WebXR is not available here. Open the site in Chrome on a recent Android phone (over HTTPS) to view in AR.'); return; }
+  if (!navigator.xr) { uiToast('AR view is not available here. Open the site in Chrome on a recent Android phone (over HTTPS) to view in AR.', 'error'); return; }
   navigator.xr.isSessionSupported('immersive-ar').then(function (ok) {
-    if (!ok) { alert('Immersive AR is not supported on this device/browser. It needs an AR-capable phone (e.g. Chrome on Android) over HTTPS.'); return; }
+    if (!ok) { uiToast('AR view is not supported on this device. It needs an AR-capable phone (e.g. Chrome on Android) over HTTPS.', 'error'); return; }
     renderer.xr.enabled = true;
     navigator.xr.requestSession('immersive-ar', { optionalFeatures: ['local-floor','dom-overlay'] })
       .then(_enterAR)
-      .catch(function (e) { alert('Could not start AR: ' + e.message); });
+      .catch(function (e) { uiToast('Could not start AR. ' + e.message, 'error'); });
   });
 }
 function _enterAR(session) {
@@ -5960,7 +6063,7 @@ function renderAssemblyGuide() {
 //  PDF EXPORT
 // ═══════════════════════════════════════════════════════════════
 function exportToPDF() {
-  if (!window.jspdf) { alert('PDF library not loaded yet — please wait a moment and try again.'); return; }
+  if (!window.jspdf) { uiToast('The PDF library is still loading. Please try again in a moment.', 'error'); return; }
   var { jsPDF } = window.jspdf;
   var doc = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
   var pw = doc.internal.pageSize.getWidth();
