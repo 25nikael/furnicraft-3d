@@ -98,7 +98,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 
 /* ── Viewport ─────────────────────────────────────── */
 #viewport{flex:1;position:relative;overflow:hidden;}
-#three-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;}
+#three-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 #dim-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
 
 #toolbar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:20;background:rgba(13,13,13,.94);padding:7px 12px;border-radius:22px;box-shadow:0 2px 20px rgba(0,0,0,.6);border:1px solid var(--bd2);}
@@ -4277,9 +4277,30 @@ function closeMobileExport() {
 document.addEventListener('click', function() { closeMobileExport(); });
 
 // ── Touch → mouse bridge ──────────────────────────────
-// Single-touch: drives panel selection/drag/resize (same code path as mouse).
-// Multi-touch (2+ fingers): passed straight through to OrbitControls (pinch/rotate/pan).
-var _touchActive = false;
+// One-finger touch drives the EXISTING mouse pipeline by synthesizing
+// mousedown/mousemove/mouseup. There is no hover on touch, so at touchstart
+// we do the raycast/handle classification the mouse path normally gets from
+// hover — setting hoveredHandle and orbitCtrl.enabled BEFORE the synthetic
+// mousedown, exactly as a mouse hover would have left them.
+//
+//   • Tap on panel/hardware      → select (raycast, same as click)
+//   • Touch-drag on selected item → move (reuses drag pipeline)
+//   • Touch-drag on resize handle → resize (touch-radius picking)
+//   • Touch on empty space        → OrbitControls native 1-finger rotate;
+//                                    a tap that never moves deselects.
+//   • Two-finger (2+)             → OrbitControls native pinch-dolly / pan.
+//
+// API choice: touch→mouse translation (NOT Pointer Events for the app's own
+// pipeline). r128 OrbitControls' onPointerDown ignores pointerType:'touch'
+// (falls through) and drives touch ONLY via its dedicated touchstart/-move/-end
+// listeners; mouse/pen go through pointerdown → onMouseDown. Feeding the app
+// synthetic *mouse* events keeps the paid mouse pipeline byte-for-byte the
+// same and lets us gate OC's native touch purely via orbitCtrl.enabled.
+var _touchActive   = false;  // a one-finger touch is currently driving the app
+var _touchLetOrbit = false;  // true when this touch was left for OC (empty space)
+var _touchMoved    = false;  // did the current touch move past a tap? (tap vs orbit)
+var HANDLE_HIT_TOUCH_PX = 34; // bigger handle pick radius for fingers
+var TOUCH_DRAG_THRESHOLD = 9; // finger jitter is larger than a mouse's
 
 function _touchToMouse(type, touch) {
   var evt = new MouseEvent(type, {
@@ -4290,42 +4311,107 @@ function _touchToMouse(type, touch) {
   return evt;
 }
 
+// Classify a one-finger touchstart the way a mouse hover would, so the synthetic
+// mousedown lands on the right branch. Returns true if the app should handle it
+// (and OC's native touch must be suppressed), false to let OC orbit.
+function _touchClassify(touch) {
+  // Handle grab (only meaningful when a panel is selected → handles exist).
+  var hh = nearestHandle(touch.clientX, touch.clientY, HANDLE_HIT_TOUCH_PX);
+  if (hh && selected) {
+    if (hoveredHandle && hoveredHandle !== hh) hoveredHandle.material.color.setHex(HANDLE_COL);
+    hoveredHandle = hh;
+    hoveredHandle.material.color.setHex(HANDLE_HOV);
+    return true;
+  }
+  if (hoveredHandle) { hoveredHandle.material.color.setHex(HANDLE_COL); hoveredHandle = null; }
+  // Panel / hardware under the finger?
+  scene.updateMatrixWorld();
+  ray.setFromCamera(ndc(touch), camera);
+  var overPanel = ray.intersectObjects(panelMeshes()).length > 0;
+  var overHw    = ray.intersectObjects(hwMeshList(), true).length > 0;
+  return overPanel || overHw;
+}
+
 canvas.addEventListener('touchstart', function(e) {
   closeDrawers();
-  if (e.touches.length !== 1) return; // let OrbitControls handle multi-touch
-  e.preventDefault();
-  _touchActive = true;
-  canvas.dispatchEvent(_touchToMouse('mousedown', e.touches[0]));
-}, { passive: false });
+  // Two-or-more fingers: hand entirely to OrbitControls (pinch/pan). If a
+  // one-finger app drag was mid-flight, cancel it cleanly so we don't end up
+  // in a stuck drag state when the gesture becomes a pinch.
+  if (e.touches.length !== 1) {
+    if (_touchActive) {
+      _touchActive = false;
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    }
+    orbitCtrl.enabled = true;   // ensure OC can run the multi-touch gesture
+    return;
+  }
+  var t = e.touches[0];
+  _touchMoved = false;
+  var appHandles = _touchClassify(t);
+  if (appHandles) {
+    // App drives this touch → block OC's native touch, synthesize mousedown.
+    orbitCtrl.enabled = false;
+    _touchActive = true; _touchLetOrbit = false;
+    e.preventDefault();           // stop page scroll / iOS double-tap-zoom
+    e.stopPropagation();          // keep OC's bubble-phase touchstart from seeing it
+    canvas.dispatchEvent(_touchToMouse('mousedown', t));
+  } else {
+    // Empty space → let OC's native one-finger rotate handle the drag.
+    // Still track the touch so a tap that never moves can deselect on release.
+    orbitCtrl.enabled = true;
+    _touchActive = true; _touchLetOrbit = true;
+    // Do NOT preventDefault/stopPropagation: OC's touchstart must fire.
+  }
+}, { passive: false, capture: true }); // capture: run before OC's bubble-phase listener
 
 document.addEventListener('touchmove', function(e) {
-  if (!_touchActive || e.touches.length !== 1) return;
+  if (!_touchActive) return;
+  if (e.touches.length) _touchMoved = true;
+  if (_touchLetOrbit) return;                  // orbit case: OC owns the move
+  if (e.touches.length !== 1) return;
   e.preventDefault();
   document.dispatchEvent(_touchToMouse('mousemove', e.touches[0]));
 }, { passive: false });
 
 document.addEventListener('touchend', function(e) {
   if (!_touchActive) return;
-  _touchActive = false;
+  // Only end when the last finger lifts.
+  if (e.touches.length > 0) return;
+  var wasOrbit = _touchLetOrbit;
+  var moved    = _touchMoved;
+  _touchActive = false; _touchLetOrbit = false;
   var touch = e.changedTouches[0];
-  document.dispatchEvent(_touchToMouse('mouseup', touch));
+  if (wasOrbit) {
+    // Empty-space touch. A tap that never moved = deselect; a drag = orbit (OC
+    // already handled it, leave selection alone).
+    if (!moved && touch) doSelect(null);
+    return;
+  }
+  document.dispatchEvent(_touchToMouse('mouseup', touch || {}));
+  // The mouse mouseup handler early-returns when nothing was dragging (e.g. a
+  // plain select tap), so re-enable OC here to clear the touchstart's disable.
+  orbitCtrl.enabled = true;
 }, { passive: true });
 
 document.addEventListener('touchcancel', function() {
   if (!_touchActive) return;
-  _touchActive = false;
-  document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  var wasOrbit = _touchLetOrbit;
+  _touchActive = false; _touchLetOrbit = false;
+  if (!wasOrbit) document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  orbitCtrl.enabled = true;
 }, { passive: true });
 
 var DRAG_THRESHOLD  = 5;  // px of movement before panel drag activates
 var HANDLE_HIT_PX   = 22; // px radius for screen-space handle picking
 var dragPending     = false;
 
-// Screen-space handle picking — avoids 3D raycaster matrix-update issues
-function nearestHandle(clientX, clientY) {
+// Screen-space handle picking — avoids 3D raycaster matrix-update issues.
+// hitRadius defaults to HANDLE_HIT_PX (mouse). Touch passes a larger radius
+// (HANDLE_HIT_TOUCH_PX) so fat fingers can grab the small handles.
+function nearestHandle(clientX, clientY, hitRadius) {
   if (!selected || !handleGrp.children.length) return null;
   var r = canvas.getBoundingClientRect();
-  var best = null, bestD = HANDLE_HIT_PX;
+  var best = null, bestD = (hitRadius || HANDLE_HIT_PX);
   handleGrp.children.forEach(function(h) {
     var sp = toScreen(h.position);
     var dx = (r.left + sp.x) - clientX;
@@ -4419,14 +4505,16 @@ canvas.addEventListener('mousedown', function(e) {
 
 // All move/up on document so dragging outside the canvas still works
 document.addEventListener('mousemove', function(e) {
+  // Larger activation threshold when this move came from a finger (jitter).
+  var _thr = (_touchActive && !_touchLetOrbit) ? TOUCH_DRAG_THRESHOLD : DRAG_THRESHOLD;
   // ── Activate panel drag once threshold crossed ───────────────
   if (dragPending && !isDragging) {
     var ddx = e.clientX - dragStart.mx, ddy = e.clientY - dragStart.my;
-    if (ddx*ddx + ddy*ddy > DRAG_THRESHOLD*DRAG_THRESHOLD) isDragging = true;
+    if (ddx*ddx + ddy*ddy > _thr*_thr) isDragging = true;
   }
   if (dragPendingHw && !isDraggingHw) {
     var hddx = e.clientX - dragStart.mx, hddy = e.clientY - dragStart.my;
-    if (hddx*hddx + hddy*hddy > DRAG_THRESHOLD*DRAG_THRESHOLD) isDraggingHw = true;
+    if (hddx*hddx + hddy*hddy > _thr*_thr) isDraggingHw = true;
   }
 
   // ── Hardware drag (XZ plane at its current height) ───────────
