@@ -1358,6 +1358,9 @@ function _handleSessionExpired(msg) {
   if (!_sessionExpiredShown) {
     _sessionExpiredShown = true;
     uiToast(msg || 'Your session expired — please sign in again.', 'error');
+    // Close any open modals first so the auth modal isn't buried underneath
+    // one at the same z-index (e.g. expiring mid Save-As).
+    if (typeof _closeTopModal === 'function') { var guard = 0; while (_closeTopModal() && guard++ < 20) {} }
     if (typeof openAuth === 'function') openAuth();
   }
 }
