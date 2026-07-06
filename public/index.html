@@ -2341,11 +2341,43 @@ function getGroupPanels(p) {
   return panels.filter(function (q) { return q.groupId != null && _rootGroup(q.groupId) === root; });
 }
 
-// Hardware that belongs to the same (root) group as gid — moves with the group.
-function getGroupHardware(gid) {
-  if (gid == null) return [];
-  var root = _rootGroup(gid);
-  return hardware.filter(function (h) { return h.groupId != null && _rootGroup(h.groupId) === root; });
+// Hardware that should move with the given panels: hardware attached to one of
+// them (drawer slides), or hardware whose group shares a root with any of them.
+function _followHardware(panelList) {
+  var ids = {}, roots = {};
+  panelList.forEach(function (p) {
+    ids[p.id] = true;
+    if (p.groupId != null) roots[_rootGroup(p.groupId)] = true;
+  });
+  return hardware.filter(function (h) {
+    if (h.attachedTo != null && ids[h.attachedTo]) return true;
+    if (h.groupId != null && roots[_rootGroup(h.groupId)]) return true;
+    return false;
+  });
+}
+
+// Spatial adoption: (re)assign hw.groupId to the smallest root group whose
+// bounds (+tol) contain it, or clear it when no group contains it. Called when
+// hardware is placed/moved so late-added hardware still travels with a group.
+function adoptHardwareGroup(hw) {
+  var tol = 30;
+  var byRoot = {};
+  panels.forEach(function (p) {
+    if (p.groupId == null) return;
+    var r = _rootGroup(p.groupId);
+    (byRoot[r] = byRoot[r] || []).push(p);
+  });
+  var best = null, bestVol = Infinity;
+  Object.keys(byRoot).forEach(function (r) {
+    var bb = _panelsBounds(byRoot[r]);
+    if (hw.x >= bb.minX-tol && hw.x <= bb.maxX+tol &&
+        hw.y >= bb.minY-tol && hw.y <= bb.maxY+tol &&
+        hw.z >= bb.minZ-tol && hw.z <= bb.maxZ+tol) {
+      var vol = (bb.maxX-bb.minX) * (bb.maxY-bb.minY) * (bb.maxZ-bb.minZ);
+      if (vol < bestVol) { bestVol = vol; best = Number(r); }
+    }
+  });
+  hw.groupId = best;
 }
 
 // World-space AABB enclosing a list of panels.
@@ -3480,7 +3512,12 @@ function _applyPanelSet(name, list, replace, hwList) {
     var p = mkPanel(Object.assign({ color:m.color, edgeColor:m.edgeColor }, data));
     panels.push(p); buildMesh(p);
   });
-  (hwList || []).forEach(function (hd) { var hw = mkHardware(hd); hardware.push(hw); buildHardwareMesh(hw); });
+  (hwList || []).forEach(function (hd) {
+    var hw = mkHardware(hd); hardware.push(hw); buildHardwareMesh(hw);
+    // Template/AI hardware (e.g. drawer slides) carries no group link — adopt it
+    // into the group whose bounds contain it so it moves with its drawer/assembly.
+    if (hw.groupId == null) adoptHardwareGroup(hw);
+  });
   refreshUI(); fitCamera();
   // A template/sample is the user's own new work — leave view-only mode if we
   // somehow got here inside it, and drop the shared banner.
@@ -3915,7 +3952,10 @@ function updateHwField(field, v) {
   saveUndo();
   if (field === 'name') { selectedHw.name = v; refreshHwList(); }
   else if (field === 'finish') { selectedHw.finish = v; buildHardwareMesh(selectedHw); rebuildHwSelBox(); }
-  else { selectedHw[field] = parseFloat(v) || 0; syncHwPos(selectedHw); rebuildHwSelBox(); }
+  else {
+    selectedHw[field] = parseFloat(v) || 0; syncHwPos(selectedHw); rebuildHwSelBox();
+    if (field === 'x' || field === 'y' || field === 'z') { adoptHardwareGroup(selectedHw); refreshHwList(); }
+  }
 }
 
 function updateHwParam(key, v) {
@@ -4152,7 +4192,7 @@ function addSlidesForDrawer() {
   [-1, 1].forEach(function (s) {
     var hw = mkHardware({ type:'slide',
       x: Math.round(p.x + s * (p.w / 2 + clr)), y: Math.round(p.y), z: Math.round(p.z - travel / 2),
-      params: { length: Math.round(travel), height: 45 }, attachedTo: p.id });
+      params: { length: Math.round(travel), height: 45 }, attachedTo: p.id, groupId: p.groupId || null });
     hardware.push(hw); buildHardwareMesh(hw);
   });
   refreshHwList();
@@ -4497,7 +4537,7 @@ canvas.addEventListener('mousedown', function(e) {
         dragStart  = { mx: e.clientX, my: e.clientY };
         panelStart = { x: selected.x, y: selected.y, z: selected.z };
         groupStart = selectedGroup.map(function(q) { return { panel:q, x:q.x, y:q.y, z:q.z }; });
-        groupStartHw = getGroupHardware(selected.groupId).map(function(h) { return { hw:h, x:h.x, y:h.y, z:h.z }; });
+        groupStartHw = _followHardware(selectedGroup).map(function(h) { return { hw:h, x:h.x, y:h.y, z:h.z }; });
       }
     }
     return;
@@ -4695,7 +4735,11 @@ document.addEventListener('mouseup', function() {
   if (!isResizing && !isDragging && !dragPending && !isDraggingHw && !dragPendingHw) return;
   orbitCtrl.enabled = true;
   isResizing = isDragging = dragPending = false;
-  if (isDraggingHw && selectedHw) showHwProps(selectedHw);
+  if (isDraggingHw && selectedHw) {
+    showHwProps(selectedHw);
+    adoptHardwareGroup(selectedHw);
+    refreshHwList();
+  }
   isDraggingHw = dragPendingHw = false;
   if (activeHandle) { activeHandle.material.color.setHex(HANDLE_COL); activeHandle = null; }
   if (hoveredHandle) { hoveredHandle.material.color.setHex(HANDLE_COL); hoveredHandle = null; }
@@ -5541,7 +5585,7 @@ document.addEventListener('keydown', function(e) {
     var dz = (k==='ArrowUp'?-step:(k==='ArrowDown'?step:0));
     saveUndo();
     selectedGroup.forEach(function(p){ p.x = Math.round(p.x+dx); p.z = Math.round(p.z+dz); syncPos(p); rebuildSelBox(p); });
-    getGroupHardware(selected.groupId).forEach(function(h){ h.x = Math.round(h.x+dx); h.z = Math.round(h.z+dz); syncHwPos(h); });
+    _followHardware(selectedGroup).forEach(function(h){ h.x = Math.round(h.x+dx); h.z = Math.round(h.z+dz); syncHwPos(h); });
     refreshHandlePos(); showProps(selected); refreshOverall();
     return;
   }
