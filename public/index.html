@@ -4039,7 +4039,33 @@ function doorPose(p, theta) {
   var pivot = P0.clone().add(new THREE.Vector3(lx, ly, 0).applyQuaternion(Q0));
   var qr = new THREE.Quaternion().setFromAxisAngle(axis, th);
   var pos = pivot.clone().add(P0.clone().sub(pivot).applyQuaternion(qr));
-  return { pos: pos, quat: qr.clone().multiply(Q0) };
+  return { pos: pos, quat: qr.clone().multiply(Q0), pivot: pivot, rot: qr };
+}
+
+// Hardware that visually follows an opening door/drawer: explicitly linked
+// (attachedTo, or same group when useGroups), or sitting on the moving panels'
+// face — strict in-plane but tolerant along the face normal (where knobs and
+// handles protrude), so a neighbouring door's knob is never captured.
+// Slides are excluded when excludeSlides (drawer rails are cabinet-mounted).
+// Computed per frame: tiny arrays, and only runs while something is open/moving.
+function _funcFollowHw(p, movingPanels, useGroups, excludeSlides) {
+  var ids = {}, gids = {};
+  movingPanels.forEach(function (q) {
+    ids[q.id] = true;
+    if (useGroups && q.groupId != null) gids[q.groupId] = true;
+  });
+  var bb = _panelsBounds(movingPanels);
+  var nAxis = _panelNormalAxis(p);            // world axis of the front face normal
+  var tolN = 60, tolT = 3;
+  var tx = nAxis === 0 ? tolN : tolT, ty = nAxis === 1 ? tolN : tolT, tz = nAxis === 2 ? tolN : tolT;
+  return hardware.filter(function (h) {
+    if (excludeSlides && h.type === 'slide') return false;
+    if (h.attachedTo != null && ids[h.attachedTo]) return true;
+    if (h.groupId != null && gids[h.groupId]) return true;
+    return h.x >= bb.minX-tx && h.x <= bb.maxX+tx &&
+           h.y >= bb.minY-ty && h.y <= bb.maxY+ty &&
+           h.z >= bb.minZ-tz && h.z <= bb.maxZ+tz;
+  });
 }
 
 function applyFuncPose(p) {
@@ -4051,6 +4077,17 @@ function applyFuncPose(p) {
   [p.mesh, p.edges, p.selBox].forEach(function (o) { if (o) { o.position.copy(pose.pos); o.quaternion.copy(pose.quat); } });
   if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(pose.pos); m.quaternion.copy(pose.quat); });
   if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(pose.pos); l.quaternion.copy(pose.quat); });
+  // Hardware on the door (knob, handle, hinges) swings with it. Group links are
+  // NOT used here: a door grouped into a cabinet must not drag the whole
+  // cabinet's hardware around — only what is attached to or sitting on the door.
+  if (p.func.kind === 'door' && pose.pivot) {
+    _funcFollowHw(p, [p], false, false).forEach(function (h) {
+      if (!h.mesh) return;
+      var hp = pose.pivot.clone().add(new THREE.Vector3(h.x, h.y, h.z).sub(pose.pivot).applyQuaternion(pose.rot));
+      h.mesh.position.copy(hp);
+      h.mesh.quaternion.setFromEuler(new THREE.Euler((h.rx||0)*_D, (h.ry||0)*_D, (h.rz||0)*_D, 'XYZ')).premultiply(pose.rot);
+    });
+  }
 }
 
 // Stepped each frame from animate()
@@ -4161,11 +4198,17 @@ function _drawerOutDir(p) {
 
 function applyDrawerSlide(p) {
   var delta = _drawerOutDir(p).multiplyScalar(p._slideCur || 0);
-  _drawerGroup(p).forEach(function (q) {
+  var grp = _drawerGroup(p);
+  grp.forEach(function (q) {
     var bp = new THREE.Vector3(q.x, q.y, q.z).add(delta);
     [q.mesh, q.edges, q.selBox].forEach(function (o) { if (o) o.position.copy(bp); });
     if (q.jointMarkers) q.jointMarkers.forEach(function (m) { m.position.copy(bp); });
     if (q.mitreLines)   q.mitreLines.forEach(function (l) { l.position.copy(bp); });
+  });
+  // Knobs/handles on the drawer travel with it; slides stay (cabinet-mounted rails).
+  _funcFollowHw(p, grp, true, true).forEach(function (h) {
+    if (!h.mesh) return;
+    h.mesh.position.set(h.x + delta.x, h.y + delta.y, h.z + delta.z);
   });
 }
 
