@@ -17,6 +17,10 @@ const flagsRoutes = require('./routes/flags');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Behind Render's single proxy hop, so req.ip reflects the real client IP
+// (needed for per-IP rate limiting). Safe: exactly one trusted proxy.
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json({ limit: '5mb' })); // project state can be large
 

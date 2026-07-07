@@ -109,6 +109,10 @@ ON CONFLICT (key) DO NOTHING;
 DELETE FROM feature_flags WHERE key = 'image_to_design';
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- OTP codes now serve multiple flows (register / reset / login). Older rows
+-- default to 'register' so existing pending registrations keep working.
+ALTER TABLE otp_codes ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'register';
 `;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }

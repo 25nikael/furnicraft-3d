@@ -29,11 +29,23 @@ function getTransporter() {
   return transporter;
 }
 
+// Subject line per flow. Registration keeps its original subject; reset and
+// login-code flows get their own so the email reads correctly.
+const SUBJECTS = {
+  register: 'Your FurniCraft 3D verification code',
+  reset: 'Your FurniCraft 3D password reset code',
+  login: 'Your FurniCraft 3D sign-in code'
+};
+
 /**
  * Send a verification code.
+ * @param {string} email  recipient
+ * @param {string} code   6-digit code
+ * @param {string} [purpose='register']  one of register | reset | login;
+ *   selects the subject line. The email body is identical for all flows.
  * @returns {Promise<{devMode: boolean}>} devMode true when no SMTP configured.
  */
-async function sendOTP(email, code) {
+async function sendOTP(email, code, purpose = 'register') {
   if (!smtpConfigured()) {
     console.log(`[email] DEV MODE — OTP for ${email} is ${code}`);
     return { devMode: true };
@@ -42,7 +54,7 @@ async function sendOTP(email, code) {
   await getTransporter().sendMail({
     from,
     to: email,
-    subject: 'Your FurniCraft 3D verification code',
+    subject: SUBJECTS[purpose] || SUBJECTS.register,
     text: `Your verification code is ${code}. It expires in 10 minutes.`,
     html: `
       <div style="font-family:system-ui,sans-serif;max-width:420px;margin:0 auto;padding:24px;">
