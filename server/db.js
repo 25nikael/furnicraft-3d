@@ -99,14 +99,12 @@ CREATE TABLE IF NOT EXISTS feature_flags (
 );
 INSERT INTO feature_flags (key, label, enabled) VALUES
   ('ai_design',       'AI Design Assistant',    true),
+  ('image_to_design', 'AI Design from Image',   true),
   ('public_gallery',  'Public Gallery',         true),
   ('version_history', 'Version History',        true),
   ('pdf_export',      'PDF / Cut Sheet Export', true),
   ('share',           'Share Projects',         true)
 ON CONFLICT (key) DO NOTHING;
-
--- Drop the never-implemented "image_to_design" flag from existing databases.
-DELETE FROM feature_flags WHERE key = 'image_to_design';
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled BOOLEAN NOT NULL DEFAULT FALSE;
 

@@ -1128,6 +1128,24 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
         ✦ Generate
       </button>
 
+      <!-- Build from a photo (feature: image_to_design) -->
+      <div id="ai-image-section" style="border-top:1px solid var(--bd);margin-bottom:12px;padding-top:12px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:5px;">Or build from a photo</div>
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:8px;">Upload a photo of a piece of furniture and the AI will recreate it as an editable design.</div>
+        <input type="file" id="ai-image-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="_aiImagePicked(this)">
+        <div id="ai-image-drop" onclick="document.getElementById('ai-image-input').click()"
+          style="border:1.5px dashed var(--bd2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;color:var(--txt2);font-size:13px;">
+          📷 Click to choose a photo
+        </div>
+        <div id="ai-image-preview" style="display:none;margin-top:10px;">
+          <img id="ai-image-thumb" alt="Selected furniture photo" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--bd2);display:block;margin:0 auto 8px;">
+          <button id="ai-image-btn" onclick="generateFromImage()"
+            style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+            ✦ Recreate this furniture
+          </button>
+        </div>
+      </div>
+
       <!-- Status / result -->
       <div id="ai-status" style="display:none;text-align:center;padding:10px;font-size:13px;color:var(--txt2);"></div>
       <div id="ai-result" style="display:none;">
@@ -1559,6 +1577,7 @@ function openAIDesign() {
   document.getElementById('ai-status').style.display = 'none';
   document.getElementById('ai-err').textContent = '';
   document.getElementById('ai-advice').style.display = 'none';
+  _resetAiImage();
   // Show context note if canvas already has panels
   var note = document.getElementById('ai-ctx-note');
   if (note) note.style.display = panels.length > 0 ? 'block' : 'none';
@@ -1596,6 +1615,82 @@ async function generateAIDesign() {
   var prompt = document.getElementById('ai-prompt').value.trim();
   var currentDesign = panels.length > 0 ? _currentDesignForAI() : null;
   _aiRun(prompt, currentDesign);
+}
+
+// ── Design from a photo ─────────────────────────────────────
+var _aiImageData = null; // downscaled JPEG data URL, or null
+
+function _resetAiImage() {
+  _aiImageData = null;
+  var inp = document.getElementById('ai-image-input'); if (inp) inp.value = '';
+  var prev = document.getElementById('ai-image-preview'); if (prev) prev.style.display = 'none';
+  var drop = document.getElementById('ai-image-drop'); if (drop) drop.textContent = '📷 Click to choose a photo';
+}
+
+// Read the chosen file, downscale it to a vision-friendly size, and preview it.
+function _aiImagePicked(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var errEl = document.getElementById('ai-err'); errEl.textContent = '';
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var img = new Image();
+    img.onload = function () {
+      var MAX = 1568; // long-edge cap — Claude vision gains nothing above this
+      var scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      var cw = Math.max(1, Math.round(img.width * scale));
+      var ch = Math.max(1, Math.round(img.height * scale));
+      var cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      _aiImageData = cv.toDataURL('image/jpeg', 0.85);
+      document.getElementById('ai-image-thumb').src = _aiImageData;
+      document.getElementById('ai-image-preview').style.display = 'block';
+      document.getElementById('ai-image-drop').textContent = '📷 ' + file.name + ' — click to change';
+    };
+    img.onerror = function () { errEl.textContent = '⚠ Could not read that image. Try a PNG or JPEG.'; };
+    img.src = e.target.result;
+  };
+  reader.onerror = function () { errEl.textContent = '⚠ Could not read that file.'; };
+  reader.readAsDataURL(file);
+}
+
+async function generateFromImage() {
+  var errEl  = document.getElementById('ai-err');
+  var statEl = document.getElementById('ai-status');
+  var resEl  = document.getElementById('ai-result');
+  var btn    = document.getElementById('ai-image-btn');
+  errEl.textContent = ''; resEl.style.display = 'none';
+  if (!_aiImageData) { errEl.textContent = 'Choose a photo first.'; return; }
+
+  btn.disabled = true;
+  var lbl = btn.textContent;
+  btn.textContent = '⏳ Analysing photo…';
+  statEl.style.display = 'block';
+  statEl.textContent = 'Studying the photo and building your design…';
+
+  try {
+    var notes = document.getElementById('ai-prompt').value.trim();
+    var currentDesign = panels.length > 0 ? _currentDesignForAI() : null;
+    var resp = await fetch('/api/ai/from-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: _aiImageData, prompt: notes, currentDesign: currentDesign })
+    });
+    if (!resp.ok) {
+      var e = await resp.json().catch(function () { return {}; });
+      throw new Error(e.error || 'Server error ' + resp.status);
+    }
+    var data = await resp.json();
+    statEl.style.display = 'none';
+    _parseAndShowDesign(data.text);
+  } catch (err) {
+    statEl.style.display = 'none';
+    errEl.textContent = '⚠ ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = lbl;
+  }
 }
 
 async function aiAdvise(kind) {
@@ -2422,6 +2517,8 @@ function _setFlagVis(id, on) {
 function _applyFeatureFlags() {
   // AI design toolbar button (id="btn-ai")
   _setFlagVis('btn-ai', _flagOn('ai_design'));
+  // "Build from a photo" section inside the AI modal (id="ai-image-section")
+  _setFlagVis('ai-image-section', _flagOn('image_to_design'));
   // Cut sheet / PDF button (id="btn-cs") and inner PDF export
   _setFlagVis('btn-cs', _flagOn('pdf_export'));
   _setFlagVis('btn-export-pdf', _flagOn('pdf_export'));

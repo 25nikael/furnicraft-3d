@@ -62,6 +62,41 @@ function extractJSON(text) {
   return stripped;
 }
 
+// Single Claude call that returns a validated design-JSON string.
+// `userContent` may be a plain string or an array of content blocks (for vision).
+// Haiku is used deliberately — it is vision-capable and fast enough to stay under
+// Render's 30s request timeout, which past iterations proved Sonnet/Opus exceed.
+// Returns { jsonText } on success or { status, error } on failure.
+async function requestDesignJSON(apiKey, userContent) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 6000,
+      system: AI_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userContent }]
+    })
+  });
+
+  if (!resp.ok) {
+    const e = await resp.json().catch(() => ({}));
+    return { status: resp.status, error: e.error ? e.error.message : `API error ${resp.status}` };
+  }
+
+  const data = await resp.json();
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if (!textBlock) return { status: 500, error: 'No design content returned. Please try again.' };
+
+  const jsonText = extractJSON(textBlock.text);
+  try {
+    JSON.parse(jsonText);
+  } catch (_) {
+    return { status: 500, error: 'Design generation returned invalid JSON. Please try again.' };
+  }
+  return { jsonText };
+}
+
 router.post('/design', async (req, res) => {
   const { prompt, currentDesign } = req.body || {};
   if (!prompt || !prompt.trim()) return res.status(400).json({ error: 'prompt required' });
@@ -79,34 +114,54 @@ router.post('/design', async (req, res) => {
   }
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 6000,
-        system: AI_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }]
-      })
-    });
+    const out = await requestDesignJSON(apiKey, userContent);
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    res.json({ text: out.jsonText });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    if (!resp.ok) {
-      const e = await resp.json().catch(() => ({}));
-      return res.status(resp.status).json({ error: e.error ? e.error.message : `API error ${resp.status}` });
-    }
+// ── Design from a photo (vision) ────────────────────────────────────────
+// Accepts a base64 image data URL, asks Claude to reproduce the furniture in
+// the photo as a buildable design in the same JSON format as /design.
+router.post('/from-image', async (req, res) => {
+  const { image, prompt, currentDesign } = req.body || {};
+  if (!image || typeof image !== 'string') return res.status(400).json({ error: 'An image is required.' });
 
-    const data = await resp.json();
-    const textBlock = data.content.find(b => b.type === 'text');
-    if (!textBlock) return res.status(500).json({ error: 'No design content returned. Please try again.' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured on this server. Ask the admin to set ANTHROPIC_API_KEY.' });
 
-    const jsonText = extractJSON(textBlock.text);
-    try {
-      JSON.parse(jsonText);
-    } catch (_) {
-      return res.status(500).json({ error: 'Design generation returned invalid JSON. Please try again.' });
-    }
+  // Parse a data URL: data:image/<type>;base64,<data>
+  const m = /^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(image.trim());
+  if (!m) return res.status(400).json({ error: 'Unsupported image. Please use a PNG, JPEG, WebP or GIF photo.' });
+  const mediaType = m[1] === 'image/jpg' ? 'image/jpeg' : m[1];
+  const b64 = m[2];
+  // Guard against oversized payloads (decoded bytes ≈ base64 length × 3/4).
+  if (b64.length * 0.75 > 4 * 1024 * 1024) {
+    return res.status(413).json({ error: 'That image is too large. Please use a smaller or lower-resolution photo.' });
+  }
 
-    res.json({ text: jsonText });
+  const note = prompt && prompt.trim() ? `\n\nExtra notes from the user: ${prompt.trim()}` : '';
+  const ctx = (currentDesign && Array.isArray(currentDesign.panels) && currentDesign.panels.length > 0)
+    ? `\n\nFor reference only, the user's canvas currently contains: ${JSON.stringify(currentDesign)}. Ignore it unless the notes ask you to combine.`
+    : '';
+
+  const instruction =
+    `The image shows a piece of furniture. Study its overall form, proportions, and structure — count the shelves, drawers, doors, legs and panels, and note the apparent material and style. ` +
+    `Reproduce it as a buildable design using the coordinate system, construction rules and material keys defined above. ` +
+    `Estimate real-world dimensions in millimetres from the photo, assuming typical furniture sizes where the scale is unclear. ` +
+    `Include a short "name", a one-line "description", and "assembly_notes". Output ONLY the raw JSON design object.` + note + ctx;
+
+  const userContent = [
+    { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+    { type: 'text', text: instruction }
+  ];
+
+  try {
+    const out = await requestDesignJSON(apiKey, userContent);
+    if (out.error) return res.status(out.status).json({ error: out.error });
+    res.json({ text: out.jsonText });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
