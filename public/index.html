@@ -322,6 +322,56 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
 .auth-form input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
 .auth-err{color:#e05050;font-size:12px;min-height:16px;}
 .auth-ok{color:var(--teal);font-size:12px;min-height:16px;}
+/* ── Unified auth box (ported from landing.html, scoped to .auth-box) ── */
+.auth-box .auth-sub{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:20px;line-height:1.5;}
+.auth-box .auth-tabs{display:flex;border:1px solid var(--bd2);border-bottom:1px solid var(--bd2);border-radius:8px;overflow:hidden;margin-bottom:22px;}
+.auth-box .auth-tab{flex:1;padding:10px;background:transparent;border:none;color:var(--txt2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;border-bottom:none;margin-bottom:0;text-align:center;}
+.auth-box .auth-tab.active{background:var(--teal);color:#00201f;border-bottom-color:transparent;}
+.auth-banner{background:var(--teal-dim);border:1px solid var(--teal-dim2);border-radius:8px;padding:9px 13px;margin-bottom:18px;font-size:13px;color:var(--txt);line-height:1.5;}
+.auth-box .form-group{margin-bottom:14px;}
+.auth-box .form-group label{display:block;font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.auth-box .form-group input{width:100%;padding:11px 12px;background:var(--bg3);border:1px solid var(--bd2);border-radius:7px;color:var(--txt);font-size:14px;transition:border-color .15s;outline:none;font-family:inherit;}
+.auth-box .form-group input:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+.auth-box .pw-wrap{position:relative;}
+.auth-box .pw-wrap input{padding-right:44px;}
+.auth-box .pw-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--txt2);cursor:pointer;font-size:16px;padding:6px 8px;line-height:1;border-radius:5px;}
+.auth-box .pw-toggle:hover{color:var(--teal);}
+.auth-box .pw-req{font-size:12px;color:var(--txt2);margin-top:6px;transition:color .15s;}
+.auth-box .pw-req.ok{color:var(--ok,#4ade80);}
+.auth-box .strength-bar{display:flex;gap:5px;margin-top:8px;}
+.auth-box .strength-seg{flex:1;height:4px;border-radius:2px;background:var(--bd2);transition:background .2s;}
+.auth-box .strength-seg.s1{background:var(--err,#f87171);}
+.auth-box .strength-seg.s2{background:var(--gold,#f0c040);}
+.auth-box .strength-seg.s3{background:var(--ok,#4ade80);}
+.auth-box .form-links{display:flex;justify-content:space-between;gap:12px;margin-top:2px;margin-bottom:6px;flex-wrap:wrap;}
+.auth-box .form-link{font-size:12px;color:var(--teal);cursor:pointer;background:none;border:none;padding:0;font-family:inherit;text-align:left;}
+.auth-box .form-link:hover{text-decoration:underline;}
+.auth-box .form-submit{width:100%;padding:12px;background:var(--teal);color:#00201f;font-weight:700;font-size:14px;border:none;border-radius:7px;cursor:pointer;margin-top:8px;transition:background .15s,opacity .15s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;}
+.auth-box .form-submit:hover{background:var(--teal-lt);}
+.auth-box .form-submit:disabled{opacity:.6;cursor:default;}
+.auth-box .spinner{width:15px;height:15px;border:2px solid rgba(0,0,0,.3);border-top-color:#00201f;border-radius:50%;animation:spin .7s linear infinite;display:none;}
+.auth-box .form-submit.busy .spinner{display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.auth-box .field-err{color:var(--err,#f87171);font-size:12px;margin-top:5px;min-height:0;}
+.auth-box .form-err{color:var(--err,#f87171);font-size:13px;margin-top:10px;min-height:18px;text-align:center;}
+.auth-box .divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--txt2);font-size:12px;}
+.auth-box .divider::before,.auth-box .divider::after{content:'';flex:1;height:1px;background:var(--bd2);}
+.auth-box .google-btn{width:100%;padding:11px;background:var(--bg3);border:1px solid var(--bd2);border-radius:7px;color:var(--txt);font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:border-color .15s;font-family:inherit;}
+.auth-box .google-btn:hover{border-color:var(--teal);}
+.auth-box .google-icon{width:18px;height:18px;flex-shrink:0;}
+.auth-box .step-note{font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.55;}
+.auth-box .step-note strong{color:var(--txt);}
+.auth-box .otp-devbox{background:var(--teal-dim);border:1px solid var(--teal-dim2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--txt);line-height:1.5;}
+.auth-box .otp-devbox b{color:var(--teal);font-size:15px;letter-spacing:1px;}
+.auth-box .digit-group{display:flex;gap:8px;justify-content:space-between;margin-bottom:12px;}
+.auth-box .digit-box{flex:1;min-width:0;aspect-ratio:1/1.15;text-align:center;font-size:20px;font-weight:700;background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;color:var(--txt);outline:none;padding:0;}
+.auth-box .digit-box:focus{border-color:var(--teal);box-shadow:0 0 0 2px var(--teal-dim);}
+.auth-box .resend-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap;}
+.auth-box .resend-link{font-size:12px;color:var(--teal);cursor:pointer;background:none;border:none;padding:0;font-family:inherit;}
+.auth-box .resend-link:hover{text-decoration:underline;}
+.auth-box .resend-link:disabled{color:var(--txt2);cursor:default;text-decoration:none;}
+.auth-box .back-link{font-size:12px;color:var(--txt2);cursor:pointer;background:none;border:none;padding:0;font-family:inherit;text-align:center;display:block;margin:14px auto 0;}
+.auth-box .back-link:hover{color:var(--teal);}
 .proj-list{max-height:340px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px;margin-bottom:14px;}
 .proj-item{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bd);gap:10px;transition:background .1s;}
 .proj-item:last-child{border-bottom:none;}
@@ -433,82 +483,168 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
 </div>
 
 <!-- ── Auth modal ────────────────────────────────────── -->
-<div class="overlay-modal" id="auth-modal">
-  <div class="modal-box" style="max-width:380px;">
+<div class="overlay-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-hdr-title">
+  <div class="modal-box" style="max-width:400px;">
     <div class="modal-hdr">
-      Account
-      <button class="modal-close" onclick="closeAuth()">×</button>
+      <span id="auth-hdr-title">Account</span>
+      <button class="modal-close" onclick="closeAuth()" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
+     <div class="auth-box">
+      <!-- Session-expired banner (hidden except in the expired variant) -->
+      <div class="auth-banner" id="auth-banner" style="display:none;"></div>
+
       <div class="auth-tabs">
-        <div class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</div>
-        <div class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Create Account</div>
-      </div>
-      <!-- Google button (both tabs) -->
-      <div id="google-btn-wrap" style="margin-bottom:12px;">
-        <button onclick="doGoogleSignIn()" style="width:100%;padding:9px 12px;background:#fff;color:#222;border:1px solid #ccc;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
-          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.5 1.2 8.9 3.2l6.6-6.6C35.5 2.5 30.1 0 24 0 14.6 0 6.6 5.5 2.7 13.5l7.7 6C12.2 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8C43.5 37.5 46.5 31.4 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 28.5A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.1.8-4.5l-7.7-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.8-6.3z"/><path fill="#34A853" d="M24 48c6.1 0 11.2-2 14.9-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.4 2.2-6.4 0-11.8-4.3-13.7-10.1l-7.8 6.3C6.7 42.5 14.7 48 24 48z"/></svg>
-          Continue with Google
-        </button>
-      </div>
-      <div id="google-divider" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-        <div style="flex:1;height:1px;background:var(--bd2);"></div>
-        <span style="font-size:11px;color:var(--txt3);">or</span>
-        <div style="flex:1;height:1px;background:var(--bd2);"></div>
+        <button class="auth-tab active" id="tab-login"    onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab"        id="tab-register" onclick="switchAuthTab('register')">Create Account</button>
       </div>
 
-      <!-- Login -->
-      <div class="auth-form active" id="form-login">
-        <div>
-          <label>Email</label>
-          <input type="email" id="li-email" placeholder="you@example.com" autocomplete="email">
+      <!-- ══ SIGN IN ══ -->
+      <div id="screen-login" class="auth-screen">
+        <div id="li-google-wrap">
+          <button class="google-btn" onclick="doGoogleSignIn()">
+            <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continue with Google
+          </button>
+          <div class="divider" id="li-divider">or</div>
         </div>
-        <div>
-          <label>Password</label>
-          <input type="password" id="li-pass" placeholder="Password" autocomplete="current-password">
-        </div>
-        <div id="li-err" class="auth-err"></div>
-        <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doLogin()">Sign In</button>
+
+        <form id="li-form" onsubmit="return false;">
+          <div class="form-group">
+            <label for="li-email">Email</label>
+            <input type="email" id="li-email" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="li-pass">Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="li-pass" autocomplete="current-password" placeholder="••••••••">
+              <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePw('li-pass',this)">👁</button>
+            </div>
+          </div>
+          <div class="form-links">
+            <button type="button" class="form-link" id="li-passwordless-link" style="display:none;" onclick="showScreen('pl-request',{prefill:'li-email'})">Email me a sign-in code instead</button>
+            <button type="button" class="form-link" id="li-forgot-link" style="display:none;margin-left:auto;" onclick="showScreen('fp-request',{prefill:'li-email'})">Forgot password?</button>
+          </div>
+          <div class="form-err" id="li-err" aria-live="assertive"></div>
+          <button type="submit" class="form-submit" id="li-submit" onclick="doLogin()"><span class="spinner"></span><span class="btn-label">Sign In</span></button>
+        </form>
       </div>
 
-      <!-- Register — step 1: details -->
-      <div class="auth-form" id="form-register">
-        <div id="reg-step1">
-          <div>
-            <label>Email</label>
-            <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email">
-          </div>
-          <div>
-            <label>Password</label>
-            <input type="password" id="reg-pass" placeholder="At least 6 characters" autocomplete="new-password">
-          </div>
-          <div>
-            <label>Confirm Password</label>
-            <input type="password" id="reg-pass2" placeholder="Repeat password" autocomplete="new-password">
-          </div>
-          <div id="reg-err" class="auth-err"></div>
-          <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doRegisterStep1()">Send Verification Code</button>
+      <!-- ══ CREATE ACCOUNT ══ -->
+      <div id="screen-register" class="auth-screen" style="display:none;">
+        <div id="reg-google-wrap">
+          <button class="google-btn" onclick="doGoogleSignIn()">
+            <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continue with Google
+          </button>
+          <div class="divider" id="reg-divider">or</div>
         </div>
-        <!-- Register — step 2: OTP -->
-        <div id="reg-step2" style="display:none;">
-          <div style="text-align:center;padding:8px 0 14px;color:var(--txt2);font-size:13px;">
-            A 6-digit code was sent to<br><strong id="reg-otp-email" style="color:var(--teal);"></strong>
+
+        <form id="reg-form" onsubmit="return false;">
+          <div class="form-group">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" autocomplete="email" placeholder="you@example.com">
           </div>
-          <!-- DEV NOTICE: remove the box below once a real email service is wired in -->
-          <div id="reg-otp-devbox" style="background:var(--bg3);border:1px dashed var(--bd2);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--txt2);text-align:center;">
-            <span style="color:var(--txt3);font-size:11px;">DEV MODE — no email server configured</span><br>
-            Your code: <strong id="reg-otp-display" style="color:var(--teal);font-size:18px;letter-spacing:4px;"></strong>
+          <div class="form-group">
+            <label for="reg-pass">Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="reg-pass" autocomplete="new-password" placeholder="At least 8 characters" oninput="onRegPwInput()">
+              <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePw('reg-pass',this)">👁</button>
+            </div>
+            <div class="pw-req" id="reg-pw-req">At least 8 characters</div>
+            <div class="strength-bar" aria-hidden="true">
+              <div class="strength-seg" id="str-1"></div>
+              <div class="strength-seg" id="str-2"></div>
+              <div class="strength-seg" id="str-3"></div>
+            </div>
           </div>
-          <div>
-            <label>Verification Code</label>
-            <input type="text" id="reg-otp-input" placeholder="6-digit code" maxlength="6" autocomplete="one-time-code" style="letter-spacing:4px;font-size:16px;text-align:center;">
+          <div class="form-group">
+            <label for="reg-pass2">Confirm Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="reg-pass2" autocomplete="new-password" placeholder="••••••••" onblur="checkRegMatch()">
+              <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePw('reg-pass2',this)">👁</button>
+            </div>
+            <div class="field-err" id="reg-pass2-err"></div>
           </div>
-          <div id="reg-otp-err" class="auth-err"></div>
-          <div id="reg-ok" class="auth-ok"></div>
-          <button class="tbtn prim" style="width:100%;padding:9px;" onclick="doRegisterStep2()">Verify & Create Account</button>
-          <button class="tbtn" style="width:100%;padding:7px;margin-top:6px;font-size:12px;" onclick="cancelOTP()">← Back</button>
+          <div class="form-err" id="reg-err" aria-live="assertive"></div>
+          <button type="submit" class="form-submit" id="reg-submit" onclick="doRegister()"><span class="spinner"></span><span class="btn-label">Send verification code</span></button>
+        </form>
+      </div>
+
+      <!-- ══ REGISTRATION OTP ══ -->
+      <div id="screen-otp" class="auth-screen" style="display:none;">
+        <p class="step-note">Enter the 6-digit code we sent to <strong id="otp-email"></strong>.</p>
+        <div class="otp-devbox" id="otp-devbox" style="display:none;">Dev mode — no email server configured. Your code: <b id="otp-devcode"></b></div>
+        <div class="digit-group" role="group" aria-label="Verification code" id="otp-digits"></div>
+        <div class="form-err" id="otp-err" aria-live="assertive"></div>
+        <button type="button" class="form-submit" id="otp-submit" onclick="doVerify()"><span class="spinner"></span><span class="btn-label">Verify &amp; create account</span></button>
+        <div class="resend-row">
+          <button type="button" class="back-link" style="margin:0;" onclick="showScreen('register')">← Use a different email</button>
+          <button type="button" class="resend-link" id="otp-resend" onclick="resendOtp()">Resend code</button>
         </div>
       </div>
+
+      <!-- ══ FORGOT: request ══ -->
+      <div id="screen-fp-request" class="auth-screen" style="display:none;">
+        <div class="auth-sub">Enter your email and we'll send you a 6-digit reset code.</div>
+        <form id="fp-req-form" onsubmit="return false;">
+          <div class="form-group">
+            <label for="fp-email">Email</label>
+            <input type="email" id="fp-email" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <div class="form-err" id="fp-req-err" aria-live="assertive"></div>
+          <button type="submit" class="form-submit" id="fp-req-submit" onclick="doForgotRequest()"><span class="spinner"></span><span class="btn-label">Send reset code</span></button>
+        </form>
+        <button type="button" class="back-link" onclick="showScreen('login')">← Back to sign in</button>
+      </div>
+
+      <!-- ══ FORGOT: reset (code + new password) ══ -->
+      <div id="screen-fp-reset" class="auth-screen" style="display:none;">
+        <p class="step-note">Enter the reset code sent to <strong id="fp-reset-email"></strong> and choose a new password.</p>
+        <div class="otp-devbox" id="fp-devbox" style="display:none;">Dev mode — no email server configured. Your code: <b id="fp-devcode"></b></div>
+        <div class="digit-group" role="group" aria-label="Verification code" id="fp-digits"></div>
+        <div class="form-group">
+          <label for="fp-newpass">New Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="fp-newpass" autocomplete="new-password" placeholder="At least 8 characters" oninput="onFpPwInput()">
+            <button type="button" class="pw-toggle" aria-label="Show password" onclick="togglePw('fp-newpass',this)">👁</button>
+          </div>
+          <div class="pw-req" id="fp-pw-req">At least 8 characters</div>
+        </div>
+        <div class="form-err" id="fp-reset-err" aria-live="assertive"></div>
+        <button type="button" class="form-submit" id="fp-reset-submit" onclick="doReset()"><span class="spinner"></span><span class="btn-label">Set new password</span></button>
+        <div class="resend-row">
+          <button type="button" class="back-link" style="margin:0;" onclick="showScreen('login')">← Back to sign in</button>
+          <button type="button" class="resend-link" id="fp-resend" onclick="resendForgot()">Resend code</button>
+        </div>
+      </div>
+
+      <!-- ══ PASSWORDLESS: request ══ -->
+      <div id="screen-pl-request" class="auth-screen" style="display:none;">
+        <div class="auth-sub">We'll email you a one-time code to sign in — no password needed.</div>
+        <form id="pl-req-form" onsubmit="return false;">
+          <div class="form-group">
+            <label for="pl-email">Email</label>
+            <input type="email" id="pl-email" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <div class="form-err" id="pl-req-err" aria-live="assertive"></div>
+          <button type="submit" class="form-submit" id="pl-req-submit" onclick="doLoginCodeRequest()"><span class="spinner"></span><span class="btn-label">Send sign-in code</span></button>
+        </form>
+        <button type="button" class="back-link" onclick="showScreen('login')">← Use password instead</button>
+      </div>
+
+      <!-- ══ PASSWORDLESS: code ══ -->
+      <div id="screen-pl-code" class="auth-screen" style="display:none;">
+        <p class="step-note">Enter the sign-in code we sent to <strong id="pl-code-email"></strong>.</p>
+        <div class="digit-group" role="group" aria-label="Verification code" id="pl-digits"></div>
+        <div class="form-err" id="pl-code-err" aria-live="assertive"></div>
+        <button type="button" class="form-submit" id="pl-code-submit" onclick="doLoginCodeVerify()"><span class="spinner"></span><span class="btn-label">Sign In</span></button>
+        <div class="resend-row">
+          <button type="button" class="back-link" style="margin:0;" onclick="showScreen('login')">← Use password instead</button>
+          <button type="button" class="resend-link" id="pl-resend" onclick="resendLoginCode()">Resend code</button>
+        </div>
+      </div>
+     </div>
     </div>
   </div>
 </div>
@@ -1352,6 +1488,8 @@ async function api(path, opts) {
 // Clears auth state and reopens the sign-in modal; the current design stays in memory.
 var _sessionExpiredShown = false;
 function _handleSessionExpired(msg) {
+  // Capture the signed-in email BEFORE clearing so we can prefill it below.
+  var prevEmail = (_currentUser && _currentUser.email) || '';
   _clearToken();
   _currentUser   = null;
   if (typeof _updateTopbar === 'function') _updateTopbar();
@@ -1361,8 +1499,30 @@ function _handleSessionExpired(msg) {
     // Close any open modals first so the auth modal isn't buried underneath
     // one at the same z-index (e.g. expiring mid Save-As).
     if (typeof _closeTopModal === 'function') { var guard = 0; while (_closeTopModal() && guard++ < 20) {} }
-    if (typeof openAuth === 'function') openAuth();
+    if (typeof openSessionExpiredAuth === 'function') openSessionExpiredAuth(prevEmail);
   }
+}
+
+// Session-expired variant of the auth modal: Sign In tab, "Session expired"
+// header, a reassuring banner, email prefilled, password autofocused. The
+// in-memory design is never touched. Resets the normal state on next open.
+function openSessionExpiredAuth(prevEmail) {
+  openAuth();  // sets Account header + clears banner + Sign In screen + applyConfig
+  var hdr = document.getElementById('auth-hdr-title');
+  if (hdr) hdr.textContent = 'Session expired';
+  var banner = document.getElementById('auth-banner');
+  if (banner) {
+    banner.textContent = "You've been signed out. Sign in to keep working — your current design is safe.";
+    banner.style.display = '';
+  }
+  showScreen('login');
+  if (prevEmail) {
+    var emailEl = document.getElementById('li-email');
+    if (emailEl) emailEl.value = prevEmail;
+  }
+  // Autofocus password (email is already filled).
+  var passEl = document.getElementById('li-pass');
+  if (passEl) { try { passEl.focus(); } catch (e) {} }
 }
 
 // ── Share view-lock (F2) ───────────────────────────────────────
@@ -1562,101 +1722,460 @@ async function applyAIDesign(replace) {
   closeAIDesign();
 }
 
-function openAuth() {
-  switchAuthTab('login');
-  document.getElementById('li-email').value = '';
-  document.getElementById('li-pass').value  = '';
-  document.getElementById('li-err').textContent = '';
-  // Reset OTP flow
-  _pendingOTP = null;
-  document.getElementById('reg-step1').style.display = '';
-  document.getElementById('reg-step2').style.display = 'none';
-  document.getElementById('auth-modal').classList.add('active');
+// ═══════════════════════════════════════════════════════════════
+//  UNIFIED IN-EDITOR AUTH MODAL  (ported from landing.html)
+//  Screen router + flows. Helpers live in the `_auth.*` namespace to
+//  avoid clashing with editor globals; the flow fns keep the public
+//  names the rest of index.html already calls (doLogin/doRegister/…).
+// ═══════════════════════════════════════════════════════════════
+var _auth = {};
+
+// Which trigger opened the modal — focus returns here on close.
+var _authReturnFocus = null;
+
+// Screen registry (same 7 screens as landing).
+_auth.LOGIN_SCREENS = ['login', 'fp-request', 'fp-reset', 'pl-request', 'pl-code'];
+_auth.ALL_SCREENS   = ['login', 'register', 'otp', 'fp-request', 'fp-reset', 'pl-request', 'pl-code'];
+_auth.pending = { email: '' };
+
+function _authRoot() { return document.getElementById('auth-modal'); }
+
+_auth.clearErrors = function () {
+  _authRoot().querySelectorAll('.form-err,.field-err').forEach(function (n) { n.textContent = ''; });
+};
+
+// Autofocus first empty (or first) input on the active screen.
+_auth.autofocus = function (screenEl) {
+  var inputs = screenEl.querySelectorAll('input:not([type=hidden])');
+  for (var i = 0; i < inputs.length; i++) {
+    if (!inputs[i].value) { inputs[i].focus(); return; }
+  }
+  if (inputs.length) inputs[0].focus();
+};
+
+// opts.prefill: id of a source input whose value seeds this screen's first email field.
+function showScreen(name, opts) {
+  opts = opts || {};
+  _auth.clearErrors();
+  _auth.ALL_SCREENS.forEach(function (s) {
+    var el = document.getElementById('screen-' + s);
+    if (el) el.style.display = (s === name) ? '' : 'none';
+  });
+  var loginActive = _auth.LOGIN_SCREENS.indexOf(name) !== -1;
+  document.getElementById('tab-login').classList.toggle('active', loginActive);
+  document.getElementById('tab-register').classList.toggle('active', !loginActive);
+
+  var el = document.getElementById('screen-' + name);
+  if (opts.prefill) {
+    var src = document.getElementById(opts.prefill);
+    var firstEmail = el.querySelector('input[type=email]');
+    if (src && firstEmail && src.value) firstEmail.value = src.value;
+  }
+  _auth.autofocus(el);
 }
-function closeAuth() { document.getElementById('auth-modal').classList.remove('active'); }
 
-function switchAuthTab(tab) {
-  document.getElementById('tab-login').classList.toggle('active',    tab==='login');
-  document.getElementById('tab-register').classList.toggle('active', tab==='register');
-  document.getElementById('form-login').classList.toggle('active',    tab==='login');
-  document.getElementById('form-register').classList.toggle('active', tab==='register');
-  document.getElementById('li-err').textContent  = '';
-  document.getElementById('reg-err').textContent = '';
-  document.getElementById('reg-ok').textContent  = '';
+// Tabs: Sign In / Create Account. Kept as switchAuthTab for existing markup/back-compat.
+function switchAuthTab(tab) { showScreen(tab === 'register' ? 'register' : 'login'); }
+// Back-compat alias (landing uses switchTab).
+function switchTab(tab) { switchAuthTab(tab); }
+
+function openAuth(trigger) {
+  // Normal open: header = Account, no session-expired banner, Sign In tab default.
+  var hdr = document.getElementById('auth-hdr-title');
+  if (hdr) hdr.textContent = 'Account';
+  var banner = document.getElementById('auth-banner');
+  if (banner) { banner.style.display = 'none'; banner.textContent = ''; }
+  _authReturnFocus = (trigger && trigger.nodeType === 1)
+    ? trigger
+    : document.getElementById('tb-signin');
+  applyConfig();
+  showScreen('login');
+  _authRoot().classList.add('active');
+  // showScreen already autofocused the first empty field on the login screen.
 }
 
-// ── OTP state ─────────────────────────────────────────
-var _pendingOTP = null; // { email, pw, code }
+function closeAuth() {
+  _authRoot().classList.remove('active');
+  var banner = document.getElementById('auth-banner');
+  if (banner) { banner.style.display = 'none'; banner.textContent = ''; }
+  var hdr = document.getElementById('auth-hdr-title');
+  if (hdr) hdr.textContent = 'Account';
+  var t = _authReturnFocus;
+  _authReturnFocus = null;
+  if (t && document.body.contains(t) && t.offsetParent !== null) {
+    try { t.focus(); } catch (e) {}
+  }
+}
 
-async function doRegisterStep1() {
-  var email = document.getElementById('reg-email').value.trim().toLowerCase();
-  var pw    = document.getElementById('reg-pass').value;
-  var pw2   = document.getElementById('reg-pass2').value;
-  var err   = document.getElementById('reg-err');
-  err.textContent = '';
-  if (!email || !email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
-  if (pw.length < 6)  { err.textContent = 'Password must be at least 6 characters.'; return; }
-  if (pw !== pw2)     { err.textContent = 'Passwords do not match.'; return; }
-  try {
-    var res = await api('/auth/register', { method:'POST', body:{ email:email, password:pw } });
-    _pendingOTP = { email: email };
-    document.getElementById('reg-otp-email').textContent = email;
-    var devbox = document.getElementById('reg-otp-devbox');
-    if (res.devMode && res.devCode) {
-      // No SMTP configured — show the code in the UI for development
-      document.getElementById('reg-otp-display').textContent = res.devCode;
-      if (devbox) devbox.style.display = '';
-    } else {
-      // A real email was sent — hide the dev box
-      if (devbox) devbox.style.display = 'none';
+// ── Show/hide password toggle ──
+function togglePw(inputId, btn) {
+  var inp = document.getElementById(inputId);
+  var show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  btn.textContent = show ? '🙈' : '👁';
+}
+
+// ── Busy state (prevents double-submit) ──
+_auth.setBusy = function (btnId, busy, loadingLabel) {
+  var btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.classList.toggle('busy', busy);
+  var label = btn.querySelector('.btn-label');
+  if (label) {
+    if (busy) { btn._orig = label.textContent; label.textContent = loadingLabel; }
+    else if (btn._orig) { label.textContent = btn._orig; }
+  }
+};
+
+// ── Password requirement / strength (register + reset) ──
+_auth.updatePwReq = function (inputId, reqId) {
+  var v = document.getElementById(inputId).value;
+  var req = document.getElementById(reqId);
+  req.classList.toggle('ok', v.length >= 8);
+  req.textContent = v.length >= 8 ? '✓ At least 8 characters' : 'At least 8 characters';
+};
+_auth.pwStrength = function (v) {
+  var score = 0;
+  if (v.length >= 8) score++;
+  if (v.length >= 12) score++;
+  var variety = 0;
+  if (/[a-z]/.test(v)) variety++;
+  if (/[A-Z]/.test(v)) variety++;
+  if (/[0-9]/.test(v)) variety++;
+  if (/[^a-zA-Z0-9]/.test(v)) variety++;
+  if (variety >= 3) score++;
+  return Math.min(score, 3);
+};
+function onRegPwInput() {
+  _auth.updatePwReq('reg-pass', 'reg-pw-req');
+  var s = _auth.pwStrength(document.getElementById('reg-pass').value);
+  for (var i = 1; i <= 3; i++) {
+    var seg = document.getElementById('str-' + i);
+    seg.className = 'strength-seg' + (i <= s ? ' s' + s : '');
+  }
+}
+function onFpPwInput() { _auth.updatePwReq('fp-newpass', 'fp-pw-req'); }
+function checkRegMatch() {
+  var p = document.getElementById('reg-pass').value;
+  var p2 = document.getElementById('reg-pass2').value;
+  var e = document.getElementById('reg-pass2-err');
+  e.textContent = (p2 && p !== p2) ? 'Passwords do not match.' : '';
+}
+
+// ── Digit boxes (build + wire) ──
+function buildDigits(groupId, onComplete) {
+  var group = document.getElementById(groupId);
+  group.innerHTML = '';
+  var boxes = [];
+  for (var i = 0; i < 6; i++) {
+    var inp = document.createElement('input');
+    inp.className = 'digit-box';
+    inp.type = 'text';
+    inp.inputMode = 'numeric';
+    inp.maxLength = 1;
+    inp.setAttribute('aria-label', 'Digit ' + (i + 1));
+    if (i === 0) inp.autocomplete = 'one-time-code';
+    boxes.push(inp);
+    group.appendChild(inp);
+  }
+  function val() { return boxes.map(function (b) { return b.value; }).join(''); }
+  boxes.forEach(function (box, idx) {
+    box.addEventListener('input', function () {
+      box.value = box.value.replace(/\D/g, '').slice(0, 1);
+      if (box.value && idx < 5) boxes[idx + 1].focus();
+      if (val().length === 6 && onComplete) onComplete();
+    });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace' && !box.value && idx > 0) boxes[idx - 1].focus();
+      else if (e.key === 'ArrowLeft' && idx > 0) boxes[idx - 1].focus();
+      else if (e.key === 'ArrowRight' && idx < 5) boxes[idx + 1].focus();
+      else if (e.key === 'Enter' && val().length === 6 && onComplete) onComplete();
+    });
+    box.addEventListener('paste', function (e) {
+      e.preventDefault();
+      var txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+      for (var j = 0; j < 6; j++) boxes[j].value = txt[j] || '';
+      var next = Math.min(txt.length, 5);
+      boxes[next].focus();
+      if (val().length === 6 && onComplete) onComplete();
+    });
+  });
+  group._val = val;
+  group._focus = function () { if (boxes[0]) boxes[0].focus(); };
+  group._clear = function () { boxes.forEach(function (b) { b.value = ''; }); };
+  return group;
+}
+function digitVal(groupId) { return document.getElementById(groupId)._val(); }
+
+// ── Resend cooldown (30s) ──
+function startCooldown(linkId, seconds, resendFn) {
+  var link = document.getElementById(linkId);
+  var remaining = seconds;
+  link.disabled = true;
+  link._resend = resendFn;
+  function tick() {
+    if (remaining <= 0) {
+      link.disabled = false;
+      link.textContent = 'Resend code';
+      return;
     }
-    document.getElementById('reg-otp-input').value     = '';
-    document.getElementById('reg-otp-err').textContent = '';
-    document.getElementById('reg-ok').textContent      = '';
-    document.getElementById('reg-step1').style.display = 'none';
-    document.getElementById('reg-step2').style.display = '';
-  } catch(e) {
-    err.textContent = e.message;
+    var m = Math.floor(remaining / 60);
+    var s = String(remaining % 60).padStart(2, '0');
+    link.textContent = 'Resend in ' + m + ':' + s;
+    remaining--;
+    link._timer = setTimeout(tick, 1000);
   }
+  if (link._timer) clearTimeout(link._timer);
+  tick();
 }
 
-async function doRegisterStep2() {
-  if (!_pendingOTP) return;
-  var entered = document.getElementById('reg-otp-input').value.trim();
-  var err = document.getElementById('reg-otp-err');
-  var ok  = document.getElementById('reg-ok');
-  err.textContent = ''; ok.textContent = '';
-  if (!entered) { err.textContent = 'Enter the verification code.'; return; }
+// ── Error mapping for sign-in ──
+function mapLoginError(err) {
+  var m = (err && err.message) || 'That email or password is incorrect.';
+  if (m === 'No account found for that email.' || m === 'Incorrect password.') {
+    return 'That email or password is incorrect.';
+  }
+  return m;
+}
+
+// ── Post-auth (editor context): store session, refresh UI in place, NO redirect ──
+// Reused after every successful auth (login, verify, reset, login-code, google).
+function afterAuth(res) {
+  _applyAuth(res);                 // sets token + _currentUser + _updateTopbar + clears _sessionExpiredShown
+  uiToast('Signed in.', 'success');
+  closeAuth();
+  // A view-only shared design or an in-progress design stays exactly as-is —
+  // we intentionally do NOT reload or navigate.
+}
+
+/* ══════════════ FLOWS ══════════════ */
+
+/* ── Sign in ── */
+async function doLogin() {
+  var email = document.getElementById('li-email').value.trim().toLowerCase();
+  var pw = document.getElementById('li-pass').value;
+  var err = document.getElementById('li-err');
+  err.textContent = '';
+  if (!email || !pw) { err.textContent = 'Enter your email and password.'; return; }
+  _auth.setBusy('li-submit', true, 'Signing in…');
   try {
-    var res = await api('/auth/verify', { method:'POST', body:{ email:_pendingOTP.email, code:entered } });
-    _pendingOTP = null;
-    _applyAuth(res);
-    ok.textContent = 'Email verified! Signing you in…';
-    setTimeout(function(){ closeAuth(); }, 700);
-  } catch(e) {
-    err.textContent = e.message;
+    var res = await api('/auth/login', { method: 'POST', body: { email: email, password: pw } });
+    afterAuth(res);
+  } catch (e) {
+    err.textContent = mapLoginError(e);
+  } finally {
+    _auth.setBusy('li-submit', false);
   }
 }
 
-function cancelOTP() {
-  _pendingOTP = null;
-  document.getElementById('reg-step1').style.display = '';
-  document.getElementById('reg-step2').style.display = 'none';
-  document.getElementById('reg-err').textContent = '';
+/* ── Register → OTP ── */
+async function doRegister() {
+  var email = document.getElementById('reg-email').value.trim().toLowerCase();
+  var pw = document.getElementById('reg-pass').value;
+  var pw2 = document.getElementById('reg-pass2').value;
+  var err = document.getElementById('reg-err');
+  err.textContent = '';
+  document.getElementById('reg-pass2-err').textContent = '';
+  if (!email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
+  if (pw.length < 8) {
+    document.getElementById('reg-pw-req').classList.remove('ok');
+    document.getElementById('reg-pw-req').textContent = 'At least 8 characters';
+    err.textContent = 'Password must be at least 8 characters.'; return;
+  }
+  if (pw !== pw2) { document.getElementById('reg-pass2-err').textContent = 'Passwords do not match.'; return; }
+  _auth.setBusy('reg-submit', true, 'Sending…');
+  try {
+    var res = await api('/auth/register', { method: 'POST', body: { email: email, password: pw } });
+    _auth.pending.email = email;
+    _auth.openOtp(res);
+  } catch (e) {
+    err.textContent = e.message;
+    _auth.setBusy('reg-submit', false);
+  }
 }
+
+_auth.openOtp = function (res) {
+  document.getElementById('otp-email').textContent = _auth.pending.email;
+  var box = document.getElementById('otp-devbox');
+  if (res && res.devMode && res.devCode) {
+    document.getElementById('otp-devcode').textContent = res.devCode;
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+  showScreen('otp');
+  var g = buildDigits('otp-digits', doVerify);
+  g._focus();
+  startCooldown('otp-resend', 30, resendOtp);
+  _auth.setBusy('reg-submit', false);
+};
+
+async function resendOtp() {
+  var pw = document.getElementById('reg-pass').value;
+  try {
+    var res = await api('/auth/register', { method: 'POST', body: { email: _auth.pending.email, password: pw } });
+    var box = document.getElementById('otp-devbox');
+    if (res && res.devMode && res.devCode) {
+      document.getElementById('otp-devcode').textContent = res.devCode;
+      box.style.display = '';
+    }
+    uiToast('A new code has been sent.', 'success');
+    startCooldown('otp-resend', 30, resendOtp);
+  } catch (e) { uiToast(e.message, 'error'); }
+}
+
+async function doVerify() {
+  var code = digitVal('otp-digits');
+  var err = document.getElementById('otp-err');
+  err.textContent = '';
+  if (code.length !== 6) { err.textContent = 'Enter all six digits.'; return; }
+  _auth.setBusy('otp-submit', true, 'Verifying…');
+  try {
+    var res = await api('/auth/verify', { method: 'POST', body: { email: _auth.pending.email, code: code } });
+    afterAuth(res);
+  } catch (e) {
+    err.textContent = 'That code is incorrect or has expired. Check the code or resend a new one.';
+    _auth.setBusy('otp-submit', false);
+  }
+}
+
+/* ── Forgot password ── */
+async function doForgotRequest() {
+  var email = document.getElementById('fp-email').value.trim().toLowerCase();
+  var err = document.getElementById('fp-req-err');
+  err.textContent = '';
+  if (!email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
+  _auth.setBusy('fp-req-submit', true, 'Sending…');
+  try {
+    var res = await api('/auth/forgot', { method: 'POST', body: { email: email } });
+    _auth.pending.email = email;
+    document.getElementById('fp-reset-email').textContent = email;
+    var box = document.getElementById('fp-devbox');
+    if (res && res.devCode) { document.getElementById('fp-devcode').textContent = res.devCode; box.style.display = ''; }
+    else box.style.display = 'none';
+    showScreen('fp-reset');
+    var g = buildDigits('fp-digits', null);
+    g._focus();
+    startCooldown('fp-resend', 30, resendForgot);
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    _auth.setBusy('fp-req-submit', false);
+  }
+}
+
+async function resendForgot() {
+  try {
+    var res = await api('/auth/forgot', { method: 'POST', body: { email: _auth.pending.email } });
+    var box = document.getElementById('fp-devbox');
+    if (res && res.devCode) { document.getElementById('fp-devcode').textContent = res.devCode; box.style.display = ''; }
+    uiToast('A new code has been sent.', 'success');
+    startCooldown('fp-resend', 30, resendForgot);
+  } catch (e) { uiToast(e.message, 'error'); }
+}
+
+async function doReset() {
+  var code = digitVal('fp-digits');
+  var pw = document.getElementById('fp-newpass').value;
+  var err = document.getElementById('fp-reset-err');
+  err.textContent = '';
+  if (code.length !== 6) { err.textContent = 'Enter the 6-digit reset code.'; return; }
+  if (pw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+  _auth.setBusy('fp-reset-submit', true, 'Saving…');
+  try {
+    var res = await api('/auth/reset', { method: 'POST', body: { email: _auth.pending.email, code: code, password: pw } });
+    uiToast("Password updated — you're signed in.", 'success');
+    afterAuth(res);
+  } catch (e) {
+    err.textContent = 'That code is incorrect or has expired.';
+    _auth.setBusy('fp-reset-submit', false);
+  }
+}
+
+/* ── Passwordless sign-in ── */
+async function doLoginCodeRequest() {
+  var email = document.getElementById('pl-email').value.trim().toLowerCase();
+  var err = document.getElementById('pl-req-err');
+  err.textContent = '';
+  if (!email.includes('@')) { err.textContent = 'Enter a valid email.'; return; }
+  _auth.setBusy('pl-req-submit', true, 'Sending…');
+  try {
+    await api('/auth/login-code/request', { method: 'POST', body: { email: email } });
+    _auth.pending.email = email;
+    document.getElementById('pl-code-email').textContent = email;
+    showScreen('pl-code');
+    var g = buildDigits('pl-digits', doLoginCodeVerify);
+    g._focus();
+    startCooldown('pl-resend', 30, resendLoginCode);
+  } catch (e) {
+    if (e.status === 503) {
+      uiToast("Email sign-in isn't available right now.", 'error');
+      showScreen('login');
+    } else {
+      err.textContent = e.message;
+    }
+  } finally {
+    _auth.setBusy('pl-req-submit', false);
+  }
+}
+
+async function resendLoginCode() {
+  try {
+    await api('/auth/login-code/request', { method: 'POST', body: { email: _auth.pending.email } });
+    uiToast('A new code has been sent.', 'success');
+    startCooldown('pl-resend', 30, resendLoginCode);
+  } catch (e) { uiToast(e.message, 'error'); }
+}
+
+async function doLoginCodeVerify() {
+  var code = digitVal('pl-digits');
+  var err = document.getElementById('pl-code-err');
+  err.textContent = '';
+  if (code.length !== 6) { err.textContent = 'Enter all six digits.'; return; }
+  _auth.setBusy('pl-code-submit', true, 'Signing in…');
+  try {
+    var res = await api('/auth/login-code/verify', { method: 'POST', body: { email: _auth.pending.email, code: code } });
+    afterAuth(res);
+  } catch (e) {
+    err.textContent = 'That code is incorrect or has expired.';
+    _auth.setBusy('pl-code-submit', false);
+  }
+}
+
+// ── Config gating: show/hide methods by server booleans (mirrors landing) ──
+function applyConfig() {
+  var c = _serverConfig || {};
+  var googleOn = !!c.googleClientId;
+  ['li-google-wrap', 'reg-google-wrap'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = googleOn ? '' : 'none';
+  });
+  var forgot = document.getElementById('li-forgot-link');
+  if (forgot) forgot.style.display = c.emailAuth ? '' : 'none';
+  var pl = document.getElementById('li-passwordless-link');
+  if (pl) pl.style.display = c.passwordlessLogin ? '' : 'none';
+}
+
+// Enter-to-submit on the simple (non-digit) forms.
+['li-form', 'reg-form', 'fp-req-form', 'pl-req-form'].forEach(function (id) {
+  var f = document.getElementById(id);
+  if (f) f.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var btn = f.querySelector('.form-submit');
+      if (btn && !btn.disabled) btn.click();
+    }
+  });
+});
 
 // ── Google Sign-In ────────────────────────────────────
 function _googleClientId() { return _serverConfig ? _serverConfig.googleClientId : ''; }
 
-// When the server has no Google client ID configured, the "Continue with Google"
-// button is a dead-end — hide it and the "or" divider entirely.
-function _applyGoogleAuthVisibility() {
-  var on = !!_googleClientId();
-  var wrap = document.getElementById('google-btn-wrap');
-  if (wrap) wrap.style.display = on ? '' : 'none';
-  var div = document.getElementById('google-divider');
-  if (div) div.style.display = on ? '' : 'none';
-}
+// Back-compat wrapper — init still calls this. The unified applyConfig() gates
+// Google (button + "or" divider) plus forgot/passwordless in one place.
+function _applyGoogleAuthVisibility() { applyConfig(); }
 
 function doGoogleSignIn() {
   var cid = _googleClientId();
@@ -1676,11 +2195,12 @@ function doGoogleSignIn() {
   });
   google.accounts.id.prompt(function(notification) {
     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      // Prompt blocked (e.g. third-party cookie policy) — fall back to popup button
-      google.accounts.id.renderButton(
-        document.getElementById('google-btn-wrap'),
-        { theme: 'outline', size: 'large', width: '100%' }
-      );
+      // Prompt blocked (e.g. third-party cookie policy) — fall back to popup button.
+      // Render into the currently-visible screen's Google wrap.
+      var loginVisible = document.getElementById('screen-login').style.display !== 'none';
+      var target = document.getElementById(loginVisible ? 'li-google-wrap' : 'reg-google-wrap')
+                || document.getElementById('li-google-wrap');
+      if (target) google.accounts.id.renderButton(target, { theme: 'outline', size: 'large', width: '100%' });
     }
   });
 }
@@ -1689,27 +2209,11 @@ function doGoogleSignIn() {
 async function _handleGoogleCredential(response) {
   try {
     var res = await api('/auth/google', { method:'POST', body:{ credential: response.credential } });
-    _applyAuth(res);
-    closeAuth();
+    afterAuth(res);
   } catch(e) {
     var el = document.getElementById('li-err');
     if (el) el.textContent = e.message;
     else uiToast(e.message, 'error');
-  }
-}
-
-async function doLogin() {
-  var email = document.getElementById('li-email').value.trim().toLowerCase();
-  var pw    = document.getElementById('li-pass').value;
-  var err   = document.getElementById('li-err');
-  err.textContent = '';
-  if (!email || !pw) { err.textContent = 'Enter your email and password.'; return; }
-  try {
-    var res = await api('/auth/login', { method:'POST', body:{ email:email, password:pw } });
-    _applyAuth(res);
-    closeAuth();
-  } catch(e) {
-    err.textContent = e.message;
   }
 }
 
@@ -2292,7 +2796,7 @@ var _hasShareParam = /[?&]share=/.test(location.search);
 (async function() {
   try { _serverConfig = await api('/auth/config'); }
   catch(e) { _serverConfig = { googleClientId:'', dbReady:false }; }
-  _applyGoogleAuthVisibility();
+  applyConfig();
 
   // Auth gate — redirect to landing if no valid session…
   // …unless this is a share link, which is viewable signed-out.
