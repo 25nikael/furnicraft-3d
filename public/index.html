@@ -1128,17 +1128,17 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
         ✦ Generate
       </button>
 
-      <!-- Build from a photo (feature: image_to_design) -->
+      <!-- Build from photos (feature: image_to_design) -->
       <div id="ai-image-section" style="border-top:1px solid var(--bd);margin-bottom:12px;padding-top:12px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:5px;">Or build from a photo</div>
-        <div style="font-size:12px;color:var(--txt2);margin-bottom:8px;">Upload a photo of a piece of furniture and the AI will recreate it as an editable design.</div>
-        <input type="file" id="ai-image-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="_aiImagePicked(this)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:5px;">Or build from photos</div>
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:8px;">Add one or more photos of the <b>same piece</b> from different angles (front, side, back, inside). More views = a more accurate recreation.</div>
+        <input type="file" id="ai-image-input" accept="image/png,image/jpeg,image/webp" multiple style="display:none;" onchange="_aiImagePicked(this)">
         <div id="ai-image-drop" onclick="document.getElementById('ai-image-input').click()"
           style="border:1.5px dashed var(--bd2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;color:var(--txt2);font-size:13px;">
-          📷 Click to choose a photo
+          📷 Click to add photos (front, side, back, inside…)
         </div>
         <div id="ai-image-preview" style="display:none;margin-top:10px;">
-          <img id="ai-image-thumb" alt="Selected furniture photo" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--bd2);display:block;margin:0 auto 8px;">
+          <div id="ai-image-thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
           <button id="ai-image-btn" onclick="generateFromImage()"
             style="width:100%;padding:11px;border-radius:8px;border:none;background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
             ✦ Recreate this furniture
@@ -1617,42 +1617,67 @@ async function generateAIDesign() {
   _aiRun(prompt, currentDesign);
 }
 
-// ── Design from a photo ─────────────────────────────────────
-var _aiImageData = null; // downscaled JPEG data URL, or null
+// ── Design from photos ──────────────────────────────────────
+var _aiImages = [];          // array of downscaled JPEG data URLs
+var _AI_MAX_IMAGES = 5;
 
 function _resetAiImage() {
-  _aiImageData = null;
+  _aiImages = [];
   var inp = document.getElementById('ai-image-input'); if (inp) inp.value = '';
+  var thumbs = document.getElementById('ai-image-thumbs'); if (thumbs) thumbs.innerHTML = '';
   var prev = document.getElementById('ai-image-preview'); if (prev) prev.style.display = 'none';
-  var drop = document.getElementById('ai-image-drop'); if (drop) drop.textContent = '📷 Click to choose a photo';
+  var drop = document.getElementById('ai-image-drop'); if (drop) drop.textContent = '📷 Click to add photos (front, side, back, inside…)';
 }
 
-// Read the chosen file, downscale it to a vision-friendly size, and preview it.
+function _aiRemoveImage(i) { _aiImages.splice(i, 1); _renderAiThumbs(); }
+
+function _renderAiThumbs() {
+  var wrap = document.getElementById('ai-image-thumbs');
+  if (!wrap) return;
+  wrap.innerHTML = _aiImages.map(function (src, i) {
+    return '<div style="position:relative;">' +
+      '<img src="' + src + '" alt="Photo ' + (i + 1) + '" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--bd2);display:block;">' +
+      '<button onclick="_aiRemoveImage(' + i + ')" title="Remove" ' +
+      'style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:#e05050;color:#fff;font-size:12px;line-height:1;cursor:pointer;padding:0;">×</button>' +
+    '</div>';
+  }).join('');
+  var has = _aiImages.length > 0;
+  document.getElementById('ai-image-preview').style.display = has ? 'block' : 'none';
+  document.getElementById('ai-image-drop').textContent = has
+    ? ('📷 ' + _aiImages.length + ' photo' + (_aiImages.length > 1 ? 's' : '') + ' added — click to add more')
+    : '📷 Click to add photos (front, side, back, inside…)';
+}
+
+// Read each chosen file, downscale to a vision-friendly size, and append to the set.
 function _aiImagePicked(input) {
-  var file = input.files && input.files[0];
-  if (!file) return;
+  var files = input.files ? Array.prototype.slice.call(input.files) : [];
+  input.value = ''; // allow re-selecting the same file later
   var errEl = document.getElementById('ai-err'); errEl.textContent = '';
-  var reader = new FileReader();
-  reader.onload = function (e) {
-    var img = new Image();
-    img.onload = function () {
-      var MAX = 1568; // long-edge cap — Claude vision gains nothing above this
-      var scale = Math.min(1, MAX / Math.max(img.width, img.height));
-      var cw = Math.max(1, Math.round(img.width * scale));
-      var ch = Math.max(1, Math.round(img.height * scale));
-      var cv = document.createElement('canvas');
-      cv.width = cw; cv.height = ch;
-      cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
-      _aiImageData = cv.toDataURL('image/jpeg', 0.85);
-      document.getElementById('ai-image-thumb').src = _aiImageData;
-      document.getElementById('ai-image-preview').style.display = 'block';
-      document.getElementById('ai-image-drop').textContent = '📷 ' + file.name + ' — click to change';
+  files.forEach(function (file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onload = function () {
+        if (_aiImages.length >= _AI_MAX_IMAGES) {
+          errEl.textContent = '⚠ Up to ' + _AI_MAX_IMAGES + ' photos.';
+          return;
+        }
+        var MAX = 1568; // long-edge cap — Claude vision gains nothing above this
+        var scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        var cw = Math.max(1, Math.round(img.width * scale));
+        var ch = Math.max(1, Math.round(img.height * scale));
+        var cv = document.createElement('canvas');
+        cv.width = cw; cv.height = ch;
+        cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        _aiImages.push(cv.toDataURL('image/jpeg', 0.85));
+        _renderAiThumbs();
+      };
+      img.onerror = function () { errEl.textContent = '⚠ Could not read one of the images. Try a PNG or JPEG.'; };
+      img.src = e.target.result;
     };
-    img.onerror = function () { errEl.textContent = '⚠ Could not read that image. Try a PNG or JPEG.'; };
-    img.src = e.target.result;
-  };
-  reader.onerror = function () { errEl.textContent = '⚠ Could not read that file.'; };
-  reader.readAsDataURL(file);
+    reader.onerror = function () { errEl.textContent = '⚠ Could not read one of the files.'; };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function generateFromImage() {
@@ -1661,13 +1686,15 @@ async function generateFromImage() {
   var resEl  = document.getElementById('ai-result');
   var btn    = document.getElementById('ai-image-btn');
   errEl.textContent = ''; resEl.style.display = 'none';
-  if (!_aiImageData) { errEl.textContent = 'Choose a photo first.'; return; }
+  if (!_aiImages.length) { errEl.textContent = 'Add at least one photo first.'; return; }
 
   btn.disabled = true;
   var lbl = btn.textContent;
-  btn.textContent = '⏳ Analysing photo…';
+  btn.textContent = _aiImages.length > 1 ? '⏳ Analysing photos…' : '⏳ Analysing photo…';
   statEl.style.display = 'block';
-  statEl.textContent = 'Studying the photo and building your design…';
+  statEl.textContent = _aiImages.length > 1
+    ? 'Studying ' + _aiImages.length + ' photos and building your design…'
+    : 'Studying the photo and building your design…';
 
   try {
     var notes = document.getElementById('ai-prompt').value.trim();
@@ -1675,7 +1702,7 @@ async function generateFromImage() {
     var resp = await fetch('/api/ai/from-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: _aiImageData, prompt: notes, currentDesign: currentDesign })
+      body: JSON.stringify({ images: _aiImages, prompt: notes, currentDesign: currentDesign })
     });
     if (!resp.ok) {
       var e = await resp.json().catch(function () { return {}; });

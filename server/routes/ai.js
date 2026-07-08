@@ -64,16 +64,18 @@ function extractJSON(text) {
 
 // Single Claude call that returns a validated design-JSON string.
 // `userContent` may be a plain string or an array of content blocks (for vision).
-// Haiku is used deliberately — it is vision-capable and fast enough to stay under
-// Render's 30s request timeout, which past iterations proved Sonnet/Opus exceed.
+// opts.model / opts.maxTokens override the defaults: the text designer uses Haiku
+// (fast, within Render's 30s request timeout), while the photo designer uses a
+// stronger vision model for accurate spatial reconstruction.
 // Returns { jsonText } on success or { status, error } on failure.
-async function requestDesignJSON(apiKey, userContent) {
+async function requestDesignJSON(apiKey, userContent, opts) {
+  opts = opts || {};
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 6000,
+      model: opts.model || 'claude-haiku-4-5-20251001',
+      max_tokens: opts.maxTokens || 6000,
       system: AI_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }]
     })
@@ -122,44 +124,61 @@ router.post('/design', async (req, res) => {
   }
 });
 
-// ── Design from a photo (vision) ────────────────────────────────────────
-// Accepts a base64 image data URL, asks Claude to reproduce the furniture in
-// the photo as a buildable design in the same JSON format as /design.
+// ── Design from photos (vision) ─────────────────────────────────────────
+// Accepts one or more base64 image data URLs of the SAME piece from different
+// angles and asks Claude to reproduce it as a buildable design in the same JSON
+// format as /design. Uses a stronger vision model than the text designer because
+// accurate spatial reconstruction needs better proportion and structure reasoning.
+const IMAGE_MODEL = 'claude-sonnet-4-6';
+const MAX_IMAGES = 5;
+
 router.post('/from-image', async (req, res) => {
-  const { image, prompt, currentDesign } = req.body || {};
-  if (!image || typeof image !== 'string') return res.status(400).json({ error: 'An image is required.' });
+  const body = req.body || {};
+  // Accept `images: [...]` (preferred) or a single legacy `image`.
+  let images = Array.isArray(body.images) ? body.images : (body.image ? [body.image] : []);
+  images = images.filter(x => typeof x === 'string' && x.trim());
+  if (images.length === 0) return res.status(400).json({ error: 'At least one image is required.' });
+  if (images.length > MAX_IMAGES) images = images.slice(0, MAX_IMAGES);
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'AI not configured on this server. Ask the admin to set ANTHROPIC_API_KEY.' });
 
-  // Parse a data URL: data:image/<type>;base64,<data>
-  const m = /^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(image.trim());
-  if (!m) return res.status(400).json({ error: 'Unsupported image. Please use a PNG, JPEG, WebP or GIF photo.' });
-  const mediaType = m[1] === 'image/jpg' ? 'image/jpeg' : m[1];
-  const b64 = m[2];
-  // Guard against oversized payloads (decoded bytes ≈ base64 length × 3/4).
-  if (b64.length * 0.75 > 4 * 1024 * 1024) {
-    return res.status(413).json({ error: 'That image is too large. Please use a smaller or lower-resolution photo.' });
+  // Parse and validate each data URL: data:image/<type>;base64,<data>
+  const blocks = [];
+  for (const img of images) {
+    const m = /^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(img.trim());
+    if (!m) return res.status(400).json({ error: 'Unsupported image. Please use PNG, JPEG, WebP or GIF photos.' });
+    const mediaType = m[1] === 'image/jpg' ? 'image/jpeg' : m[1];
+    const b64 = m[2];
+    if (b64.length * 0.75 > 4 * 1024 * 1024) {
+      return res.status(413).json({ error: 'One of the images is too large. Please use smaller or lower-resolution photos.' });
+    }
+    blocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } });
   }
 
+  const { prompt, currentDesign } = body;
   const note = prompt && prompt.trim() ? `\n\nExtra notes from the user: ${prompt.trim()}` : '';
   const ctx = (currentDesign && Array.isArray(currentDesign.panels) && currentDesign.panels.length > 0)
     ? `\n\nFor reference only, the user's canvas currently contains: ${JSON.stringify(currentDesign)}. Ignore it unless the notes ask you to combine.`
     : '';
 
+  const many = blocks.length > 1;
   const instruction =
-    `The image shows a piece of furniture. Study its overall form, proportions, and structure — count the shelves, drawers, doors, legs and panels, and note the apparent material and style. ` +
-    `Reproduce it as a buildable design using the coordinate system, construction rules and material keys defined above. ` +
-    `Estimate real-world dimensions in millimetres from the photo, assuming typical furniture sizes where the scale is unclear. ` +
+    (many
+      ? `You are given ${blocks.length} photographs of the SAME piece of furniture from different angles (e.g. front, side, three-quarter, and interior). Use ALL of them together and cross-reference the views to resolve depth, internal structure, and any feature hidden in a single shot. Do not treat them as separate pieces.`
+      : `The photograph shows a single piece of furniture.`) + `\n\n` +
+    `Reconstruct it accurately by working through these steps before writing any JSON:\n` +
+    `1. Identify the piece type and overall silhouette.\n` +
+    `2. Count features EXACTLY as seen — number of shelves, drawers, doors, legs, compartments and dividers. Reproduce these counts precisely; do not add or omit any.\n` +
+    `3. Establish proportions: estimate the width : height : depth ratio from the views, then assign real-world millimetre dimensions using visible scale cues (drawer fronts are usually 120–260mm tall, door/handle sizes, desk/counter heights ~720–760mm, seat heights ~450mm, standard shelf spacing 250–350mm). Only fall back to typical sizes where no cue is visible.\n` +
+    `4. Read the construction: overlay vs inset doors/drawers, plinth/base vs legs, solid vs recessed back, face-frame vs frameless, and the material/finish.\n` +
+    `5. Build it using the coordinate system, construction rules and material keys defined above, keeping the exact part counts and arrangement you established. Prefer correct proportions and structure over embellishment.\n\n` +
     `Include a short "name", a one-line "description", and "assembly_notes". Output ONLY the raw JSON design object.` + note + ctx;
 
-  const userContent = [
-    { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-    { type: 'text', text: instruction }
-  ];
+  const userContent = blocks.concat([{ type: 'text', text: instruction }]);
 
   try {
-    const out = await requestDesignJSON(apiKey, userContent);
+    const out = await requestDesignJSON(apiKey, userContent, { model: IMAGE_MODEL, maxTokens: 8000 });
     if (out.error) return res.status(out.status).json({ error: out.error });
     res.json({ text: out.jsonText });
   } catch (err) {
