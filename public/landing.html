@@ -28,6 +28,16 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg0);color:
 a{color:inherit;}
 em{font-style:normal;}
 
+/* ── Interactive wooden-panel background ── */
+/* Fixed, pointer-transparent, z-index:-1 so it paints above the page's
+   background colour but behind every in-flow element and the sticky nav. */
+#wood-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;}
+.wood-panel{position:absolute;border-radius:9px;
+  box-shadow:0 24px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06), inset 0 2px 6px rgba(255,255,255,.08);
+  will-change:transform;transform:translate3d(0,0,0);}
+:root.theme-light .wood-panel{box-shadow:0 20px 50px rgba(90,62,20,.22), inset 0 0 0 1px rgba(255,255,255,.18);}
+@media (prefers-reduced-motion: reduce){ .wood-panel{will-change:auto;} }
+
 /* ── Nav (sticky) ── */
 nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 48px;position:sticky;top:0;z-index:100;background:transparent;transition:background .2s,box-shadow .2s,border-color .2s;border-bottom:1px solid transparent;}
 nav.nav-solid{background:rgba(13,13,13,.9);backdrop-filter:blur(12px);box-shadow:0 2px 20px rgba(0,0,0,.35);border-bottom:1px solid var(--bd);}
@@ -229,6 +239,8 @@ footer a:hover{color:var(--teal);}
 </style>
 </head>
 <body>
+
+<div id="wood-bg" aria-hidden="true"></div>
 
 <div id="toast-wrap"></div>
 
@@ -1114,6 +1126,90 @@ function applyConfig() {
       return;
     } catch (e) { localStorage.removeItem('fc3d_token'); }
   }
+})();
+
+// ── Interactive wooden-panel background ──────────────────────────────────
+// Floating wood panels that parallax toward/away from the cursor. Deeper
+// (larger) panels move more; all panels idle-drift so the scene is alive on
+// load and on touch devices. Honours prefers-reduced-motion.
+(function () {
+  var host = document.getElementById('wood-bg');
+  if (!host) return;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Wood face palettes: [highlight, mid, shadow]
+  var PALETTES = [
+    ['#a9801f', '#C49A28', '#7d5c14'], // oak
+    ['#6f4e24', '#8a6636', '#4a3216'], // walnut
+    ['#c08a3c', '#d8a850', '#96682a'], // maple
+    ['#7a5810', '#a07820', '#5a3e08'], // deep oak
+    ['#8B6914', '#b8862c', '#6b4e10']  // amber
+  ];
+
+  var W = window.innerWidth, H = window.innerHeight;
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  var N = W < 640 ? 9 : 15;
+  var panels = [];
+  for (var i = 0; i < N; i++) {
+    var el = document.createElement('div');
+    el.className = 'wood-panel';
+    var pal = PALETTES[(Math.random() * PALETTES.length) | 0];
+    var size = rand(70, 260);
+    var ratio = rand(0.4, 1.7);                    // width : height variety
+    var w = size, h = Math.round(size / ratio);
+    var depth = (size - 70) / (260 - 70);           // 0 (far) .. 1 (near)
+    var grainAng = Math.round(rand(82, 98));
+    el.style.width = Math.round(w) + 'px';
+    el.style.height = h + 'px';
+    el.style.left = rand(-6, 92).toFixed(2) + '%';
+    el.style.top  = rand(-8, 94).toFixed(2) + '%';
+    // Wood face = grain lines over a diagonal tonal gradient.
+    el.style.background =
+      'repeating-linear-gradient(' + grainAng + 'deg, rgba(0,0,0,.13) 0 2px, rgba(255,255,255,.04) 2px 3px, transparent 3px ' + Math.round(rand(8, 13)) + 'px), ' +
+      'linear-gradient(135deg,' + pal[0] + ',' + pal[1] + ' 45%,' + pal[2] + ')';
+    el.style.opacity = (0.30 + depth * 0.34).toFixed(2);       // nearer = more solid
+    el.style.filter = depth < 0.45 ? 'blur(' + ((0.45 - depth) * 5).toFixed(1) + 'px)' : 'none'; // far = soft (depth of field)
+    host.appendChild(el);
+    panels.push({
+      el: el,
+      move: 0.22 + depth * 0.95,                    // parallax strength
+      baseRot: rand(-16, 16),
+      phase: rand(0, Math.PI * 2),
+      floatAmp: rand(5, 16) * (0.5 + depth * 0.6)
+    });
+  }
+
+  var tx = 0, ty = 0, cx = 0, cy = 0;               // target / eased cursor, -1..1
+  function setTarget(px, py) { tx = (px / W) * 2 - 1; ty = (py / H) * 2 - 1; }
+  window.addEventListener('mousemove', function (e) { setTarget(e.clientX, e.clientY); }, { passive: true });
+  window.addEventListener('touchmove', function (e) { if (e.touches && e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+  window.addEventListener('resize', function () { W = window.innerWidth; H = window.innerHeight; }, { passive: true });
+
+  var PARALLAX = 80;
+  function render(px, py, time) {
+    for (var i = 0; i < panels.length; i++) {
+      var p = panels[i];
+      var fx = time ? Math.sin(time * 0.00035 + p.phase) * p.floatAmp : 0;
+      var fy = time ? Math.cos(time * 0.00028 + p.phase) * p.floatAmp : 0;
+      var mx = -px * PARALLAX * p.move + fx;
+      var my = -py * PARALLAX * p.move + fy;
+      var rot = p.baseRot + px * 5 * p.move;
+      p.el.style.transform = 'translate3d(' + mx.toFixed(1) + 'px,' + my.toFixed(1) + 'px,0) rotate(' + rot.toFixed(2) + 'deg)';
+    }
+  }
+
+  if (reduce) {
+    render(0, 0, 0);                                 // static, no animation loop
+    return;
+  }
+  function frame(t) {
+    cx += (tx - cx) * 0.06;                          // ease toward the cursor
+    cy += (ty - cy) * 0.06;
+    render(cx, cy, t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
