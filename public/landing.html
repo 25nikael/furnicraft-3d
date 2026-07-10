@@ -1137,19 +1137,27 @@ function applyConfig() {
   if (!host) return;
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Wood face palettes: [highlight, mid, shadow]
+  // Wood face palettes: [highlight, mid, shadow] — a range of species
   var PALETTES = [
     ['#a9801f', '#C49A28', '#7d5c14'], // oak
     ['#6f4e24', '#8a6636', '#4a3216'], // walnut
     ['#c08a3c', '#d8a850', '#96682a'], // maple
     ['#7a5810', '#a07820', '#5a3e08'], // deep oak
-    ['#8B6914', '#b8862c', '#6b4e10']  // amber
+    ['#8B6914', '#b8862c', '#6b4e10'], // amber
+    ['#7a3b26', '#9c4f33', '#5a2a1a'], // mahogany
+    ['#a3512e', '#c2683f', '#7d3a1f'], // cherry
+    ['#c9a86a', '#e0c58a', '#a8834c'], // pine
+    ['#9a6b2f', '#b98842', '#6f4a1e'], // teak
+    ['#3a2c20', '#4e3a28', '#241a12'], // wenge / ebony
+    ['#c7b48a', '#e2d3a8', '#a89568'], // birch / ash
+    ['#8a7f6a', '#a89c82', '#6b6150'], // weathered grey oak
+    ['#8a4b2a', '#ad633a', '#63321c']  // rosewood
   ];
 
   var W = window.innerWidth, H = window.innerHeight;
   function rand(a, b) { return a + Math.random() * (b - a); }
 
-  var N = W < 640 ? 9 : 15;
+  var N = W < 640 ? 16 : 28;
   var panels = [];
   for (var i = 0; i < N; i++) {
     var el = document.createElement('div');
@@ -1173,7 +1181,7 @@ function applyConfig() {
     host.appendChild(el);
     panels.push({
       el: el,
-      move: 0.22 + depth * 0.95,                    // parallax strength
+      move: 0.28 + depth * 1.35,                    // parallax strength (per-panel)
       baseRot: rand(-16, 16),
       phase: rand(0, Math.PI * 2),
       floatAmp: rand(5, 16) * (0.5 + depth * 0.6)
@@ -1186,7 +1194,7 @@ function applyConfig() {
   window.addEventListener('touchmove', function (e) { if (e.touches && e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
   window.addEventListener('resize', function () { W = window.innerWidth; H = window.innerHeight; }, { passive: true });
 
-  var PARALLAX = 80;
+  var PARALLAX = 170;
   function render(px, py, time) {
     for (var i = 0; i < panels.length; i++) {
       var p = panels[i];
@@ -1194,7 +1202,7 @@ function applyConfig() {
       var fy = time ? Math.cos(time * 0.00028 + p.phase) * p.floatAmp : 0;
       var mx = -px * PARALLAX * p.move + fx;
       var my = -py * PARALLAX * p.move + fy;
-      var rot = p.baseRot + px * 5 * p.move;
+      var rot = p.baseRot + px * 9 * p.move;
       p.el.style.transform = 'translate3d(' + mx.toFixed(1) + 'px,' + my.toFixed(1) + 'px,0) rotate(' + rot.toFixed(2) + 'deg)';
     }
   }
@@ -1204,8 +1212,8 @@ function applyConfig() {
     return;
   }
   function frame(t) {
-    cx += (tx - cx) * 0.06;                          // ease toward the cursor
-    cy += (ty - cy) * 0.06;
+    cx += (tx - cx) * 0.08;                          // ease toward the cursor
+    cy += (ty - cy) * 0.08;
     render(cx, cy, t);
     requestAnimationFrame(frame);
   }
