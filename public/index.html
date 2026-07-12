@@ -72,7 +72,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 .drawer-overlay.open{display:block;}
 
 /* ── Left panel ───────────────────────────────────── */
-#left-panel{width:188px;min-width:188px;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:10;}
+#left-panel{width:188px;min-width:188px;background:var(--bg2);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;z-index:10;transition:width .24s ease,min-width .24s ease;}
 .sec-title{padding:6px 10px;font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:.7px;background:var(--bg0);border-bottom:1px solid var(--bd);border-top:1px solid var(--bd);flex-shrink:0;}
 .dim-block{padding:9px 10px;}
 .dim-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
@@ -130,7 +130,27 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
 #info-hud{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.7);color:var(--txt2);padding:5px 10px;border-radius:8px;font-size:11px;pointer-events:none;line-height:1.65;border:1px solid var(--bd);}
 
 /* ── Right panel ──────────────────────────────────── */
-#right-panel{width:208px;min-width:208px;background:var(--bg2);border-left:1px solid var(--bd);overflow-y:auto;z-index:10;}
+#right-panel{width:208px;min-width:208px;background:var(--bg2);border-left:1px solid var(--bd);overflow-y:auto;z-index:10;transition:width .24s ease,min-width .24s ease;}
+
+/* ── Collapsible side panels + edge tabs (desktop) ── */
+#left-panel.side-collapsed,#right-panel.side-collapsed{width:0;min-width:0;overflow:hidden;border-color:transparent;}
+.panel-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:22;width:20px;height:62px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--bd2);color:var(--txt2);font-size:15px;line-height:1;cursor:pointer;padding:0;transition:color .12s,border-color .12s,background .12s;}
+.panel-tab:hover{color:var(--teal);border-color:var(--teal);background:var(--bg3);}
+#tab-left{left:0;border-left:none;border-radius:0 8px 8px 0;}
+#tab-right{right:0;border-right:none;border-radius:8px 0 0 8px;}
+
+/* ── Collapsible toolbar widget ── */
+#toolbar-btns{display:flex;gap:7px;align-items:center;}
+#toolbar.tb-collapsed #toolbar-btns{display:none;}
+#toolbar-toggle{padding:6px 11px;color:var(--txt2);}
+#toolbar-toggle:hover{color:var(--teal);border-color:var(--teal);}
+/* Edge tabs are desktop-only; on mobile the panels are drawers, so hide the
+   tabs and make sure a lingering desktop-collapse can't zero the drawer width. */
+@media (max-width: 768px){
+  .panel-tab{display:none;}
+  #left-panel.side-collapsed{width:220px;min-width:0;overflow-y:auto;border-color:var(--bd);}
+  #right-panel.side-collapsed{width:230px;min-width:0;overflow-y:auto;border-color:var(--bd);}
+}
 #no-sel{padding:24px 12px;font-size:12px;color:var(--txt3);text-align:center;line-height:1.7;}
 #prop-panel{display:none;}
 .prop-sec{padding:9px 12px;border-bottom:1px solid var(--bd);}
@@ -724,6 +744,8 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
   <div id="viewport">
     <canvas id="three-canvas"></canvas>
     <svg id="dim-svg"></svg>
+    <button class="panel-tab" id="tab-left" onclick="toggleSidePanel('left')" title="Hide tools panel" aria-label="Toggle tools panel">‹</button>
+    <button class="panel-tab" id="tab-right" onclick="toggleSidePanel('right')" title="Hide properties panel" aria-label="Toggle properties panel">›</button>
     <div id="shared-banner">
       <span id="shared-banner-text">Viewing a shared design — edits here won't change the original.</span>
       <button id="shared-banner-signin" onclick="openAuth()" style="display:none;">Sign in to save your own copy</button>
@@ -744,6 +766,8 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
       [G] group &nbsp;|&nbsp; [U] ungroup &nbsp;|&nbsp; [D] dup &nbsp;|&nbsp; [S] snap
     </div>
     <div id="toolbar">
+      <button class="tbtn" id="toolbar-toggle" onclick="toggleToolbar()" title="Hide view options" aria-label="Collapse view-options toolbar">▾</button>
+      <div id="toolbar-btns">
       <button class="tbtn" id="btn-undo" title="Undo (Ctrl+Z)" onclick="undo()">↶</button>
       <button class="tbtn" id="btn-redo" title="Redo (Ctrl+Shift+Z)" onclick="redo()">↷</button>
       <button class="tbtn" id="btn-reset" title="Reset the camera to fit the design (R)">⟳ Reset View</button>
@@ -758,6 +782,7 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
       <button class="tbtn" id="btn-export" onclick="openExport()" title="Export model, images, CNC files, or share link">⬇ Export</button>
       <button class="tbtn prim" id="btn-cs" title="Open the cut sheet — full parts list with dimensions">✂ Cut Sheet</button>
       <button class="tbtn" id="btn-ai" onclick="openAIDesign()" title="Generate a design from a text prompt with AI" style="background:linear-gradient(135deg,#6c3de0,#0ABAB5);color:#fff;border-color:transparent;">✦ AI Design</button>
+      </div>
     </div>
   </div>
 
@@ -6970,6 +6995,56 @@ function resizeRenderer() {
 }
 window.addEventListener('resize', resizeRenderer);
 resizeRenderer();
+
+// ── Collapsible UI: side panels + toolbar ───────────────────────────────
+// Keep the WebGL renderer crisp while a panel width animates (~240ms).
+function _fitViewportSoon() {
+  var start = performance.now();
+  (function step() {
+    resizeRenderer();
+    if (performance.now() - start < 320) requestAnimationFrame(step);
+  })();
+}
+function _setTabGlyph(side, collapsed) {
+  var tab = document.getElementById(side === 'left' ? 'tab-left' : 'tab-right');
+  if (!tab) return;
+  // Arrow points the way the panel edge will move when clicked.
+  if (side === 'left') tab.textContent = collapsed ? '›' : '‹';
+  else                 tab.textContent = collapsed ? '‹' : '›';
+  tab.title = (collapsed ? 'Show ' : 'Hide ') + (side === 'left' ? 'tools panel' : 'properties panel');
+}
+function toggleSidePanel(side) {
+  var panel = document.getElementById(side === 'left' ? 'left-panel' : 'right-panel');
+  if (!panel) return;
+  var collapsed = panel.classList.toggle('side-collapsed');
+  try { localStorage.setItem('fc3d_' + side + '_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+  _setTabGlyph(side, collapsed);
+  _fitViewportSoon();
+}
+function toggleToolbar() {
+  var tb = document.getElementById('toolbar');
+  if (!tb) return;
+  var collapsed = tb.classList.toggle('tb-collapsed');
+  var t = document.getElementById('toolbar-toggle');
+  if (t) { t.textContent = collapsed ? '🛠' : '▾'; t.title = collapsed ? 'Show view options' : 'Hide view options'; }
+  try { localStorage.setItem('fc3d_toolbar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+// Restore saved collapse state on load.
+(function () {
+  ['left', 'right'].forEach(function (side) {
+    var v; try { v = localStorage.getItem('fc3d_' + side + '_collapsed'); } catch (e) {}
+    var collapsed = v === '1';
+    var panel = document.getElementById(side === 'left' ? 'left-panel' : 'right-panel');
+    if (collapsed && panel) panel.classList.add('side-collapsed');
+    _setTabGlyph(side, collapsed);
+  });
+  var tv; try { tv = localStorage.getItem('fc3d_toolbar_collapsed'); } catch (e) {}
+  if (tv === '1') {
+    var tb = document.getElementById('toolbar'); if (tb) tb.classList.add('tb-collapsed');
+    var t = document.getElementById('toolbar-toggle'); if (t) { t.textContent = '🛠'; t.title = 'Show view options'; }
+  }
+  resizeRenderer();
+})();
 
 // ═══════════════════════════════════════════════════════════════
 //  RENDER LOOP  (dims throttled to 10 fps)
