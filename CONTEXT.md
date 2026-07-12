@@ -110,6 +110,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R37–R39 (landing + auth overhaul)** — auth server: forgot/reset, passwordless code, rate limiting, 8‑char password floor (R37); landing rebuild + unified auth component (R38); same unified auth in the editor modal + session‑expired variant (R39).
 - **R40–R41** — **AI design from a photo** (`/api/ai/from-image`, re‑enabled `image_to_design` flag) (R40); **multiple photos** + upgraded the photo path to Sonnet + rigorous multi‑view prompt for accuracy (R41).
 - **R42–R43** — **interactive wooden‑panel background** on the landing page (cursor parallax + idle drift) (R42); more panels, 13 wood species, stronger parallax (R43).
+- **R44** — landing UI cleanup: replaced the static CSS‑mock cabinet + grey faux tool‑strip with honest **animated SVG demos** (hero drawer slide; showcase grid of panel‑resize‑with‑live‑mm, drawer open/close, door swing). Pure CSS keyframes + one rAF for the mm label; `prefers-reduced-motion` fallback; removed dead `.hv-*`/`.showcase-*` CSS.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
@@ -117,7 +118,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **Set SMTP env on Render** → enables forgot‑password + passwordless code sign‑in live.
 - **Privacy Policy / Terms pages** — footer links are placeholders (toast "coming soon"); pending business decision.
 - **Self‑host Three.js / jsPDF** — currently CDN; an outage would break the editor.
-- **Real screenshot assets** for the landing hero/showcase (currently CSS mock with a `TODO`).
+- ~~Real screenshot assets for the landing hero/showcase~~ — resolved in R44 with animated SVG tool demos (honest, asset‑free). Could still add real editor screenshots later if desired.
 - **Passkeys / Apple Sign‑In** — deferred (Apple needs a paid dev account; passkeys can't be verified in this harness).
 - **Photo‑AI latency** — Sonnet + multiple images may approach the 30s Render limit; move to streaming/background if 502s appear.
 - Minor: share tokens aren't revoked on *unpublish* (only on delete) — flagged, no decision.
