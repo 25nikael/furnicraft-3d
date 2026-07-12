@@ -69,21 +69,43 @@ h1 em{color:var(--teal);}
 
 /* ── Hero visual (CSS illustration) ── */
 .hero-visual{flex:1;max-width:520px;aspect-ratio:4/3;background:var(--bg2);border:1px solid var(--bd);border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;}
-.hero-scene{width:100%;height:100%;padding:24px;display:flex;align-items:center;justify-content:center;}
-.hv-cabinet{position:relative;width:200px;height:240px;}
-.hv-face{position:absolute;background:linear-gradient(135deg,#8B6914 0%,#C49A28 40%,#A07820 100%);}
-.hv-front{width:200px;height:240px;left:0;top:20px;border-radius:4px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);background:linear-gradient(135deg,#8B6914 0%,#C49A28 40%,#A07820 100%);}
-.hv-top{width:200px;height:20px;left:0;top:0;background:linear-gradient(135deg,#A07820,#D4AA30);transform-origin:bottom;transform:skewX(-40deg) translateX(16px);border-radius:2px;}
-.hv-side{width:24px;height:240px;right:-24px;top:20px;background:linear-gradient(180deg,#6B4E10,#5a3e08);border-radius:0 4px 4px 0;}
-.hv-door{position:absolute;width:88px;height:200px;top:20px;background:linear-gradient(135deg,#C49A28,#E8C040,#B08820);border-radius:3px;border:2px solid rgba(0,0,0,.3);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);}
-.hv-door-l{left:6px;}
-.hv-door-r{right:6px;}
-.hv-handle{width:6px;height:30px;background:#ccc;border-radius:3px;position:absolute;top:50%;transform:translateY(-50%);}
-.hv-door-l .hv-handle{right:6px;}
-.hv-door-r .hv-handle{left:6px;}
-.hv-drawer{position:absolute;height:44px;left:6px;right:6px;background:linear-gradient(180deg,#D4AA30,#B08820);border-radius:3px;border:2px solid rgba(0,0,0,.3);}
-.hv-drawer-handle{width:40px;height:5px;background:#ccc;border-radius:3px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);}
-.hv-teal-line{position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--teal),transparent);}
+.hero-scene{width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+.hero-svg{width:84%;height:84%;}
+
+/* ── Animated feature demos (SVG + CSS) ── */
+.demo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:28px;}
+.demo-card{background:var(--bg2);border:1px solid var(--bd);border-radius:16px;overflow:hidden;transition:border-color .2s,transform .2s;}
+.demo-card:hover{border-color:var(--teal);transform:translateY(-3px);}
+.demo-stage{aspect-ratio:5/4;background:radial-gradient(circle at 50% 42%,var(--bg3),var(--bg1));display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--bd);}
+.demo-svg{width:88%;height:88%;}
+.demo-cap{padding:15px 18px 17px;}
+.demo-cap .mini{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--teal);margin-bottom:5px;}
+.demo-cap .line{font-size:13px;color:var(--txt2);line-height:1.5;}
+/* shared demo element styling */
+.teal-fill{fill:var(--teal);}
+.hnd{fill:var(--teal);stroke:#fff;stroke-width:1.6;}
+.dim{fill:var(--teal);}
+.dimtick{stroke:var(--teal);stroke-width:1.6;stroke-linecap:round;}
+.dimlabel{fill:var(--txt);font:700 13px system-ui,sans-serif;text-anchor:middle;}
+.steel{fill:#cfd3da;}
+.carcass-in{fill:#3a2c16;}
+:root.theme-light .carcass-in{fill:#8a6f4a;}
+/* resize: panel + dim rect share width; right handles/tick share translate */
+@keyframes rzW{0%,12%{width:46px}50%,64%{width:138px}100%{width:46px}}
+@keyframes rzX{0%,12%{transform:translateX(0)}50%,64%{transform:translateX(92px)}100%{transform:translateX(0)}}
+.rz-panel,.rz-dim{animation:rzW 5s ease-in-out infinite;}
+.rz-right{animation:rzX 5s ease-in-out infinite;transform-box:view-box;}
+/* drawer: slide out (down-left) and back */
+@keyframes drawerOut{0%,16%{transform:translate(0,0)}52%,68%{transform:translate(-15px,10px)}100%{transform:translate(0,0)}}
+.dw-drawer{animation:drawerOut 4.6s ease-in-out infinite;transform-box:view-box;}
+/* door: swing open (2D foreshorten from the hinge) and back */
+@keyframes doorSwing{0%,16%{transform:scaleX(1)}54%,70%{transform:scaleX(.26)}100%{transform:scaleX(1)}}
+.dr-door{animation:doorSwing 4.6s ease-in-out infinite;transform-box:fill-box;transform-origin:left center;}
+@media (prefers-reduced-motion: reduce){
+  .rz-panel,.rz-dim,.rz-right,.dw-drawer,.dr-door{animation:none;}
+  .dr-door{transform:scaleX(.5);}
+  .dw-drawer{transform:translate(-15px,10px);}
+}
 .hero-tag{position:absolute;background:var(--bg3);border:1px solid var(--bd2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--txt2);white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .hero-tag strong{display:block;color:var(--txt);font-size:13px;}
 .tag-ai{top:20px;right:20px;}
@@ -96,17 +118,6 @@ h1 em{color:var(--teal);}
 .section-label{text-align:center;font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--teal);margin-bottom:12px;}
 .section-title{text-align:center;font-size:clamp(26px,4vw,38px);font-weight:800;margin-bottom:20px;letter-spacing:-.02em;line-height:1.15;}
 
-/* ── Showcase ── */
-.showcase-frame{background:var(--bg2);border:1px solid var(--bd);border-radius:16px;padding:20px;margin-top:28px;display:flex;gap:18px;min-height:300px;overflow:hidden;}
-.showcase-panel{width:70px;flex-shrink:0;background:var(--bg1);border:1px solid var(--bd);border-radius:10px;padding:12px 10px;display:flex;flex-direction:column;gap:10px;}
-.sp-row{height:12px;background:var(--bg4);border-radius:4px;}
-.sp-row.active{background:var(--teal-dim);border:1px solid var(--teal-dim2);}
-.showcase-stage{flex:1;background:radial-gradient(circle at 50% 40%,var(--bg3),var(--bg1));border:1px solid var(--bd);border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
-.showcase-stage .hv-cabinet{transform:scale(1.25);}
-.showcase-captions{display:flex;gap:24px;flex-wrap:wrap;margin-top:28px;}
-.sc-cap{flex:1;min-width:200px;}
-.sc-cap .mini{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--teal);margin-bottom:6px;}
-.sc-cap .line{font-size:14px;color:var(--txt2);line-height:1.5;}
 
 /* ── Features ── */
 .feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-top:12px;}
@@ -225,12 +236,9 @@ footer a:hover{color:var(--teal);}
   .hero-visual{width:100%;max-width:420px;}
   .section{padding:44px 20px;}
   .how-grid{grid-template-columns:1fr;gap:28px;}
-  .showcase-captions{flex-direction:column;gap:18px;}
+  .demo-grid{grid-template-columns:1fr;max-width:420px;margin-left:auto;margin-right:auto;}
   .pricing-band,.cta-band{padding-left:24px;padding-right:24px;}
   footer{padding:24px 20px;}
-  .showcase-frame{flex-direction:column;}
-  .showcase-panel{width:100%;flex-direction:row;}
-  .sp-row{flex:1;height:auto;min-height:36px;}
 }
 @media(max-width:560px){
   .nav-signin{display:none;}
@@ -241,6 +249,25 @@ footer a:hover{color:var(--teal);}
 <body>
 
 <div id="wood-bg" aria-hidden="true"></div>
+
+<!-- Shared wood gradients for the animated demos -->
+<svg width="0" height="0" style="position:absolute;pointer-events:none;" aria-hidden="true"><defs>
+  <linearGradient id="gwFront" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#cda13a"/><stop offset=".5" stop-color="#a9801f"/><stop offset="1" stop-color="#856214"/>
+  </linearGradient>
+  <linearGradient id="gwTop" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#e2c576"/><stop offset="1" stop-color="#b8862c"/>
+  </linearGradient>
+  <linearGradient id="gwSide" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#6e5210"/><stop offset="1" stop-color="#4a3406"/>
+  </linearGradient>
+  <linearGradient id="gwDrawer" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#dbab52"/><stop offset="1" stop-color="#b7852b"/>
+  </linearGradient>
+  <linearGradient id="gwPanel" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#c99a35"/><stop offset=".55" stop-color="#a67c1c"/><stop offset="1" stop-color="#7d5b12"/>
+  </linearGradient>
+</defs></svg>
 
 <div id="toast-wrap"></div>
 
@@ -272,16 +299,29 @@ footer a:hover{color:var(--teal);}
   </div>
   <div class="hero-visual">
     <div class="hero-scene">
-      <div class="hv-cabinet">
-        <div class="hv-front">
-          <div class="hv-door hv-door-l"><div class="hv-handle"></div></div>
-          <div class="hv-door hv-door-r"><div class="hv-handle"></div></div>
-          <div class="hv-drawer" style="bottom:6px"><div class="hv-drawer-handle"></div></div>
-        </div>
-        <div class="hv-top"></div>
-        <div class="hv-side"></div>
-        <div class="hv-teal-line"></div>
-      </div>
+      <svg class="hero-svg" viewBox="0 0 260 232" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A wooden chest of drawers with the top drawer sliding open and closed">
+        <!-- top + right side (2.5D) -->
+        <polygon points="46,46 196,46 226,22 76,22" fill="url(#gwTop)"/>
+        <polygon points="196,46 226,22 226,198 196,222" fill="url(#gwSide)"/>
+        <!-- carcass front + interior -->
+        <rect x="46" y="46" width="150" height="176" rx="4" fill="url(#gwFront)"/>
+        <rect x="54" y="54" width="134" height="160" rx="3" class="carcass-in"/>
+        <!-- static drawers (middle, bottom) -->
+        <g>
+          <rect x="56" y="112" width="130" height="46" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.32)"/>
+          <rect x="104" y="132" width="34" height="6" rx="3" class="steel"/>
+          <rect x="56" y="162" width="130" height="48" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.32)"/>
+          <rect x="104" y="183" width="34" height="6" rx="3" class="steel"/>
+        </g>
+        <!-- top drawer (animated slide-out) -->
+        <g class="dw-drawer">
+          <polygon points="56,58 186,58 198,49 68,49" fill="#c99a3a"/>
+          <rect x="56" y="58" width="130" height="46" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.32)"/>
+          <rect x="104" y="78" width="34" height="6" rx="3" class="steel"/>
+        </g>
+        <!-- teal baseline -->
+        <rect x="46" y="224" width="150" height="3" rx="1.5" class="teal-fill"/>
+      </svg>
     </div>
     <div class="hero-tag tag-ai"><span class="tag-dot"></span><strong>AI assist</strong>Start &amp; refine</div>
     <div class="hero-tag tag-3d"><strong>Full 3D</strong>Rotate, measure, export</div>
@@ -292,31 +332,75 @@ footer a:hover{color:var(--teal);}
 <section class="section" id="showcase">
   <div class="section-label">The Editor</div>
   <div class="section-title">Not a template gallery. A real design tool.</div>
-  <!-- TODO: replace CSS mock with a real editor screenshot (public/img/shot-editor.png) -->
-  <div class="showcase-frame">
-    <div class="showcase-panel">
-      <div class="sp-row active"></div>
-      <div class="sp-row"></div>
-      <div class="sp-row"></div>
-      <div class="sp-row"></div>
-    </div>
-    <div class="showcase-stage">
-      <div class="hv-cabinet">
-        <div class="hv-front">
-          <div class="hv-door hv-door-l"><div class="hv-handle"></div></div>
-          <div class="hv-door hv-door-r"><div class="hv-handle"></div></div>
-          <div class="hv-drawer" style="bottom:6px"><div class="hv-drawer-handle"></div></div>
-        </div>
-        <div class="hv-top"></div>
-        <div class="hv-side"></div>
-        <div class="hv-teal-line"></div>
+  <div class="demo-grid">
+
+    <!-- Panel resize -->
+    <div class="demo-card">
+      <div class="demo-stage">
+        <svg class="demo-svg" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A panel being resized while its width dimension updates live">
+          <rect class="rz-panel" x="51" y="56" height="78" width="46" rx="4" fill="url(#gwPanel)" stroke="rgba(0,0,0,.28)"/>
+          <line class="dimtick" x1="51" y1="36" x2="51" y2="48"/>
+          <rect class="rz-dim dim" x="51" y="41.5" height="2.5" width="46" rx="1.25"/>
+          <g class="rz-right">
+            <line class="dimtick" x1="97" y1="36" x2="97" y2="48"/>
+            <rect class="hnd" x="93" y="56" width="8" height="8" rx="2"/>
+            <rect class="hnd" x="93" y="91" width="8" height="8" rx="2"/>
+            <rect class="hnd" x="93" y="126" width="8" height="8" rx="2"/>
+          </g>
+          <rect class="hnd" x="47" y="56" width="8" height="8" rx="2"/>
+          <rect class="hnd" x="47" y="91" width="8" height="8" rx="2"/>
+          <rect class="hnd" x="47" y="126" width="8" height="8" rx="2"/>
+          <text class="dimlabel rz-mm" x="97" y="30">600 mm</text>
+        </svg>
       </div>
+      <div class="demo-cap"><div class="mini">Resize any panel</div><div class="line">Drag the blue handles — every dimension updates live in millimetres.</div></div>
     </div>
-  </div>
-  <div class="showcase-captions">
-    <div class="sc-cap"><div class="mini">Panel-level control</div><div class="line">Every part editable</div></div>
-    <div class="sc-cap"><div class="mini">Live cut sheet</div><div class="line">Parts update as you build</div></div>
-    <div class="sc-cap"><div class="mini">Export</div><div class="line">PDF cut sheet + CSV parts list</div></div>
+
+    <!-- Drawer open/close -->
+    <div class="demo-card">
+      <div class="demo-stage">
+        <svg class="demo-svg" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A cabinet drawer sliding open and closed">
+          <polygon points="52,42 176,42 200,24 76,24" fill="url(#gwTop)"/>
+          <polygon points="176,42 200,24 200,146 176,164" fill="url(#gwSide)"/>
+          <rect x="52" y="42" width="124" height="122" rx="4" fill="url(#gwFront)"/>
+          <rect x="59" y="49" width="110" height="108" rx="3" class="carcass-in"/>
+          <rect x="61" y="100" width="106" height="28" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.3)"/>
+          <rect x="100" y="111" width="28" height="5" rx="2.5" class="steel"/>
+          <rect x="61" y="130" width="106" height="26" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.3)"/>
+          <rect x="100" y="140" width="28" height="5" rx="2.5" class="steel"/>
+          <g class="dw-drawer">
+            <polygon points="61,56 167,56 177,49 71,49" fill="#c99a3a"/>
+            <rect x="61" y="56" width="106" height="40" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.3)"/>
+            <rect x="100" y="73" width="28" height="5" rx="2.5" class="steel"/>
+          </g>
+          <rect x="52" y="166" width="124" height="3" rx="1.5" class="teal-fill"/>
+        </svg>
+      </div>
+      <div class="demo-cap"><div class="mini">Drawers that open</div><div class="line">Add working drawers on slides and preview them sliding open and closed.</div></div>
+    </div>
+
+    <!-- Door swing -->
+    <div class="demo-card">
+      <div class="demo-stage">
+        <svg class="demo-svg" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="A cabinet door swinging open and closed">
+          <polygon points="50,40 180,40 204,22 74,22" fill="url(#gwTop)"/>
+          <polygon points="180,40 204,22 204,148 180,166" fill="url(#gwSide)"/>
+          <rect x="50" y="40" width="130" height="124" rx="4" fill="url(#gwFront)"/>
+          <rect x="57" y="47" width="116" height="110" rx="3" class="carcass-in"/>
+          <rect x="57" y="98" width="116" height="4" fill="rgba(0,0,0,.28)"/>
+          <g class="dr-door">
+            <rect x="57" y="47" width="116" height="110" rx="3" fill="url(#gwDrawer)" stroke="rgba(0,0,0,.32)"/>
+            <rect x="66" y="56" width="98" height="92" rx="3" fill="none" stroke="rgba(0,0,0,.22)" stroke-width="2"/>
+            <rect x="162" y="92" width="6" height="22" rx="3" class="steel"/>
+          </g>
+          <circle cx="58" cy="66" r="2.4" class="steel"/>
+          <circle cx="58" cy="138" r="2.4" class="steel"/>
+          <rect x="50" y="166" width="130" height="3" rx="1.5" class="teal-fill"/>
+        </svg>
+      </div>
+      <div class="demo-cap"><div class="mini">Doors that swing</div><div class="line">Hinge doors on any edge and check the swing and clearances in 3D.</div></div>
+    </div>
+
   </div>
 </section>
 
@@ -1218,6 +1302,24 @@ function applyConfig() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+})();
+
+// ── Live millimetre readout on the resize demo ──────────────────────────
+// Maps the panel's CSS-animated width (46..138 user units) to 300..900 mm and
+// keeps the label centred over the panel. Progressive enhancement; if the
+// animation is paused (reduced motion / hidden tab) the label simply holds.
+(function () {
+  var panel = document.querySelector('.rz-panel');
+  var label = document.querySelector('.rz-mm');
+  if (!panel || !label) return;
+  function tick() {
+    var w = parseFloat(getComputedStyle(panel).width) || 46;
+    var mm = Math.round((300 + (w - 46) / (138 - 46) * 600) / 10) * 10;
+    label.textContent = mm + ' mm';
+    label.setAttribute('x', (51 + w / 2).toFixed(1));
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 })();
 </script>
 </body>
