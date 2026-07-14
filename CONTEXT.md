@@ -1,6 +1,6 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R43** (2026‑07‑10).
+> Continuity document for resuming work across context windows. Current as of **R45** (2026‑07‑10).
 > Supersedes the older `HANDOFF.md` (pre‑R13) and complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
@@ -111,6 +111,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R40–R41** — **AI design from a photo** (`/api/ai/from-image`, re‑enabled `image_to_design` flag) (R40); **multiple photos** + upgraded the photo path to Sonnet + rigorous multi‑view prompt for accuracy (R41).
 - **R42–R43** — **interactive wooden‑panel background** on the landing page (cursor parallax + idle drift) (R42); more panels, 13 wood species, stronger parallax (R43).
 - **R44** — landing UI cleanup: replaced the static CSS‑mock cabinet + grey faux tool‑strip with honest **animated SVG demos** (hero drawer slide; showcase grid of panel‑resize‑with‑live‑mm, drawer open/close, door swing). Pure CSS keyframes + one rAF for the mm label; `prefers-reduced-motion` fallback; removed dead `.hv-*`/`.showcase-*` CSS.
+- **R45** — **collapsible editor UI (desktop)**: left/right side panels collapse via edge tabs (`#tab-left`/`#tab-right`, `.side-collapsed` class, `toggleSidePanel()`, renderer re‑fit during the .24s width transition via `_fitViewportSoon()`); bottom view‑options toolbar collapses to a 🛠 button (`#toolbar-toggle`, `#toolbar-btns`, `.tb-collapsed`, `toggleToolbar()`). State persists in localStorage (`fc3d_left_collapsed` etc.). Desktop‑only — tabs hidden ≤768px and a defensive rule keeps `.side-collapsed` from zeroing the mobile drawers; the existing mobile drawer system (`.open` + `toggleDrawer`/`closeDrawers`) is untouched and separate.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
