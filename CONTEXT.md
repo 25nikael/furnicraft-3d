@@ -1,6 +1,6 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R46** (2026‑07‑19).
+> Continuity document for resuming work across context windows. Current as of **R47** (2026‑07‑19).
 > The stale pre‑R13 `HANDOFF.md` was deleted in favour of this file; complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
@@ -51,6 +51,18 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
   - `requestAnimationFrame` is **paused** when hidden, so animation loops (3D render, the landing wood‑bg parallax) don't advance in the preview — you cannot observe motion there. Verify the **logic/DOM/state**, not the animation.
   - The WebGL canvas can report **0×0** headless, so screen‑projection paths (dimension labels, drag via screen rays) are degenerate in preview but fine in a real browser.
 - **Verify via:** `preview_eval` (DOM queries, app‑state reads like `panels.length`, mocking `fetch` to capture payloads), `preview_console_logs` (level `error`), `preview_inspect` (computed styles), and Node‑side checks.
+- **To verify what the 3D scene actually RENDERS** (no screenshots available), render offscreen and read pixels — this works even with the tab hidden and the canvas 0×0, because a `WebGLRenderTarget` has its own fixed size and `renderer.render()` can be called manually (rAF is paused, but direct calls are not):
+  ```js
+  var rt = new THREE.WebGLRenderTarget(64,64);
+  var cam = new THREE.PerspectiveCamera(50,1,1,20000);
+  cam.position.set(2500,500,0); cam.lookAt(2500,0,0); cam.updateMatrixWorld();
+  scene.background = new THREE.Color(0xff0000);           // decisive backdrop
+  var buf = new Uint8Array(4);
+  renderer.setRenderTarget(rt); renderer.render(scene,cam);
+  renderer.readRenderTargetPixels(rt,32,32,1,1,buf); renderer.setRenderTarget(null);
+  ```
+  Used in R47 to prove the floor was genuinely transparent (red showed through) and that gridlines still drew. **Always run a control** (e.g. same sample with the feature forced off) — and aim the camera at empty space away from the model, or panel geometry contaminates the pixel count.
+- **CSS transitions are also paused in the hidden preview tab**, so geometry read after a `.24s` transition still reports the *start* state. To check the settled end state, inject `*{transition:none !important}` for the affected selectors, toggle, then measure (R46).
 - **Syntax check for the big HTML files** (catches broken inline JS before commit):
   ```
   node -e "const fs=require('fs');const h=fs.readFileSync('public/index.html','utf8');const re=/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;let m,e=0;while((m=re.exec(h))){const c=m[1];if(!c.trim())continue;try{new Function(c)}catch(x){e++;console.log(x.message)}}console.log(e?'FAIL':'OK')"
@@ -60,7 +72,7 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
 
 ## 6. Working conventions
 
-- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R46**. Continue numbering.
+- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R47**. Continue numbering.
 - Commit → push only when the work is verified. Pushing to `master` **deploys to production** — the user has authorized deploys for this work and typically wants each fix live.
 - Keep commit messages **quote‑free** in heredocs if using PowerShell here‑strings (the Bash tool handles quotes fine; PowerShell here‑strings historically broke on `"`).
 - After a deploy, remind the user to hard‑refresh (Ctrl+Shift+R).
@@ -113,6 +125,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R44** — landing UI cleanup: replaced the static CSS‑mock cabinet + grey faux tool‑strip with honest **animated SVG demos** (hero drawer slide; showcase grid of panel‑resize‑with‑live‑mm, drawer open/close, door swing). Pure CSS keyframes + one rAF for the mm label; `prefers-reduced-motion` fallback; removed dead `.hv-*`/`.showcase-*` CSS.
 - **R45** — **collapsible editor UI (desktop)**: left/right side panels collapse via edge tabs (`#tab-left`/`#tab-right`, `.side-collapsed` class, `toggleSidePanel()`); bottom view‑options toolbar collapses to a 🛠 button (`#toolbar-toggle`, `#toolbar-btns`, `.tb-collapsed`, `toggleToolbar()`). State persists in localStorage (`fc3d_left_collapsed` etc.). Desktop‑only — tabs hidden ≤768px; the existing mobile drawer system (`.open` + `toggleDrawer`/`closeDrawers`) is untouched and separate. *(Panel collapse mechanics superseded by R46.)*
 - **R46** — **side panels overlay the viewport instead of resizing it**. R45's panels were flex children of `#app`, so collapsing re‑laid‑out the row and resized the canvas. Now `#app` is `position:relative` and both panels are `position:absolute` overlays (`z-index:21`, drop shadow) that slide off‑screen via `translateX(±100%)`; `#viewport`/`#three-canvas` hold the full window width in every state. Edge tabs sit at the panel's inner edge (188px / 208px) and slide to the window edge, driven by new `body.lp-collapsed` / `body.rp-collapsed` classes set in `_setSideState()`. `#info-hud` shifts to `right:220px` to clear the floating right panel. `_fitViewportSoon()` **deleted** — it existed only to chase the animating width. Mobile: `#…side-collapsed.open` rules make `.open` explicitly win, so a stale desktop collapse flag in localStorage can't wedge a drawer shut. Trade‑off: expanded panels cover ~400px of canvas, so edge‑of‑screen orbit drags hit a panel — inherent to overlaying.
+- **R47** — **transparent ground‑plane toggle** (`▦ Floor` button in the view toolbar). The y=0 plane carries two materials: `_floorMatSolid` (opaque `MeshLambertMaterial`) and `_floorMatClear` (a `ShadowMaterial`, opacity .28, which draws *only* the received shadow so the design keeps its ground shadow instead of floating). `setFloorClear()`/`toggleFloor()`, persisted in `fc3d_floor_clear`. `_gridHelper` is a separate scene object and is never touched, so gridlines survive both states. Two gotchas fixed while building: `setTheme()` now recolours `_floorMatSolid` directly instead of `_floorMesh.material` (which in clear mode would tint the shadow material and wash shadows out in the light theme), and `_floorClear` is declared *beside the floor setup* — a later `var` initialiser was silently clobbering the restore‑on‑load value, desyncing the flag from the material and making the first click after a reload a no‑op.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
