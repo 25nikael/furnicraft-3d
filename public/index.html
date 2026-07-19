@@ -790,6 +790,7 @@ body.rp-collapsed #tab-right{right:0;}
       <button class="tbtn" id="btn-wire" title="Toggle wireframe rendering (W)">Wireframe</button>
       <button class="tbtn on" id="btn-dims" title="Toggle dimension overlays">Dims ✓</button>
       <button class="tbtn" id="btn-labels" onclick="toggleLabels()" title="Toggle panel name labels"># Labels</button>
+      <button class="tbtn on" id="btn-floor" onclick="toggleFloor()" title="Make the ground plane transparent (gridlines stay visible)">▦ Floor ✓</button>
       <button class="tbtn" id="btn-measure" onclick="toggleMeasure()" title="Measure the distance between two points (M)">📏 Measure</button>
       <button class="tbtn" id="btn-explode" onclick="toggleExplode()" title="Exploded view — separate panels to see the assembly (X)">💥 Explode</button>
       <button class="tbtn" id="btn-room" onclick="toggleRoom()" title="Show the design inside a room for scale">🏠 Room</button>
@@ -2466,11 +2467,11 @@ function setTheme(theme) {
   if (typeof scene !== 'undefined') {
     if (theme === 'light') {
       scene.background = new THREE.Color(0xe8e0d0);
-      if (_floorMesh) _floorMesh.material.color.setHex(0xd8ceb8);
+      if (typeof _floorMatSolid !== 'undefined') _floorMatSolid.color.setHex(0xd8ceb8);
       if (_gridHelper) { scene.remove(_gridHelper); _gridHelper = new THREE.GridHelper(3000, 60, 0x2a7d6f, 0xc4b898); scene.add(_gridHelper); }
     } else {
       scene.background = new THREE.Color(0x111111);
-      if (_floorMesh) _floorMesh.material.color.setHex(0x1a1a1a);
+      if (typeof _floorMatSolid !== 'undefined') _floorMatSolid.color.setHex(0x1a1a1a);
       if (_gridHelper) { scene.remove(_gridHelper); _gridHelper = new THREE.GridHelper(3000, 60, 0x0abab5, 0x252525); scene.add(_gridHelper); }
     }
   }
@@ -3137,15 +3138,24 @@ var fill2 = new THREE.DirectionalLight(0x0abab5, 0.12);
 fill2.position.set(200, -100, 500); scene.add(fill2);
 
 // ── Floor + Grid ───────────────────────────────────────────────
-var _floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(6000, 6000),
-  new THREE.MeshLambertMaterial({ color: 0x1a1a1a })
-);
+// Two materials for the same ground plane. Solid is the normal opaque surface;
+// clear is a ShadowMaterial, which draws ONLY the received shadow and leaves
+// the rest of the plane fully transparent — so the grid lines (a separate
+// helper) and anything below y=0 stay visible while the surface disappears.
+var _floorMatSolid = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+var _floorMatClear = new THREE.ShadowMaterial({ opacity: 0.28 });
+var _floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), _floorMatSolid);
 _floorMesh.rotation.x = -Math.PI / 2;
 _floorMesh.receiveShadow = true;
 scene.add(_floorMesh);
 var _gridHelper = new THREE.GridHelper(3000, 60, 0x0abab5, 0x252525);
 scene.add(_gridHelper);
+// Declared here, before the restore call below — a `var _floorClear = false`
+// sitting further down the file would re-run after this and silently clobber
+// the restored state, leaving the flag out of sync with the material.
+var _floorClear = false;
+// Restore the saved floor mode now that the mesh exists.
+setFloorClear(localStorage.getItem('fc3d_floor_clear') === '1');
 // Apply saved theme now that scene exists
 _applyPrefs();
 
@@ -5777,6 +5787,28 @@ function handleMeasureClick(e) {
   updateDims();
 }
 function clearMeasurements() { measurements = []; _measureA = null; updateDims(); }
+
+// ── Ground-plane surface toggle (R47) ───────────────────
+// Swaps the y=0 plane between opaque and transparent. The GridHelper is a
+// separate object and is never touched, so the gridlines survive either way.
+// (`_floorClear` is declared up in the floor/grid section — see the note there.)
+function setFloorClear(on) {
+  _floorClear = !!on;
+  if (typeof _floorMesh !== 'undefined' && _floorMesh) {
+    _floorMesh.material = _floorClear ? _floorMatClear : _floorMatSolid;
+  }
+  var b = document.getElementById('btn-floor');
+  if (b) {
+    b.textContent = '▦ Floor ' + (_floorClear ? '✗' : '✓');
+    b.classList.toggle('on', !_floorClear);
+    b.title = _floorClear ? 'Ground plane is transparent — click for a solid surface'
+                          : 'Make the ground plane transparent (gridlines stay visible)';
+  }
+}
+function toggleFloor() {
+  setFloorClear(!_floorClear);
+  try { localStorage.setItem('fc3d_floor_clear', _floorClear ? '1' : '0'); } catch (e) {}
+}
 
 // ── Part-number labels (R2 / C5) ────────────────────────
 var _showLabels = false;
