@@ -1,7 +1,7 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R45** (2026‑07‑10).
-> Supersedes the older `HANDOFF.md` (pre‑R13) and complements `DEVPLAN.md` (the original feature roadmap, all ✅).
+> Continuity document for resuming work across context windows. Current as of **R46** (2026‑07‑19).
+> The stale pre‑R13 `HANDOFF.md` was deleted in favour of this file; complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
 
@@ -60,7 +60,7 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
 
 ## 6. Working conventions
 
-- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R43**. Continue numbering.
+- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R46**. Continue numbering.
 - Commit → push only when the work is verified. Pushing to `master` **deploys to production** — the user has authorized deploys for this work and typically wants each fix live.
 - Keep commit messages **quote‑free** in heredocs if using PowerShell here‑strings (the Bash tool handles quotes fine; PowerShell here‑strings historically broke on `"`).
 - After a deploy, remind the user to hard‑refresh (Ctrl+Shift+R).
@@ -111,7 +111,8 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R40–R41** — **AI design from a photo** (`/api/ai/from-image`, re‑enabled `image_to_design` flag) (R40); **multiple photos** + upgraded the photo path to Sonnet + rigorous multi‑view prompt for accuracy (R41).
 - **R42–R43** — **interactive wooden‑panel background** on the landing page (cursor parallax + idle drift) (R42); more panels, 13 wood species, stronger parallax (R43).
 - **R44** — landing UI cleanup: replaced the static CSS‑mock cabinet + grey faux tool‑strip with honest **animated SVG demos** (hero drawer slide; showcase grid of panel‑resize‑with‑live‑mm, drawer open/close, door swing). Pure CSS keyframes + one rAF for the mm label; `prefers-reduced-motion` fallback; removed dead `.hv-*`/`.showcase-*` CSS.
-- **R45** — **collapsible editor UI (desktop)**: left/right side panels collapse via edge tabs (`#tab-left`/`#tab-right`, `.side-collapsed` class, `toggleSidePanel()`, renderer re‑fit during the .24s width transition via `_fitViewportSoon()`); bottom view‑options toolbar collapses to a 🛠 button (`#toolbar-toggle`, `#toolbar-btns`, `.tb-collapsed`, `toggleToolbar()`). State persists in localStorage (`fc3d_left_collapsed` etc.). Desktop‑only — tabs hidden ≤768px and a defensive rule keeps `.side-collapsed` from zeroing the mobile drawers; the existing mobile drawer system (`.open` + `toggleDrawer`/`closeDrawers`) is untouched and separate.
+- **R45** — **collapsible editor UI (desktop)**: left/right side panels collapse via edge tabs (`#tab-left`/`#tab-right`, `.side-collapsed` class, `toggleSidePanel()`); bottom view‑options toolbar collapses to a 🛠 button (`#toolbar-toggle`, `#toolbar-btns`, `.tb-collapsed`, `toggleToolbar()`). State persists in localStorage (`fc3d_left_collapsed` etc.). Desktop‑only — tabs hidden ≤768px; the existing mobile drawer system (`.open` + `toggleDrawer`/`closeDrawers`) is untouched and separate. *(Panel collapse mechanics superseded by R46.)*
+- **R46** — **side panels overlay the viewport instead of resizing it**. R45's panels were flex children of `#app`, so collapsing re‑laid‑out the row and resized the canvas. Now `#app` is `position:relative` and both panels are `position:absolute` overlays (`z-index:21`, drop shadow) that slide off‑screen via `translateX(±100%)`; `#viewport`/`#three-canvas` hold the full window width in every state. Edge tabs sit at the panel's inner edge (188px / 208px) and slide to the window edge, driven by new `body.lp-collapsed` / `body.rp-collapsed` classes set in `_setSideState()`. `#info-hud` shifts to `right:220px` to clear the floating right panel. `_fitViewportSoon()` **deleted** — it existed only to chase the animating width. Mobile: `#…side-collapsed.open` rules make `.open` explicitly win, so a stale desktop collapse flag in localStorage can't wedge a drawer shut. Trade‑off: expanded panels cover ~400px of canvas, so edge‑of‑screen orbit drags hit a panel — inherent to overlaying.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
