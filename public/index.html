@@ -7900,12 +7900,66 @@ function tickExplode(dt) {
 // ── Room context (G-series G3) ──────────────────────────
 var roomGroup = new THREE.Group(); scene.add(roomGroup);
 var _roomMode = false, _room = { w: 4000, h: 2700, d: 4000 };
+
+// Procedural wood-plank floor: N boards side by side, each a slightly different
+// tone, with dark seam grooves between them, vertical grain, and staggered
+// board-end joints. One tile; tiled across the floor via texture.repeat.
+function _roomFloorTex() {
+  var key = 'roomfloor';
+  if (_texCache[key]) return _texCache[key];
+  var sz = 512, planks = 4, pw = sz / planks;
+  var cv = document.createElement('canvas'); cv.width = cv.height = sz;
+  var cx = cv.getContext('2d');
+  var tones = ['#B07A3C', '#A66E34', '#BA8244', '#9E682F', '#B37B3E'];
+  var seam = '#4A2E14', grainD = '#6A4218', grainL = '#D8B472';
+  for (var b = 0; b < planks; b++) {
+    var x0 = b * pw;
+    cx.fillStyle = tones[b % tones.length];
+    cx.fillRect(x0, 0, pw + 1, sz);
+    // grain: vertical wavy streaks running the length of the board
+    for (var g = 0; g < 22; g++) {
+      var gx = x0 + Math.random() * pw;
+      cx.globalAlpha = 0.05 + Math.random() * 0.13;
+      cx.strokeStyle = Math.random() < 0.22 ? grainL : grainD;
+      cx.lineWidth = 0.3 + Math.random() * 1.8;
+      cx.beginPath(); cx.moveTo(gx, 0);
+      var xx = gx;
+      for (var y = 0; y <= sz; y += 8) { xx += (Math.random() - 0.5) * 2.2; cx.lineTo(xx, y); }
+      cx.stroke();
+    }
+    // one staggered butt joint per board (random height, so ends don't line up)
+    cx.globalAlpha = 0.5; cx.strokeStyle = seam; cx.lineWidth = 1.5;
+    var jy = sz * (0.28 + Math.random() * 0.44);
+    cx.beginPath(); cx.moveTo(x0, jy); cx.lineTo(x0 + pw, jy); cx.stroke();
+  }
+  // seam grooves between boards (and at the tile edges so tiling stays seamless)
+  cx.globalAlpha = 1; cx.strokeStyle = seam; cx.lineWidth = 2;
+  for (var s = 0; s <= planks; s++) { var x = s * pw; cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, sz); cx.stroke(); }
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (renderer && renderer.capabilities) t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return (_texCache[key] = t);
+}
+
 function buildRoom() {
-  while (roomGroup.children.length) { var c = roomGroup.children[0]; roomGroup.remove(c); if (c.geometry) c.geometry.dispose(); }
+  while (roomGroup.children.length) {
+    var c = roomGroup.children[0];
+    roomGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    // dispose the per-build material but NOT its map (the floor texture is cached/shared)
+    if (c.material) c.material.dispose();
+  }
   if (!_roomMode) return;
   var W = _room.w, H = _room.h, D = _room.d;
-  var floorMat = new THREE.MeshStandardMaterial({ color: 0xb8a98f, roughness: 0.9, metalness: 0 });
-  var wallMat  = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
+  // Wood floor: tile the plank texture so each board reads ~250mm wide.
+  var floorTex = _roomFloorTex();
+  floorTex.repeat.set(Math.max(1, W / 1000), Math.max(1, D / 1200));
+  floorTex.needsUpdate = true;
+  // High roughness so the matte floor shows its true wood albedo rather than
+  // washing out under grey environment reflection when PBR is on.
+  var floorMat = new THREE.MeshStandardMaterial({ map: floorTex, color: 0xffffff, roughness: 0.88, metalness: 0 });
+  // White painted walls.
+  var wallMat  = new THREE.MeshStandardMaterial({ color: 0xF2F1ED, roughness: 0.96, metalness: 0, side: THREE.DoubleSide });
   var fl = new THREE.Mesh(new THREE.PlaneGeometry(W, D), floorMat); fl.rotation.x = -Math.PI/2; fl.position.y = 0.5; fl.receiveShadow = true; roomGroup.add(fl);
   var bw = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wallMat); bw.position.set(0, H/2, -D/2); bw.receiveShadow = true; roomGroup.add(bw);
   var lw = new THREE.Mesh(new THREE.PlaneGeometry(D, H), wallMat); lw.rotation.y = Math.PI/2; lw.position.set(-W/2, H/2, 0); lw.receiveShadow = true; roomGroup.add(lw);
