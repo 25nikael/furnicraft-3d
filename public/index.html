@@ -3454,8 +3454,8 @@ function mitrableFaces(p) {
 }
 
 // ── Joinery geometry (Block 4/5): true recesses via axis-aligned box subtraction ──
-var CUT_JOINTS    = ['dado','groove','rabbet','finger','dovetail'];
-var MARKER_JOINTS = ['dowel','pocket'];
+var CUT_JOINTS    = ['dado','groove','rabbet','finger','dovetail','stoppeddado','tonguegroove','halflap','mortisetenon','loosetenon'];
+var MARKER_JOINTS = ['dowel','pocket','buttjoint'];
 
 function _anyJoint(p, list) {
   if (!p.joints) return false;
@@ -3521,10 +3521,164 @@ function fingerCuts(p, edgeKey, j) {
 }
 
 // All cut boxes for a joint (recess types → 1, finger/dovetail → N, markers → 0)
+// ── R49 cut joints: all exact axis-aligned box removals ─────────────
+
+// Stopped dado — a dado channel halted `stop` mm short of the front edge so no
+// joinery shows on the finished face. notch=0 cuts the housing on the case
+// side; notch=1 cuts the mating shelf's front-corner notch (same depth/stop).
+function stoppedDadoCuts(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0);                    // edge axis (x | y | z)
+  var s = /Max$/.test(edgeKey) ? 1 : -1;        // which side of that axis
+  if (A === tAxis) return [];                   // can't joint the thickness edge
+  // B = the run axis: the channel travels along it; stopEnd picks which end is "front"
+  var B = ['x', 'y', 'z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+  var stopEnd = (j.stopEnd || 1) >= 0 ? 1 : -1;
+  var stop = Math.max(1, Math.min(j.stop || 22, 2 * half[B] - 1)); // channel must survive
+  var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+  if (j.notch) {
+    // SHELF corner notch: bite `depth` into the mated edge, `stop` long from
+    // the front end, through the full thickness
+    var bite = Math.max(1, Math.min(j.depth || 6, 2 * half[A] - 1));
+    box[A] = s > 0 ? [half[A] - bite, half[A]] : [-half[A], -half[A] + bite];
+    box[B] = stopEnd > 0 ? [half[B] - stop, half[B]] : [-half[B], -half[B] + stop];
+    return [box];
+  }
+  // HOUSING channel — a plain dado stopped `stop` mm short of the front end
+  var depth  = Math.max(1, Math.min(j.depth || 6, 2 * half[tAxis] - 1));
+  var width  = Math.max(1, j.width || 19);
+  var offset = Math.max(0, j.offset || 0);
+  box[tAxis] = [half[tAxis] - depth, half[tAxis]]; // cut inward from +thickness face
+  box[A] = s > 0 ? [half[A] - offset - width, half[A] - offset]
+                 : [-half[A] + offset, -half[A] + offset + width];
+  box[A][0] = Math.max(-half[A], box[A][0]);
+  box[A][1] = Math.min(half[A], box[A][1]);
+  if (box[A][0] >= box[A][1]) return [];
+  box[B] = stopEnd > 0 ? [-half[B], half[B] - stop] : [-half[B] + stop, half[B]];
+  if (box[B][0] >= box[B][1]) return [];
+  return [box];
+}
+
+// Tongue & groove — cuts the TONGUE half: two shoulder rabbets leave a centred
+// tongue projecting from the edge. The mating panel uses the existing 'groove'
+// joint (same width, depth + 1mm glue relief).
+function tongueGrooveCuts(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0);
+  var s = /Max$/.test(edgeKey) ? 1 : -1;
+  if (A === tAxis) return [];
+  var stock = 2 * half[tAxis];            // panel thickness
+  var len = Math.max(1, Math.min(j.depth || 6, 2 * half[A] - 1));   // projection
+  // 1/3-rule default thickness, clamped so >=1mm shoulder survives per face
+  var tt = Math.max(1, Math.min(j.width || 6, stock - 2));
+  var shoulder = (stock - tt) / 2;
+  var aRange = s > 0 ? [half[A] - len, half[A]] : [-half[A], -half[A] + len];
+  var top = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+  top[tAxis] = [half[tAxis] - shoulder, half[tAxis]];
+  top[A] = aRange.slice();
+  var bot = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+  bot[tAxis] = [-half[tAxis], -half[tAxis] + shoulder];
+  bot[A] = aRange.slice();
+  return [top, bot];
+}
+
+// Half-lap — one ledge cut into the +thickness face, half the stock deep by
+// default so two lapped members finish flush. offset=0 is an end-lap; offset>0
+// slides the ledge toward mid-panel (cross-lap).
+function halfLapCut(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0);
+  var s = /Max$/.test(edgeKey) ? 1 : -1;
+  if (A === tAxis) return null;
+  var depth  = j.depth ? Math.max(1, Math.min(j.depth, 2 * half[tAxis] - 1))
+                       : half[tAxis];     // defining property: half the thickness
+  var width  = Math.max(1, j.width || 60);   // overlap = mating member width
+  var offset = Math.max(0, j.offset || 0);
+  var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+  box[tAxis] = [half[tAxis] - depth, half[tAxis]];
+  box[A] = s > 0 ? [half[A] - offset - width, half[A] - offset]
+                 : [-half[A] + offset, -half[A] + offset + width];
+  box[A][0] = Math.max(-half[A], box[A][0]);
+  box[A][1] = Math.min(half[A], box[A][1]);
+  if (box[A][0] >= box[A][1]) return null;
+  return box;
+}
+
+// Mortise & tenon — role 'tenon' (default) cuts the rail end down to a centred
+// stub (2 cheek cuts + up to 2 edge shoulders; overlapping removals are fine);
+// role 'mortise' cuts one blind pocket into the mating edge face.
+function mortiseTenonCuts(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0), s = /Max$/.test(edgeKey) ? 1 : -1;
+  if (A === tAxis) return [];
+  var B = ['x', 'y', 'z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+  var len = Math.max(1, Math.min(j.depth || 25, 2 * half[A] - 1));
+  // rule of thirds: tenon thickness defaults to 1/3 of stock, centred
+  var tt = Math.max(2, Math.min(j.thick || (2 * half[tAxis]) / 3, 2 * half[tAxis] - 2));
+  var tw = Math.max(2, Math.min(j.width || half[B], 2 * half[B]));
+  var c = Math.max(-half[B] + tw / 2, Math.min(half[B] - tw / 2, j.offset || 0));
+  var aZone = s > 0 ? [half[A] - len, half[A]] : [-half[A], -half[A] + len];
+  function mk(tRange, bRange) {
+    var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+    box[A] = aZone.slice();
+    box[tAxis] = tRange;
+    box[B] = bRange;
+    return box;
+  }
+  if (j.role === 'mortise') {
+    return [mk([-tt / 2, tt / 2], [c - tw / 2, c + tw / 2])];
+  }
+  var cuts = [
+    mk([tt / 2, half[tAxis]], [-half[B], half[B]]),      // cheek, +thickness face
+    mk([-half[tAxis], -tt / 2], [-half[B], half[B]])     // cheek, -thickness face
+  ];
+  if (c - tw / 2 > -half[B]) cuts.push(mk([-half[tAxis], half[tAxis]], [-half[B], c - tw / 2]));
+  if (c + tw / 2 <  half[B]) cuts.push(mk([-half[tAxis], half[tAxis]], [c + tw / 2, half[B]]));
+  return cuts;
+}
+
+// Loose tenon (Domino-style) — `count` blind mortise slots spread evenly along
+// the edge; the mating panel gets the same joint and a floating tenon spans both.
+function looseTenonCuts(p, edgeKey, j) {
+  var half = { x: p.w / 2, y: p.h / 2, z: p.d / 2 };
+  var tAxis = _thickAxisXYZ(p);
+  var A = edgeKey.charAt(0);
+  var s = /Max$/.test(edgeKey) ? 1 : -1;
+  if (A === tAxis) return [];
+  var B = ['x','y','z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+  var depth = Math.max(1, Math.min(j.depth || 20, 2 * half[A] - 1)); // per-side = half tenon length
+  var thick = Math.max(3, Math.min(j.width || 6, 2 * half[tAxis] - 2));
+  var len   = Math.max(thick, j.length || 20);
+  var count = Math.max(1, Math.round(j.count || 2));
+  var bMin = -half[B], span = 2 * half[B];
+  var cuts = [];
+  for (var i = 0; i < count; i++) {
+    var c = bMin + span * (i + 1) / (count + 1);  // same spacing rule as dowels
+    var b0 = Math.max(-half[B], c - len / 2);
+    var b1 = Math.min( half[B], c + len / 2);
+    if (b0 >= b1) continue;
+    var box = { x: [-half.x, half.x], y: [-half.y, half.y], z: [-half.z, half.z] };
+    box[A] = s > 0 ? [half[A] - depth, half[A]] : [-half[A], -half[A] + depth];
+    box[tAxis] = [-thick / 2, thick / 2];         // centred in the thickness
+    box[B] = [b0, b1];
+    cuts.push(box);
+  }
+  return cuts;
+}
+
 function jointCuts(p, edgeKey, j) {
   var t = j.type;
   if (t === 'dado' || t === 'groove' || t === 'rabbet') { var b = jointCutAABB(p, edgeKey, j); return b ? [b] : []; }
   if (t === 'finger' || t === 'dovetail') { return fingerCuts(p, edgeKey, j); }
+  if (t === 'stoppeddado') { return stoppedDadoCuts(p, edgeKey, j); }
+  if (t === 'tonguegroove') { return tongueGrooveCuts(p, edgeKey, j); }
+  if (t === 'halflap') { var hb = halfLapCut(p, edgeKey, j); return hb ? [hb] : []; }
+  if (t === 'mortisetenon') { return mortiseTenonCuts(p, edgeKey, j); }
+  if (t === 'loosetenon') { return looseTenonCuts(p, edgeKey, j); }
   return [];
 }
 
@@ -3596,16 +3750,52 @@ function buildJointMarkers(p) {
   var D = Math.PI / 180, rx = (p.rx || 0) * D, ry = (p.ry || 0) * D, rz = (p.rz || 0) * D;
   var dowelMat  = new THREE.MeshPhongMaterial({ color: 0xC9A24B, shininess: 30 });
   var pocketMat = new THREE.MeshPhongMaterial({ color: 0x222226, shininess: 10 });
+  var screwMat  = new THREE.MeshPhongMaterial({ color: 0x9EA4AC, shininess: 60 });
+  function addMarker(geo, mat, local) {
+    geo.translate(local.x, local.y, local.z);
+    var mk = new THREE.Mesh(geo, mat);
+    mk.position.set(p.x, p.y, p.z);
+    mk.rotation.set(rx, ry, rz);
+    mk.castShadow = true;
+    mk.userData.pid = p.id;
+    scene.add(mk);
+    p.jointMarkers.push(mk);
+  }
   Object.keys(p.joints).forEach(function (edgeKey) {
     var j = p.joints[edgeKey];
-    if (!j || (j.type !== 'dowel' && j.type !== 'pocket')) return;
+    if (!j || MARKER_JOINTS.indexOf(j.type) === -1) return;
     var A = edgeKey.charAt(0), s = /Max$/.test(edgeKey) ? 1 : -1;
     if (A === tAxis) return;
     var B = ['x','y','z'].filter(function (a) { return a !== tAxis && a !== A; })[0];
+    var bMin = -half[B], span = 2 * half[B];
+
+    if (j.type === 'buttjoint') {
+      // Butt joint: nothing is cut — mark screw positions crossing the joint line.
+      // width = shank dia (default 4), depth = screw length (default 40),
+      // count = 0 means auto: 25mm end inset, <= 150mm between screws.
+      var sDia  = Math.max(2, j.width || 4);
+      var sLen  = Math.max(10, j.depth || 40);
+      var inset = 25, usable = span - 2 * inset;
+      var n = Math.max(1, Math.round(j.count || 0));
+      if (!(j.count > 0)) n = (usable <= 0) ? 1 : Math.max(2, Math.ceil(usable / 150) + 1);
+      for (var k = 0; k < n; k++) {
+        var bPos = (n === 1 || usable <= 0) ? (bMin + span / 2)
+                                            : (bMin + inset + usable * k / (n - 1));
+        // Shank: half embedded in this panel's edge, half in the mating panel
+        var lp = { x: 0, y: 0, z: 0 };
+        lp[B] = bPos; lp[A] = s * half[A];
+        addMarker(_cyl(sDia / 2, sDia / 2, sLen, A), screwMat, lp);
+        // Pan head (2x shank dia) at the entry end of the screw
+        var hp = { x: 0, y: 0, z: 0 };
+        hp[B] = bPos; hp[A] = s * (half[A] + sLen / 2);
+        addMarker(_cyl(sDia, sDia, 2.5, A), screwMat, hp);
+      }
+      return;
+    }
+
     var count = Math.max(1, Math.round(j.count || 3));
     var dia = Math.max(3, j.width || 8);
     var len = Math.max(8, j.depth || 16);
-    var bMin = -half[B], span = 2 * half[B];
     for (var i = 0; i < count; i++) {
       var local = { x: 0, y: 0, z: 0 };
       local[B] = bMin + span * (i + 1) / (count + 1);
@@ -3622,14 +3812,7 @@ function buildJointMarkers(p) {
         geo = _cyl(dia / 2, dia / 2, len, tAxis);
         mat = pocketMat;
       }
-      geo.translate(local.x, local.y, local.z);
-      var mk = new THREE.Mesh(geo, mat);
-      mk.position.set(p.x, p.y, p.z);
-      mk.rotation.set(rx, ry, rz);
-      mk.castShadow = true;
-      mk.userData.pid = p.id;
-      scene.add(mk);
-      p.jointMarkers.push(mk);
+      addMarker(geo, mat, local);
     }
   });
 }
@@ -3788,7 +3971,7 @@ function removeMesh(p) {
     _disposeMaterial(mlMat);
     p.mitreLines = [];
   }
-  // jointMarkers share at most two materials (dowelMat/pocketMat, per buildJointMarkers) —
+  // jointMarkers share at most three materials (dowelMat/pocketMat/screwMat, per buildJointMarkers) —
   // collect unique materials and dispose each once so we don't double-dispose.
   if (p.jointMarkers) {
     var jmMats = [];
@@ -6366,14 +6549,27 @@ function renderJointsUI(p) {
     var key = e[0], j = (p.joints && p.joints[key]) || { type: 'none' }, t = j.type || 'none';
     function opt(v, l){ return '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>'; }
     var sel = '<select class="prop-input" style="width:84px;" onchange="setJoint(\''+key+'\',\'type\',this.value)">'
-      + opt('none','None') + opt('dado','Dado') + opt('groove','Groove') + opt('rabbet','Rabbet')
-      + opt('finger','Finger') + opt('dovetail','Dovetail') + opt('dowel','Dowel') + opt('pocket','Pocket') + '</select>';
+      + opt('none','None') + opt('dado','Dado') + opt('stoppeddado','Stopped Dado') + opt('groove','Groove')
+      + opt('rabbet','Rabbet') + opt('tonguegroove','Tongue+Groove') + opt('halflap','Half-Lap')
+      + opt('finger','Finger') + opt('dovetail','Dovetail') + opt('mortisetenon','Mortise+Tenon')
+      + opt('loosetenon','Loose Tenon') + opt('dowel','Dowel') + opt('pocket','Pocket')
+      + opt('buttjoint','Butt (screws)') + '</select>';
     var rows = '';
     if (t !== 'none') {
       function inp(field, val, min){ return '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;font-size:10px;">'+field+'</span>'
         + '<input class="prop-input" type="number" min="'+min+'" value="'+val+'" style="width:54px;" onchange="setJoint(\''+key+'\',\''+field+'\',this.value)"></div>'; }
       if (t === 'dado' || t === 'groove')      rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1) + inp('offset', j.offset||0, 0);
       else if (t === 'rabbet')                 rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1);
+      else if (t === 'stoppeddado')            rows = inp('depth', j.depth||6, 1) + inp('width', j.width||19, 1) + inp('offset', j.offset||0, 0) + inp('stop', j.stop||22, 1) + inp('notch', j.notch||0, 0);
+      else if (t === 'tonguegroove')           rows = inp('depth', j.depth||6, 1) + inp('width', j.width||6, 1);
+      else if (t === 'halflap')                rows = inp('depth', j.depth || Math.round(panelThickness(p)/2), 1) + inp('width', j.width||60, 1) + inp('offset', j.offset||0, 0);
+      else if (t === 'mortisetenon')           rows = '<div class="prop-row"><span class="prop-lbl" style="width:auto;flex:1;font-size:10px;">role</span>'
+        + '<select class="prop-input" style="width:64px;" onchange="setJoint(\''+key+'\',\'role\',this.value)">'
+        + '<option value="tenon"'+(j.role!=='mortise'?' selected':'')+'>tenon</option>'
+        + '<option value="mortise"'+(j.role==='mortise'?' selected':'')+'>mortise</option></select></div>'
+        + inp('depth', j.depth||25, 1) + inp('width', j.width||30, 2) + inp('offset', j.offset||0, 0);
+      else if (t === 'loosetenon')             rows = inp('depth', j.depth||20, 1) + inp('width', j.width||6, 3) + inp('length', j.length||20, 6) + inp('count', j.count||2, 1);
+      else if (t === 'buttjoint')              rows = inp('count', j.count||0, 0) + inp('width', j.width||4, 2) + inp('depth', j.depth||40, 10); // count 0 = auto spacing
       else if (t === 'finger' || t === 'dovetail') rows = inp('depth', j.depth||18, 1) + inp('count', j.count||6, 2);
       else                                     rows = inp('count', j.count||3, 1) + inp('width', j.width||8, 1) + inp('depth', j.depth||16, 1); // dowel / pocket
     }
@@ -6394,7 +6590,17 @@ function setJoint(edgeKey, field, value) {
       var defaults = { depth: 6, width: 6, offset: 0, count: 3 };
       if (value === 'finger' || value === 'dovetail') defaults = { depth: 18, width: 6, offset: 0, count: 6 };
       else if (value === 'dowel' || value === 'pocket') defaults = { depth: 16, width: 8, offset: 0, count: 3 };
-      var j = p.joints[edgeKey] || defaults;
+      else if (value === 'stoppeddado')  defaults = { depth: 6, width: 19, offset: 0, stop: 22, stopEnd: 1, notch: 0, count: 3 };
+      else if (value === 'tonguegroove') defaults = { depth: 6, width: 6, offset: 0, count: 3 };
+      else if (value === 'halflap')      defaults = { depth: Math.round(panelThickness(p) / 2), width: 60, offset: 0, count: 3 };
+      else if (value === 'mortisetenon') defaults = { depth: 25, width: 30, offset: 0, role: 'tenon', count: 3 };
+      else if (value === 'loosetenon')   defaults = { depth: 20, width: 6, length: 20, offset: 0, count: 2 };
+      else if (value === 'buttjoint')    defaults = { depth: 40, width: 4, offset: 0, count: 0 };
+      // Changing the joint TYPE resets params to that type's defaults — carrying
+      // e.g. a dowel's width:8 into a buttjoint (screw dia) produced nonsense,
+      // and buttjoint's auto mode needs count to start at 0.
+      var j = p.joints[edgeKey];
+      if (!j || j.type !== value) j = defaults;
       j.type = value;
       if (j.count === undefined) j.count = defaults.count;
       p.joints[edgeKey] = j;
@@ -6404,7 +6610,16 @@ function setJoint(edgeKey, field, value) {
     }
   } else {
     if (!p.joints[edgeKey]) return;
-    p.joints[edgeKey][field] = Math.max(field === 'offset' ? 0 : 1, parseFloat(value) || 0);
+    if (field === 'role') {
+      // mortisetenon's role is a string, not a number
+      p.joints[edgeKey].role = value === 'mortise' ? 'mortise' : 'tenon';
+    } else {
+      // Per-field floors: offset/count/notch may legitimately be 0 (count 0 =
+      // buttjoint auto spacing, notch 0 = stopped-dado housing mode);
+      // everything else stays >= 1.
+      var floor = (field === 'offset' || field === 'count' || field === 'notch') ? 0 : 1;
+      p.joints[edgeKey][field] = Math.max(floor, parseFloat(value) || 0);
+    }
   }
   buildMesh(p);
   rebuildSelBox(p);
@@ -6876,11 +7091,16 @@ function _jointSummary(p, html) {
   if (ml.length) parts.push('Mitre ' + ml.join('/') + ' ' + (p.mitreAngle || 45) + '°');
   if (p.joints) {
     var EL  = { xMin:'−X', xMax:'+X', yMin:'−Y', yMax:'+Y', zMin:'−Z', zMax:'+Z' };
-    var LBL = { dado:'Dado', groove:'Groove', rabbet:'Rabbet', finger:'Finger', dovetail:'Dovetail', dowel:'Dowel', pocket:'Pocket' };
+    var LBL = { dado:'Dado', groove:'Groove', rabbet:'Rabbet', finger:'Finger', dovetail:'Dovetail', dowel:'Dowel', pocket:'Pocket',
+                stoppeddado:'Stopped Dado', tonguegroove:'Tongue+Groove', halflap:'Half-Lap',
+                mortisetenon:'Mortise+Tenon', loosetenon:'Loose Tenon', buttjoint:'Butt' };
     Object.keys(p.joints).forEach(function (k) {
       var j = p.joints[k]; if (!j || !j.type || !LBL[j.type]) return;
       var d = LBL[j.type] + ' ' + EL[k];
-      if (j.type === 'finger' || j.type === 'dovetail' || j.type === 'dowel' || j.type === 'pocket') d += ' ×' + (j.count || 6);
+      if (j.type === 'buttjoint') d += (j.count > 0 ? ' ×' + j.count + ' screws' : ' (screws, auto)');
+      else if (j.type === 'mortisetenon') d += ' ' + (j.role === 'mortise' ? 'mortise' : 'tenon') + ' ' + (j.depth || 25) + 'mm';
+      else if (j.type === 'loosetenon') d += ' ×' + (j.count || 2);
+      else if (j.type === 'finger' || j.type === 'dovetail' || j.type === 'dowel' || j.type === 'pocket') d += ' ×' + (j.count || 6);
       else d += ' ' + (j.depth || 6) + 'mm';
       parts.push(d);
     });
