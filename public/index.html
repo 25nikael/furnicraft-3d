@@ -1077,11 +1077,23 @@ body.rp-collapsed #tab-right{right:0;}
     <div class="modal-body">
       <div class="prop-title">Preset</div>
       <select class="prop-input" id="tpl-preset" style="width:100%;" onchange="_tplDefaults()">
-        <option value="bookcase">Bookcase</option>
-        <option value="wardrobe">Wardrobe</option>
-        <option value="basecabinet">Base Cabinet</option>
-        <option value="table">Table</option>
-        <option value="drawerunit">Drawer Unit</option>
+        <optgroup label="Cabinets &amp; Storage">
+          <option value="bookcase">Bookcase</option>
+          <option value="basecabinet">Base Cabinet</option>
+          <option value="wallcabinet">Wall Cabinet</option>
+          <option value="wardrobe">Wardrobe</option>
+          <option value="drawerunit">Drawer Unit</option>
+          <option value="dresser">Dresser (2 column)</option>
+          <option value="nightstand">Nightstand</option>
+          <option value="tvstand">TV Stand / Media Console</option>
+          <option value="floatingshelf">Floating Shelf</option>
+        </optgroup>
+        <optgroup label="Tables, Desks &amp; Seating">
+          <option value="table">Dining Table</option>
+          <option value="desk">Desk</option>
+          <option value="coffeetable">Coffee Table</option>
+          <option value="bench">Bench</option>
+        </optgroup>
       </select>
       <div class="prop-title" style="margin-top:12px;">Overall size</div>
       <div class="prop-row"><span class="prop-lbl" style="flex:1;width:auto;">Width</span><input class="prop-input" id="tpl-w" type="number" style="width:84px;"></div>
@@ -4324,34 +4336,113 @@ function tplTable(W, H, D) {
   });
   return { name:'Table', panels:list };
 }
-function tplDrawerUnit(W, H, D) {
-  var T = 18, list = _tplCarcass(W, H, D, { mat:'birch' }), hw = [], inner = H - 2*T;
-  var n = Math.max(2, Math.round(inner / 200)), dh = inner / n, clr = 12.5;
-  var boxW = W - 2*T - 2*clr;                 // drawer box outer width (slide clearance each side)
+// Fill a vertical column with `n` stacked drawers (front + 5-panel box + 2
+// slides each), between yBottom and yTop, centred on xC in a clear opening of
+// width openW. Extracted from tplDrawerUnit so nightstand/dresser/etc. reuse the
+// verified drawer math; pass a unique gPrefix per column so groups don't collide.
+function _tplDrawers(list, hw, xC, openW, D, yBottom, yTop, n, opts) {
+  opts = opts || {};
+  var T = 18, clr = 12.5, inner = yTop - yBottom, dh = inner / n;
+  var boxW = openW - 2*clr;                    // box outer width, inside the slides
+  var frontMat = opts.frontMat || 'oak', boxMat = 'birch';
+  var gp = opts.gPrefix || 'd', label = opts.label || 'Drawer';
   for (var i = 0; i < n; i++) {
-    var yc = T + dh*(i + 0.5);
+    var yc = yBottom + dh*(i + 0.5);
     var boxH = Math.max(40, dh - 24);
     var boxD = Math.max(80, D - 40);
-    var cz = -(T / 2);                         // box just behind the front
-    var g = 'd' + i, gname = 'Drawer ' + (i + 1);
-    // Working front face
-    list.push({ name:'Drawer Front '+(i+1), w:W-2*T-4, h:dh-6, d:T, x:0, y:yc, z:D/2-T/2, material:'oak',
+    var cz = -(T / 2);                          // box just behind the front
+    var g = gp + i, gname = label + ' ' + (i + 1);
+    list.push({ name:label+' Front '+(i+1), w:openW-4, h:dh-6, d:T, x:xC, y:yc, z:D/2-T/2, material:frontMat,
                 func:{ kind:'drawer', travel:Math.max(150, D-30), slide:'sidemount', clearance:clr, open:false }, _g:g, _gname:gname });
-    // Drawer box: two sides, back, bottom
-    list.push({ name:'Drawer '+(i+1)+' L', w:T, h:boxH, d:boxD, x:-(boxW/2 - T/2), y:yc, z:cz, material:'birch', _g:g });
-    list.push({ name:'Drawer '+(i+1)+' R', w:T, h:boxH, d:boxD, x:(boxW/2 - T/2),  y:yc, z:cz, material:'birch', _g:g });
-    list.push({ name:'Drawer '+(i+1)+' Back', w:boxW-2*T, h:boxH, d:T, x:0, y:yc, z:cz - boxD/2 + T/2, material:'birch', _g:g });
-    list.push({ name:'Drawer '+(i+1)+' Bottom', w:boxW-2*T, h:T, d:boxD-2*T, x:0, y:yc - boxH/2 + T/2, z:cz, material:'birch', _g:g });
-    // Side-mount slides
+    list.push({ name:gname+' L', w:T, h:boxH, d:boxD, x:xC-(boxW/2 - T/2), y:yc, z:cz, material:boxMat, _g:g });
+    list.push({ name:gname+' R', w:T, h:boxH, d:boxD, x:xC+(boxW/2 - T/2), y:yc, z:cz, material:boxMat, _g:g });
+    list.push({ name:gname+' Back', w:boxW-2*T, h:boxH, d:T, x:xC, y:yc, z:cz - boxD/2 + T/2, material:boxMat, _g:g });
+    list.push({ name:gname+' Bottom', w:boxW-2*T, h:T, d:boxD-2*T, x:xC, y:yc - boxH/2 + T/2, z:cz, material:boxMat, _g:g });
     [-1, 1].forEach(function (s) {
-      hw.push({ type:'slide', x: Math.round(s*(boxW/2 + clr/2)), y: Math.round(yc), z: Math.round(cz), params:{ length: Math.round(boxD), height: 45 } });
+      hw.push({ type:'slide', x: Math.round(xC + s*(boxW/2 + clr/2)), y: Math.round(yc), z: Math.round(cz), params:{ length: Math.round(boxD), height: 45 } });
     });
   }
-  return { name:'Drawer Unit', panels:list, hardware:hw };
 }
 
-var TPL_GEN = { bookcase:tplBookcase, wardrobe:tplWardrobe, basecabinet:tplBaseCabinet, table:tplTable, drawerunit:tplDrawerUnit };
-var TPL_DEFAULTS = { bookcase:[800,1800,300], wardrobe:[1000,2000,600], basecabinet:[600,870,560], table:[1200,740,750], drawerunit:[500,800,500] };
+function tplDrawerUnit(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'birch' }), hw = [], inner = H - 2*T;
+  var n = Math.max(2, Math.round(inner / 200));
+  _tplDrawers(list, hw, 0, W - 2*T, D, T, H - T, n, { frontMat:'oak' });
+  return { name:'Drawer Unit', panels:list, hardware:hw };
+}
+function tplNightstand(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'oak' }), hw = [];
+  _tplDrawers(list, hw, 0, W - 2*T, D, T, H - T, 2, { frontMat:'walnut' });
+  return { name:'Nightstand', panels:list, hardware:hw };
+}
+function tplDresser(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'oak' }), hw = [];
+  list.push({ name:'Divider', w:T, h:H-2*T, d:D-12, x:0, y:H/2, z:6, material:'oak' });
+  var openW = (W - 2*T - T) / 2, xC = openW/2 + T/2;     // two columns split by the divider
+  _tplDrawers(list, hw, -xC, openW, D, T, H - T, 3, { frontMat:'walnut', gPrefix:'dl', label:'Left Drawer' });
+  _tplDrawers(list, hw,  xC, openW, D, T, H - T, 3, { frontMat:'walnut', gPrefix:'dr', label:'Right Drawer' });
+  return { name:'Dresser', panels:list, hardware:hw };
+}
+function tplDesk(W, H, D) {
+  var T = 30, legT = 60, list = [], lh = H - T, inset = legT/2 + 20;
+  list.push({ name:'Top', w:W, h:T, d:D, x:0, y:H-T/2, z:0, material:'oak' });
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function (c, i) {
+    list.push({ name:'Leg '+(i+1), w:legT, h:lh, d:legT, x:c[0]*(W/2-inset), y:lh/2, z:c[1]*(D/2-inset), material:'oak' });
+  });
+  // Back modesty panel spanning the rear legs, hung under the top
+  list.push({ name:'Modesty Panel', w:W-2*inset, h:Math.max(150, H*0.4), d:12, x:0, y:H-T-Math.max(150, H*0.4)/2, z:-(D/2-inset), material:'birch' });
+  return { name:'Desk', panels:list };
+}
+function tplCoffeeTable(W, H, D) {
+  var T = 30, legT = 50, list = [], lh = H - T, inset = legT/2 + 20;
+  list.push({ name:'Top', w:W, h:T, d:D, x:0, y:H-T/2, z:0, material:'walnut' });
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function (c, i) {
+    list.push({ name:'Leg '+(i+1), w:legT, h:lh, d:legT, x:c[0]*(W/2-inset), y:lh/2, z:c[1]*(D/2-inset), material:'walnut' });
+  });
+  list.push({ name:'Lower Shelf', w:W-2*inset, h:18, d:D-2*inset, x:0, y:lh*0.33, z:0, material:'walnut' });
+  return { name:'Coffee Table', panels:list };
+}
+function tplTvStand(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'oak' });
+  var bay = (W - 4*T) / 3;                                // three equal bays between two dividers
+  [-1, 1].forEach(function (s) {
+    list.push({ name:'Divider '+(s<0?'L':'R'), w:T, h:H-2*T, d:D-12, x:s*(bay/2 + T/2), y:H/2, z:6, material:'oak' });
+  });
+  [-(bay+T), 0, (bay+T)].forEach(function (x, i) {
+    list.push({ name:'Shelf '+(i+1), w:bay, h:T, d:D-12, x:x, y:H/2, z:6, material:'oak' });
+  });
+  return { name:'TV Stand', panels:list };
+}
+function tplFloatingShelf(W, H, D) {
+  var t = 40;  // H is the mount height off the floor; the board itself is 40mm thick
+  var list = [{ name:'Shelf', w:W, h:t, d:D, x:0, y:H, z:0, material:'oak' }];
+  var hw = [{ type:'cleat', x:0, y:H - t/2, z:-(D/2 - 30), params:{ length:Math.max(200, W-40), height:60, thickness:18 } }];
+  return { name:'Floating Shelf', panels:list, hardware:hw };
+}
+function tplWallCabinet(W, H, D) {
+  var T = 18, list = _tplCarcass(W, H, D, { mat:'white' });
+  list.push({ name:'Mounting Rail', w:W-2*T, h:75, d:18, x:0, y:H-T-40, z:-(D/2-18-6), material:'birch' });
+  list.push({ name:'Shelf', w:W-2*T, h:T, d:D-12, x:0, y:H/2, z:6, material:'white' });
+  return { name:'Wall Cabinet', panels:list };
+}
+function tplBench(W, H, D) {
+  var T = 30, legT = 45, list = [], lh = H - T, inset = legT/2 + 15;
+  list.push({ name:'Seat', w:W, h:T, d:D, x:0, y:H-T/2, z:0, material:'oak' });
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function (c, i) {
+    list.push({ name:'Leg '+(i+1), w:legT, h:lh, d:legT, x:c[0]*(W/2-inset), y:lh/2, z:c[1]*(D/2-inset), material:'oak' });
+  });
+  [-1, 1].forEach(function (s) {
+    list.push({ name:'Apron '+(s<0?'Back':'Front'), w:W-2*inset, h:70, d:15, x:0, y:H-T-45, z:s*(D/2-inset), material:'oak' });
+  });
+  return { name:'Bench', panels:list };
+}
+
+var TPL_GEN = { bookcase:tplBookcase, wardrobe:tplWardrobe, basecabinet:tplBaseCabinet, table:tplTable, drawerunit:tplDrawerUnit,
+  nightstand:tplNightstand, dresser:tplDresser, desk:tplDesk, coffeetable:tplCoffeeTable, tvstand:tplTvStand,
+  floatingshelf:tplFloatingShelf, wallcabinet:tplWallCabinet, bench:tplBench };
+var TPL_DEFAULTS = { bookcase:[800,1800,300], wardrobe:[1000,2000,600], basecabinet:[600,870,560], table:[1200,740,750], drawerunit:[500,800,500],
+  nightstand:[450,550,400], dresser:[900,800,450], desk:[1200,740,600], coffeetable:[1100,450,600], tvstand:[1600,500,400],
+  floatingshelf:[800,1200,220], wallcabinet:[600,700,320], bench:[1100,450,350] };
 
 function _applyPanelSet(name, list, replace, hwList) {
   saveUndo();
