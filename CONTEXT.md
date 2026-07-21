@@ -1,6 +1,6 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R54** (2026‑07‑22).
+> Continuity document for resuming work across context windows. Current as of **R55** (2026‑07‑22).
 > The stale pre‑R13 `HANDOFF.md` was deleted in favour of this file; complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
@@ -72,7 +72,7 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
 
 ## 6. Working conventions
 
-- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R54**. Continue numbering.
+- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R55**. Continue numbering.
 - Commit → push only when the work is verified. Pushing to `master` **deploys to production** — the user has authorized deploys for this work and typically wants each fix live.
 - Keep commit messages **quote‑free** in heredocs if using PowerShell here‑strings (the Bash tool handles quotes fine; PowerShell here‑strings historically broke on `"`).
 - After a deploy, remind the user to hard‑refresh (Ctrl+Shift+R).
@@ -135,6 +135,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R53–R54 — furniture library + AI reference base.**
   - **R53 (client):** template library 5→**13** pieces. New: nightstand, dresser (2‑column), desk, coffee table, TV stand, floating shelf, wall cabinet, bench. Picker now uses optgroups. The drawer‑box math is extracted from `tplDrawerUnit` into `_tplDrawers(list, hw, xC, openW, D, yBottom, yTop, n, opts)` — driven by column‑centre + clear‑opening width so it serves single‑ and multi‑column pieces; `tplDrawerUnit` refactored onto it with byte‑identical output. `TPL_GEN` + `TPL_DEFAULTS` + the `#tpl-preset` `<select>` all extended. Templates feed the existing R50 explode/group machinery unchanged.
   - **R54 (server):** `server/routes/ai.js` gains `FURNITURE_REFERENCE`, appended to `AI_SYSTEM_PROMPT` (used by BOTH `/design` and `/from-image`): ergonomic height anchors, shelf/drawer rules of thumb, and a W×H×D catalog of ~18 common pieces, kept consistent with `TPL_DEFAULTS`. Improves accuracy of undimensioned requests. **Only verifiable offline** (require‑load + prompt interpolation) — live AI still needs `ANTHROPIC_API_KEY` on Render (still unset → 503).
+- **R55 — landing wood‑panel bg follows device tilt on mobile** (`public/landing.html`). The parallax only tracked a cursor, so phones saw idle drift only. Now `deviceorientation` drives the same `tx/ty` target: **first reading = neutral rest pose** (phones are held at ~50‑70°, not flat), 22° from neutral = full deflection, clamped. `tiltToScreenAxes(beta, gamma, angle)` is a **top‑level pure fn** mapping device→screen axes per rotation (portrait/90/180/270/legacy −90). `orientationchange` clears the neutral to re‑level. **iOS 13+** needs a user gesture → asks once on first `touchend`, refusal remembered in `localStorage.fc3d_tilt_denied` (never re‑prompts); Android starts directly. `touchmove` defers once `tiltActive`. The tilt block sits **after** the `prefers-reduced-motion` early return so reduced‑motion users are never prompted. **Verification limit:** the harness has no accelerometer and rAF is paused, so on‑screen motion was NOT observed — verified the pure mapping exhaustively + spied the global mapper to prove listener wiring. Sensitivity dial = `TILT_DEG`. Needs a real‑phone check.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
