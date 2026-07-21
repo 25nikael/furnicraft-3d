@@ -1,6 +1,6 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R51** (2026‑07‑21).
+> Continuity document for resuming work across context windows. Current as of **R54** (2026‑07‑22).
 > The stale pre‑R13 `HANDOFF.md` was deleted in favour of this file; complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
@@ -72,7 +72,7 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
 
 ## 6. Working conventions
 
-- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R51**. Continue numbering.
+- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R54**. Continue numbering.
 - Commit → push only when the work is verified. Pushing to `master` **deploys to production** — the user has authorized deploys for this work and typically wants each fix live.
 - Keep commit messages **quote‑free** in heredocs if using PowerShell here‑strings (the Bash tool handles quotes fine; PowerShell here‑strings historically broke on `"`).
 - After a deploy, remind the user to hard‑refresh (Ctrl+Shift+R).
@@ -131,6 +131,10 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
   - **R49 — 6 joinery types**: cut joints `stoppeddado` (notch=1 → shelf‑corner notch mode), `tonguegroove` (tongue half; mate = existing groove), `halflap`, `mortisetenon` (`role` tenon|mortise), `loosetenon` (Domino‑style, count slots) — all exact AABB removals via `subtractBox`; marker joint `buttjoint` (auto screw layout: 25mm inset, ≤150mm apart at count=0). `buildJointMarkers` refactored (addMarker helper, `MARKER_JOINTS.indexOf` filter, screwMat). **`setJoint` behaviour changes:** switching joint type now resets params to the new type's defaults, and the old blanket `>=1` clamp became per‑field floors (offset/count/notch may be 0; `role` passes through as a string) — the blanket clamp would have silently broken buttjoint auto mode and stoppeddado's notch/stopEnd.
 - **R50 — staged exploded view.** Previously only panels exploded (hardware froze at assembly position) and drawer-box panels scattered into the global stacks. Now two smoothstep phases: **0→0.45** each drawer unit (front + groupId panels + its hardware) ejects along `_drawerOutDir` until its rear clears the carcase +gap; **0.45→1** carcase panels separate (stack algorithm scoped to non‑drawer panels) while each drawer's panels fan out around its ejected spot. Collapse mirrors. Hardware host resolution: `attachedTo` → group root → nearest panel by world‑AABB distance (`_distToPanelSq`); slides ride eject but not the fan‑out. Key internals: `_stackOffsets(list,MINGAP,SPREAD,out)` extracted; offsets struct `{main,eject,sub,hw}`; cache key includes `hardware.length`. **Behaviour gates:** `toggleExplode` closes open doors/drawers on entry (else a swung door keeps open rotation while its position explodes); `tickFunctional` is skipped in `animate()` while `_explode > 0.0001` (both wrote positions to the same meshes). Verified by stepping `tickExplode(0.02)` manually with synthetic dt — the animation math is pure and testable headless.
 - **R51 — room mode: wood‑plank floor + white walls.** `buildRoom` previously drew a flat tan floor + two off‑white walls. New `_roomFloorTex()` builds a cached procedural plank texture (4 boards/tile, varied tones, dark seam grooves, vertical grain, staggered butt joints; `RepeatWrapping` + max anisotropy); floor material is `roughness:0.88` so it shows true wood albedo instead of washing to grey under the PBR env reflection (this was the real gotcha — a single‑pixel render sample looked warm, but a **wide render‑average** exposed the wash: saturation R‑B 19→33 after deepening tones + raising roughness). Walls repainted `0xF2F1ED`. `buildRoom` now disposes each mesh material on rebuild (the cached floor texture survives). Two‑wall open‑corner layout kept. Verify technique reused from §5: offscreen `WebGLRenderTarget` + averaged pixels (not one texel) to judge how a lit surface actually reads.
+- **R52** — darkened the R51 room floor to a deeper walnut (plank tones + seam/grain one shade down; floor render mean [138,127,105]→[123,109,81]). Colour‑only tweak.
+- **R53–R54 — furniture library + AI reference base.**
+  - **R53 (client):** template library 5→**13** pieces. New: nightstand, dresser (2‑column), desk, coffee table, TV stand, floating shelf, wall cabinet, bench. Picker now uses optgroups. The drawer‑box math is extracted from `tplDrawerUnit` into `_tplDrawers(list, hw, xC, openW, D, yBottom, yTop, n, opts)` — driven by column‑centre + clear‑opening width so it serves single‑ and multi‑column pieces; `tplDrawerUnit` refactored onto it with byte‑identical output. `TPL_GEN` + `TPL_DEFAULTS` + the `#tpl-preset` `<select>` all extended. Templates feed the existing R50 explode/group machinery unchanged.
+  - **R54 (server):** `server/routes/ai.js` gains `FURNITURE_REFERENCE`, appended to `AI_SYSTEM_PROMPT` (used by BOTH `/design` and `/from-image`): ergonomic height anchors, shelf/drawer rules of thumb, and a W×H×D catalog of ~18 common pieces, kept consistent with `TPL_DEFAULTS`. Improves accuracy of undimensioned requests. **Only verifiable offline** (require‑load + prompt interpolation) — live AI still needs `ANTHROPIC_API_KEY` on Render (still unset → 503).
 
 ## 10. Open backlog (owner decisions / not yet done)
 
