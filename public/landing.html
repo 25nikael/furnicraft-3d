@@ -1212,10 +1212,22 @@ function applyConfig() {
   }
 })();
 
+// Map device-tilt angles onto screen-space axes, accounting for how the device
+// is currently rotated. beta = front/back tilt, gamma = left/right tilt (deg);
+// angle = screen.orientation.angle. Kept standalone: it is pure, and the axis
+// swapping is the easiest part of tilt handling to get subtly wrong.
+function tiltToScreenAxes(beta, gamma, angle) {
+  if (angle === 90)                   return { x:  beta,  y: -gamma };
+  if (angle === 270 || angle === -90) return { x: -beta,  y:  gamma };
+  if (angle === 180)                  return { x: -gamma, y: -beta  };
+  return { x: gamma, y: beta };                      // portrait (0)
+}
+
 // ── Interactive wooden-panel background ──────────────────────────────────
-// Floating wood panels that parallax toward/away from the cursor. Deeper
-// (larger) panels move more; all panels idle-drift so the scene is alive on
-// load and on touch devices. Honours prefers-reduced-motion.
+// Floating wood panels that parallax toward/away from the cursor — or, on a
+// phone, toward/away from the direction the device is tilted. Deeper (larger)
+// panels move more; all panels idle-drift so the scene is alive on load.
+// Honours prefers-reduced-motion.
 (function () {
   var host = document.getElementById('wood-bg');
   if (!host) return;
@@ -1273,9 +1285,11 @@ function applyConfig() {
   }
 
   var tx = 0, ty = 0, cx = 0, cy = 0;               // target / eased cursor, -1..1
+  var tiltActive = false;                            // true once the sensor drives the target
   function setTarget(px, py) { tx = (px / W) * 2 - 1; ty = (py / H) * 2 - 1; }
   window.addEventListener('mousemove', function (e) { setTarget(e.clientX, e.clientY); }, { passive: true });
-  window.addEventListener('touchmove', function (e) { if (e.touches && e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+  // Once tilt is driving the scene, a dragging finger must not fight it.
+  window.addEventListener('touchmove', function (e) { if (!tiltActive && e.touches && e.touches[0]) setTarget(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
   window.addEventListener('resize', function () { W = window.innerWidth; H = window.innerHeight; }, { passive: true });
 
   var PARALLAX = 170;
@@ -1293,8 +1307,54 @@ function applyConfig() {
 
   if (reduce) {
     render(0, 0, 0);                                 // static, no animation loop
-    return;
+    return;                                          // (also skips the tilt setup below)
   }
+
+  // ── Device tilt (mobile) ──────────────────────────────────────────────
+  // A phone has no cursor, so drive the same parallax target from the
+  // orientation sensor. The FIRST reading becomes the neutral rest pose —
+  // people hold a phone at roughly 50-70deg, not flat — and tilting away from
+  // that pushes the panels exactly as moving a cursor would.
+  var TILT_DEG = 22;                                 // tilt from neutral for full deflection
+  function startTilt() {
+    var base = null;
+    window.addEventListener('deviceorientation', function (e) {
+      if (e.beta === null || e.gamma === null) return;   // no usable sensor data
+      var ang = 0;
+      if (window.screen && screen.orientation && typeof screen.orientation.angle === 'number') ang = screen.orientation.angle;
+      else if (typeof window.orientation === 'number') ang = window.orientation;
+      var s = tiltToScreenAxes(e.beta, e.gamma, ang);
+      if (!base) base = s;                           // first reading = neutral
+      tx = Math.max(-1, Math.min(1, (s.x - base.x) / TILT_DEG));
+      ty = Math.max(-1, Math.min(1, (s.y - base.y) / TILT_DEG));
+      tiltActive = true;
+    }, { passive: true });
+    // Turning the device sideways invalidates the old neutral — re-level.
+    window.addEventListener('orientationchange', function () { base = null; }, { passive: true });
+  }
+
+  var DOE = window.DeviceOrientationEvent;
+  if (DOE) {
+    if (typeof DOE.requestPermission === 'function') {
+      // iOS 13+ gates the sensor behind a user gesture. Ask once on the first
+      // tap; if the user declines, remember it and never prompt again.
+      var denied = false;
+      try { denied = localStorage.getItem('fc3d_tilt_denied') === '1'; } catch (err) {}
+      if (!denied) {
+        var ask = function () {
+          document.removeEventListener('touchend', ask);
+          DOE.requestPermission().then(function (state) {
+            if (state === 'granted') startTilt();
+            else { try { localStorage.setItem('fc3d_tilt_denied', '1'); } catch (err2) {} }
+          }).catch(function () {});
+        };
+        document.addEventListener('touchend', ask, { passive: true });
+      }
+    } else {
+      startTilt();                                   // Android and others: no gate
+    }
+  }
+
   function frame(t) {
     cx += (tx - cx) * 0.08;                          // ease toward the cursor
     cy += (ty - cy) * 0.08;
