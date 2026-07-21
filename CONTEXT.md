@@ -1,6 +1,6 @@
 # FurniCraft 3D — Project Context & History
 
-> Continuity document for resuming work across context windows. Current as of **R49** (2026‑07‑21).
+> Continuity document for resuming work across context windows. Current as of **R50** (2026‑07‑21).
 > The stale pre‑R13 `HANDOFF.md` was deleted in favour of this file; complements `DEVPLAN.md` (the original feature roadmap, all ✅).
 
 ---
@@ -72,7 +72,7 @@ Production needs `DATABASE_URL`; there is none locally. Use the **in‑memory de
 
 ## 6. Working conventions
 
-- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R49**. Continue numbering.
+- **One change = one `Rxx:` commit** = a resume checkpoint. Current head is **R50**. Continue numbering.
 - Commit → push only when the work is verified. Pushing to `master` **deploys to production** — the user has authorized deploys for this work and typically wants each fix live.
 - Keep commit messages **quote‑free** in heredocs if using PowerShell here‑strings (the Bash tool handles quotes fine; PowerShell here‑strings historically broke on `"`).
 - After a deploy, remind the user to hard‑refresh (Ctrl+Shift+R).
@@ -129,6 +129,7 @@ Foundation → **B1** hardware catalog, **B2** functional doors/drawers, **A1** 
 - **R48–R49 (agent‑orchestrated hardware + joinery expansion)** — a multi‑agent Workflow researched supplier catalogs (6 parallel sweeps, 81 candidates), deduped against the existing catalog, ranked by real‑world usage, generated defs, and adversarially verified each (engine API / mounting‑face geometry / dimensional realism). Run had to be resumed 3× across session‑limit windows (`resumeFromRunId` caching); the final verify pass was rewritten **serially** (1 agent at a time, combined 3‑lens verifier, context via scratchpad files) to keep token burn/sec low.
   - **R48 — 10 hardware types** in `HW_DEFS`: `screw` (chipboard 4×40), `bumper`, `magcatch`, `leveler`, `minifix`, `euroscrew`, `confirmat`, `cornerblock`, `cuppull`, `edgepull`. Purely additive — catalog grid/params panel/finish picker/cut sheet all render from `HW_DEFS` generically; `HW_PRICE_DEFAULT` extended. Ranks 11–18 (damper, roller catch, TIP‑ON, threaded insert, cross dowel, figure‑8, Z‑clip, corner brace) are researched + dimensioned but not coded — in the workflow output at the session tasks dir if wanted later.
   - **R49 — 6 joinery types**: cut joints `stoppeddado` (notch=1 → shelf‑corner notch mode), `tonguegroove` (tongue half; mate = existing groove), `halflap`, `mortisetenon` (`role` tenon|mortise), `loosetenon` (Domino‑style, count slots) — all exact AABB removals via `subtractBox`; marker joint `buttjoint` (auto screw layout: 25mm inset, ≤150mm apart at count=0). `buildJointMarkers` refactored (addMarker helper, `MARKER_JOINTS.indexOf` filter, screwMat). **`setJoint` behaviour changes:** switching joint type now resets params to the new type's defaults, and the old blanket `>=1` clamp became per‑field floors (offset/count/notch may be 0; `role` passes through as a string) — the blanket clamp would have silently broken buttjoint auto mode and stoppeddado's notch/stopEnd.
+- **R50 — staged exploded view.** Previously only panels exploded (hardware froze at assembly position) and drawer-box panels scattered into the global stacks. Now two smoothstep phases: **0→0.45** each drawer unit (front + groupId panels + its hardware) ejects along `_drawerOutDir` until its rear clears the carcase +gap; **0.45→1** carcase panels separate (stack algorithm scoped to non‑drawer panels) while each drawer's panels fan out around its ejected spot. Collapse mirrors. Hardware host resolution: `attachedTo` → group root → nearest panel by world‑AABB distance (`_distToPanelSq`); slides ride eject but not the fan‑out. Key internals: `_stackOffsets(list,MINGAP,SPREAD,out)` extracted; offsets struct `{main,eject,sub,hw}`; cache key includes `hardware.length`. **Behaviour gates:** `toggleExplode` closes open doors/drawers on entry (else a swung door keeps open rotation while its position explodes); `tickFunctional` is skipped in `animate()` while `_explode > 0.0001` (both wrote positions to the same meshes). Verified by stepping `tickExplode(0.02)` manually with synthetic dt — the animation math is pure and testable headless.
 
 ## 10. Open backlog (owner decisions / not yet done)
 
