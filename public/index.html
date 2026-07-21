@@ -7910,8 +7910,8 @@ function _roomFloorTex() {
   var sz = 512, planks = 4, pw = sz / planks;
   var cv = document.createElement('canvas'); cv.width = cv.height = sz;
   var cx = cv.getContext('2d');
-  var tones = ['#B07A3C', '#A66E34', '#BA8244', '#9E682F', '#B37B3E'];
-  var seam = '#4A2E14', grainD = '#6A4218', grainL = '#D8B472';
+  var tones = ['#6E4A24', '#65431F', '#77522A', '#5A3C1B', '#6A4826'];
+  var seam = '#301E0C', grainD = '#452C12', grainL = '#A97C40';
   for (var b = 0; b < planks; b++) {
     var x0 = b * pw;
     cx.fillStyle = tones[b % tones.length];
