@@ -2,6 +2,49 @@
 const express = require('express');
 const router = express.Router();
 
+// Standard-dimensions knowledge base. Grounds the model in real-world sizes so
+// generated pieces are buildable and correctly proportioned when the user does
+// not give explicit dimensions. All mm. Ranges are typical; pick a sensible
+// value within range from any cue in the request. Keep this consistent with the
+// front-end template presets (TPL_DEFAULTS in public/index.html).
+const FURNITURE_REFERENCE = `STANDARD FURNITURE REFERENCE — real-world dimensions to use when the user does not specify them (all mm, W = width, H = height, D = depth):
+
+ERGONOMIC / STANDARD HEIGHTS (anchor everything to these):
+- Seat height (chairs, benches, stools-for-tables): 430–480 (use 450)
+- Table / dining / desk work surface: 720–760 (use 740)
+- Kitchen counter top surface: 900 (base carcass 720 + 100 toe kick + ~40–60 worktop; frameless carcass depth 560–600)
+- Bar / breakfast counter: 1050–1100
+- Kitchen wall-cabinet underside above finished floor: ~1450 (so 500 gap to a 900 counter)
+- Comfortable top reachable shelf: ≤ 1800
+- Toe kick / plinth recess: 100 high × 50–70 deep, set back under the carcass front
+
+SHELF & DRAWER RULES OF THUMB:
+- Bookshelf clear spacing: 300–350 (paperbacks 200–250, display/large 350–400); one fixed mid-shelf for rigidity, rest adjustable on shelf pins
+- Drawer front heights: 120–180 shallow, 180–260 medium, 260–320 deep; a chest usually graduates smaller-at-top to larger-at-bottom
+- Max unsupported shelf span before sag: ~800 for 18mm; add a divider or thicker stock beyond that
+- Hanging rod: single long-hang 1400–1500 clear below rod; double-hang 1000 + 1000
+
+PIECE CATALOG (W × H × D typical, then notes):
+- Bookcase: 600–1000 × 1500–2100 × 250–350 — shelf pitch 300–350; deeper (300) for binders
+- Base/floor cabinet (kitchen): 300–900 × 720 (carcass) × 560–600 — sits on a 100 toe kick; door OR drawer bank front
+- Wall cabinet (kitchen): 300–900 × 600–900 × 300–350 — MUST include a top mounting rail; hang so underside ~1450 AFF
+- Tall/pantry cabinet: 500–600 × 1900–2200 × 560–600
+- Wardrobe: single 900–1000 / double 1200–1800 × 1900–2200 × 550–650 — top shelf + hanging rail; double may split hanging/shelved bays
+- Chest of drawers / dresser: 750–1100 × 700–1300 × 400–500 — 3–6 drawers; wide dressers use two drawer columns with a central divider
+- Nightstand / bedside: 400–550 × 500–700 × 350–450 — 1–2 drawers or a drawer over an open shelf; top near mattress height ~550–650
+- Dining table: 4-seat 1200 / 6-seat 1600–1800 / 8-seat 2100+ × 740 × 750–1000 — allow 600 elbow width & 350 depth per setting; legs inset ~100 from corners
+- Desk / writing desk: 1000–1600 × 720–750 × 600–800 — often a back modesty panel and an optional drawer box on one side
+- Coffee table: 900–1200 × 400–450 × 500–700 — often a lower shelf; height near the sofa seat
+- Side / end table: 400–550 × 500–600 × 400–550
+- Console / sofa / hall table: 900–1400 × 750–900 × 300–400 — shallow
+- TV stand / media console: 1200–1800 × 450–600 × 400–450 — open bays (dividers) for components, cable gap in the back; screen-centre ~1000 seated
+- Sideboard / buffet: 1200–1800 × 800–900 × 450–500 — mix of doors and drawers over a shared carcass
+- Bench: 900–1500 × 430–480 × 300–400 — seat + 4 legs + aprons, or a storage box
+- Floating / wall shelf: 400–1200 × 30–45 (board thickness) × 150–300 — mounted on a French cleat; keep single-board span ≤ 800
+- Vanity / bathroom cabinet: 600–1200 × 800–850 × 450–550
+
+Prefer these proportions and construction unless the user's request clearly overrides them. When a request implies a room or use (kitchen, bedroom, office), pick heights/depths from the matching entry above.`;
+
 const AI_SYSTEM_PROMPT = `You are an expert furniture designer and cabinet maker. Output ONLY a valid JSON object — no markdown fences, no explanation, just raw JSON.
 
 COORDINATE SYSTEM (all values in mm):
@@ -49,7 +92,9 @@ MATERIALS — use ONLY these exact keys: oak, walnut, pine, maple, cherry, birch
 - Painted/modern look: white or black
 - MDF painted: grey
 - Steel frame / legs: metal
-- Display shelves / inserts: glass`;
+- Display shelves / inserts: glass
+
+${FURNITURE_REFERENCE}`;
 
 // Extract the first valid JSON object from a string that may contain prose
 function extractJSON(text) {
