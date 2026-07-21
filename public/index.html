@@ -7650,6 +7650,19 @@ function toggleExplode() {
   _explodeTarget = _explodeTarget > 0 ? 0 : 1;
   var b = document.getElementById('btn-explode');
   if (b) b.classList.toggle('on', _explodeTarget > 0);
+  if (_explodeTarget > 0) {
+    // Explode owns every mesh position while active, and it lerps from the
+    // CLOSED base pose — so shut any open door/drawer first, or a swung door
+    // would keep its open rotation while its position explodes.
+    panels.forEach(function (p) {
+      if (!p.func) return;
+      p.func.open = false;
+      p._swingCur = 0;
+      p._slideCur = 0;
+    });
+    panels.forEach(function (p) { syncPos(p); });
+    hardware.forEach(function (h) { syncHwPos(h); });
+  }
 }
 // World axis (0=X,1=Y,2=Z) of a panel's thickness (its smallest dimension).
 function _panelNormalAxis(p) {
@@ -7676,36 +7689,32 @@ function _overlapPerp(a, b, perp) {
   });
 }
 
-// Cache of fully-exploded per-panel offsets. Recomputed only when the panel set /
-// geometry changes (_sceneRev) or the explode target flips — NOT every frame.
-var _explodeOffsets = {};   // panel.id -> [dx,dy,dz] fully-exploded displacement
+// Cache of fully-exploded offsets. Recomputed only when the panel set /
+// geometry changes (_sceneRev), hardware is added/removed, or the explode
+// target flips — NOT every frame.
+// Staged animation (R50): phase 1 (0→0.45) ejects each drawer unit out of the
+// carcase along its slide direction; phase 2 (0.45→1) separates the carcase
+// panels AND fans each drawer's own panels out around its ejected position.
+// Hardware rides with its host panel throughout; drawer slides ride the eject
+// but not the internal fan-out (they are the drawer's rails, not its box).
+var _explodeOffsets = null; // { main:{pid:[dx,dy,dz]}, eject:{}, sub:{}, hw:{hwId:{host,slide}} }
 var _explodeCacheKey = null;
 var _explodeBp = null;      // reusable scratch position
 
-// Heavy computation: bucket panels by thickness axis, group overlapping stacks,
-// and derive each panel's fully-exploded displacement. Result cached by caller.
-function _computeExplodeOffsets() {
-  var off = {};
-  if (!panels.length) return off;
-
-  var bb = furnitureBBox();
-  var maxDim = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ);
-  var MINGAP = Math.max(50, maxDim * 0.06); // min clear space between adjacent panel faces
-  var SPREAD = 1.35;                          // exaggerate already-separated panels a little
-
-  // Bucket panels by the world axis of their thickness (sides→X, shelves→Y, backs→Z).
+// The original stack-separation algorithm, extracted so it can run on the
+// carcase and on each drawer unit independently. Writes pid->[dx,dy,dz] into out.
+function _stackOffsets(list, MINGAP, SPREAD, out) {
+  if (list.length < 2) return;
   var buckets = { 0:[], 1:[], 2:[] };
-  panels.forEach(function (p) { buckets[_panelNormalAxis(p)].push(p); });
-
+  list.forEach(function (p) { buckets[_panelNormalAxis(p)].push(p); });
   [0,1,2].forEach(function (axis) {
-    var list = buckets[axis];
-    if (list.length < 2) return;
+    var blist = buckets[axis];
+    if (blist.length < 2) return;
     var key  = ['x','y','z'][axis];
     var perp = [0,1,2].filter(function (a) { return a !== axis; });
-
     // Group panels that actually overlap (a "stack") so side-by-side panels aren't pushed apart.
     var stacks = [];
-    list.forEach(function (p) {
+    blist.forEach(function (p) {
       var hit = null;
       for (var s = 0; s < stacks.length; s++) {
         if (stacks[s].some(function (q) { return _overlapPerp(p, q, perp); })) {
@@ -7715,14 +7724,13 @@ function _computeExplodeOffsets() {
       }
       if (hit === null) stacks.push([p]);
     });
-
     stacks.forEach(function (stack) {
       if (stack.length < 2) return;
       stack.sort(function (a, b) { return a[key] - b[key]; });
       var thick = stack.map(function (p) { return _panelExtentAlong(p, axis); });
       var center = stack.reduce(function (a, p) { return a + p[key]; }, 0) / stack.length;
-      // Cumulative centre positions, expand-only: keep original spacing (exaggerated) but
-      // never less than thickness/2 + MINGAP between neighbours.
+      // Cumulative centre positions, expand-only: keep original spacing (exaggerated)
+      // but never less than thickness/2 + MINGAP between neighbours.
       var pos = [0];
       for (var i = 1; i < stack.length; i++) {
         var orig = stack[i][key] - stack[i-1][key];
@@ -7731,13 +7739,95 @@ function _computeExplodeOffsets() {
       }
       var mid = pos[pos.length-1] / 2;
       stack.forEach(function (p, i) {
-        var o = [0,0,0];
-        o[axis] = (center + pos[i] - mid) - p[key];
-        off[p.id] = o;
+        var o = out[p.id] || [0,0,0];
+        o[axis] = (o[axis] || 0) + (center + pos[i] - mid) - p[key];
+        out[p.id] = o;
       });
     });
   });
-  return off;
+}
+
+// Squared distance from a point to a panel's world AABB (0 if inside) — used
+// to pick the most sensible host panel for unattached hardware.
+function _distToPanelSq(px, py, pz, p) {
+  var e = panelWorldHalfExtents(p.rx||0, p.ry||0, p.rz||0, p.w/2, p.h/2, p.d/2);
+  var dx = Math.max(0, Math.abs(px - p.x) - e.hw);
+  var dy = Math.max(0, Math.abs(py - p.y) - e.hh);
+  var dz = Math.max(0, Math.abs(pz - p.z) - e.hd);
+  return dx*dx + dy*dy + dz*dz;
+}
+
+function _computeExplodeOffsets() {
+  var res = { main: {}, eject: {}, sub: {}, hw: {} };
+  if (!panels.length) return res;
+
+  var bb = furnitureBBox();
+  var maxDim = Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ);
+  var MINGAP = Math.max(50, maxDim * 0.06); // min clear space between adjacent panel faces
+  var SPREAD = 1.35;                          // exaggerate already-separated panels a little
+
+  // 1. Identify drawer units: each drawer front + its groupId panels forms a
+  //    unit that ejects as one and then fans out on its own.
+  var drawerOf = {};   // panel.id -> unit index
+  var units = [];
+  var seenGroups = {};
+  panels.forEach(function (p) {
+    if (!p.func || p.func.kind !== 'drawer') return;
+    if (p.groupId != null) {
+      if (seenGroups[p.groupId]) return;     // one unit per group
+      seenGroups[p.groupId] = true;
+    }
+    var grp = _drawerGroup(p);
+    units.push({ front: p, panels: grp });
+    grp.forEach(function (q) { drawerOf[q.id] = units.length - 1; });
+  });
+
+  // 2. Carcase separation runs on everything that is NOT part of a drawer unit.
+  var mainPanels = panels.filter(function (p) { return drawerOf[p.id] === undefined; });
+  _stackOffsets(mainPanels, MINGAP, SPREAD, res.main);
+
+  // 3. Per drawer unit: eject vector (clear the whole unit bbox along the slide
+  //    direction, plus a gap) and an internal fan-out around the ejected spot.
+  var mm = [[bb.minX, bb.maxX], [bb.minY, bb.maxY], [bb.minZ, bb.maxZ]];
+  units.forEach(function (u) {
+    var dir = _drawerOutDir(u.front);
+    var ax = Math.abs(dir.x), ay = Math.abs(dir.y), az = Math.abs(dir.z);
+    var axis = (ax >= ay && ax >= az) ? 0 : (ay >= ax && ay >= az) ? 1 : 2;
+    var sgn = [dir.x, dir.y, dir.z][axis] >= 0 ? 1 : -1;
+    var gb = _panelsBounds(u.panels);
+    var gmm = [[gb.minX, gb.maxX], [gb.minY, gb.maxY], [gb.minZ, gb.maxZ]];
+    // Move the drawer's REAR face past the unit's outer face, plus breathing room
+    var dist = (sgn > 0 ? mm[axis][1] - gmm[axis][0] : gmm[axis][1] - mm[axis][0]) + MINGAP * 2;
+    var ev = [dir.x * dist, dir.y * dist, dir.z * dist];
+    u.panels.forEach(function (q) { res.eject[q.id] = ev; });
+    // Internal fan-out, scaled to the drawer's own size
+    var gDim = Math.max(gb.maxX-gb.minX, gb.maxY-gb.minY, gb.maxZ-gb.minZ);
+    _stackOffsets(u.panels, Math.max(30, gDim * 0.08), 1.2, res.sub);
+  });
+
+  // 4. Host panel for every hardware item: explicit attachment first, then the
+  //    hardware's group, then the spatially nearest panel.
+  var pById = {};
+  panels.forEach(function (p) { pById[p.id] = p; });
+  hardware.forEach(function (h) {
+    var host = null;
+    if (h.attachedTo != null && pById[h.attachedTo]) host = pById[h.attachedTo];
+    if (!host) {
+      var cands = panels;
+      if (h.groupId != null) {
+        var r = _rootGroup(h.groupId);
+        var grpPanels = panels.filter(function (q) { return q.groupId != null && _rootGroup(q.groupId) === r; });
+        if (grpPanels.length) cands = grpPanels;
+      }
+      var best = Infinity;
+      cands.forEach(function (q) {
+        var d = _distToPanelSq(h.x, h.y, h.z, q);
+        if (d < best) { best = d; host = q; }
+      });
+    }
+    if (host) res.hw[h.id] = { host: host.id, slide: h.type === 'slide' };
+  });
+  return res;
 }
 
 function tickExplode(dt) {
@@ -7747,31 +7837,63 @@ function tickExplode(dt) {
     if ((dir > 0 && _explode >= _explodeTarget) || (dir < 0 && _explode <= _explodeTarget)) _explode = _explodeTarget;
   }
   if (_explode <= 0.0001) {
-    if (_explodeActive) { panels.forEach(function (p) { syncPos(p); }); _explodeActive = false; _explodeCacheKey = null; }
+    if (_explodeActive) {
+      panels.forEach(function (p) { syncPos(p); });
+      hardware.forEach(function (h) { syncHwPos(h); });
+      _explodeActive = false; _explodeCacheKey = null;
+    }
     return;
   }
   if (!panels.length) return;
   _explodeActive = true;
 
-  // Recompute offsets ONLY when the panel set/geometry or explode target changes.
-  var key = _explodeTarget + '|' + _sceneRev;
+  // Recompute offsets ONLY when the scene, hardware count, or target changes.
+  var key = _explodeTarget + '|' + _sceneRev + '|' + hardware.length;
   if (key !== _explodeCacheKey) {
     _explodeOffsets = _computeExplodeOffsets();
     _explodeCacheKey = key;
   }
-  var off = _explodeOffsets;
+  var E = _explodeOffsets;
   if (!_explodeBp) _explodeBp = new THREE.Vector3();
 
-  // Per frame: only lerp each panel's meshes by the current _explode factor.
+  // Two phases with smoothstep easing. Collapsing runs the mirror image:
+  // panels reassemble around the ejected drawer, then the drawer slides home.
+  var EJECT_END = 0.45;
+  var fE = Math.min(1, _explode / EJECT_END);            fE = fE * fE * (3 - 2 * fE);
+  var fM = Math.max(0, (_explode - EJECT_END) / (1 - EJECT_END)); fM = fM * fM * (3 - 2 * fM);
+
+  function offsetFor(pid, slideOnly) {
+    var ox = 0, oy = 0, oz = 0;
+    var e = E.eject[pid];
+    if (e) {
+      ox += e[0] * fE; oy += e[1] * fE; oz += e[2] * fE;
+      if (!slideOnly) {
+        var s2 = E.sub[pid];
+        if (s2) { ox += s2[0] * fM; oy += s2[1] * fM; oz += s2[2] * fM; }
+      }
+    } else {
+      var m = E.main[pid];
+      if (m) { ox += m[0] * fM; oy += m[1] * fM; oz += m[2] * fM; }
+    }
+    return [ox, oy, oz];
+  }
+
   panels.forEach(function (p) {
     if (!p.mesh) return;
-    var o = off[p.id] || [0,0,0];
-    var bp = _explodeBp.set(p.x + o[0]*_explode, p.y + o[1]*_explode, p.z + o[2]*_explode);
+    var o = offsetFor(p.id, false);
+    var bp = _explodeBp.set(p.x + o[0], p.y + o[1], p.z + o[2]);
     if (p.mesh)   p.mesh.position.copy(bp);
     if (p.edges)  p.edges.position.copy(bp);
     if (p.selBox) p.selBox.position.copy(bp);
     if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.copy(bp); });
     if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.copy(bp); });
+  });
+  hardware.forEach(function (h) {
+    if (!h.mesh) return;
+    var map = E.hw[h.id];
+    if (!map) return;
+    var o = offsetFor(map.host, map.slide);
+    h.mesh.position.set(h.x + o[0], h.y + o[1], h.z + o[2]);
   });
 }
 
@@ -7850,7 +7972,9 @@ function animate() {
   var dt  = Math.min((now - _lastFrameTime) / 1000, 0.1); // seconds, capped
   _lastFrameTime = now;
   _tickFPS(dt);
-  tickFunctional(dt);
+  // Explode owns all mesh positions while active — the door/drawer animation
+  // would fight it for the same meshes (both write positions every frame).
+  if (_explode <= 0.0001) tickFunctional(dt);
   tickExplode(dt);
   if (_currentNavMode === 'orbit') orbitCtrl.update();
   renderer.render(scene, camera);
