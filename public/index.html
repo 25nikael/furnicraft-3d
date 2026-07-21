@@ -4408,7 +4408,334 @@ var HW_DEFS = {
       geo.rotateY(Math.PI / 2); // run the length along X
       return [new THREE.Mesh(geo)];
     }
-  }
+  },
+  screw: {
+    label: 'Chipboard Screw', icon: '✜', finish: 'steel',
+    params: { dia: 4, length: 40, headDia: 8 },
+    build: function (pr) {
+      var meshes = [];
+      var r = pr.dia / 2;
+      // Countersunk head: 90-deg included angle means cone height = (headDia - dia) / 2.
+      // Guard keeps headH positive if the user types a headDia smaller than the shank.
+      var headR = Math.max(r + 0.5, pr.headDia / 2);
+      var headH = headR - r;
+      // Clamp to a small positive floor so a pathological length < headH cannot
+      // produce a negative-height cylinder for the tip.
+      var tipLen = Math.max(0.5, Math.min(pr.dia * 1.2, (pr.length - headH) * 0.4));
+      var shankLen = Math.max(1, pr.length - headH - tipLen);
+      // The screw is driven INTO the panel, so nearly everything sits at negative Z.
+      // 'proud' lifts the head top 0.3mm above the face to avoid z-fighting with the panel.
+      var proud = 0.3;
+      // Head cone: wide face out (+Z side), tapering down to the shank inside the panel
+      var head = new THREE.Mesh(_cyl(headR, r, headH, 'z'));
+      head.position.z = proud - headH / 2;
+      meshes.push(head);
+      // Shank core (thread minor diameter, ~80% of nominal)
+      var shank = new THREE.Mesh(_cyl(r * 0.8, r * 0.8, shankLen, 'z'));
+      shank.position.z = proud - headH - shankLen / 2;
+      meshes.push(shank);
+      // A few flat torus rings at full thread diameter to suggest the thread.
+      // TorusGeometry already lies in the XY plane with its axis along Z — no rotation needed.
+      var nRings = Math.min(4, Math.floor(shankLen / (pr.dia * 1.5)));
+      for (var i = 0; i < nRings; i++) {
+        var ring = new THREE.Mesh(new THREE.TorusGeometry(r * 0.85, r * 0.22, 6, 14));
+        ring.position.z = proud - headH - shankLen * (i + 1) / (nRings + 1);
+        meshes.push(ring);
+      }
+      // Pointed tip (rTop faces the head, rBot is the point at the deepest -Z)
+      var tip = new THREE.Mesh(_cyl(r, 0.2, tipLen, 'z'));
+      tip.position.z = proud - pr.length + tipLen / 2;
+      meshes.push(tip);
+      return meshes;
+    }
+  },
+  bumper: {
+    label: "Silicone Door Bumper", icon: "◗", finish: "black",
+    params: { dia: 10, height: 3 },
+    build: function (pr) {
+      var meshes = [];
+      var r = pr.dia / 2;
+      // Dome: hemisphere built pointing +Y (thetaLength = PI/2), then rotated
+      // so it points +Z (out of the mounting face). Base circle lands in the
+      // XY plane at z=0, i.e. flush against the panel.
+      var geo = new THREE.SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+      geo.rotateX(Math.PI / 2);
+      var dome = new THREE.Mesh(geo);
+      // Hemisphere height equals its radius; squash (or stretch) along Z so
+      // the bump stands exactly pr.height proud of the face.
+      dome.scale.z = pr.height / r;
+      meshes.push(dome);
+      // Thin base disc closes the open back of the hemisphere so the bumper
+      // looks solid when the door is viewed edge-on or swung open.
+      var base = new THREE.Mesh(_cyl(r, r, 0.4, "z"));
+      base.position.z = 0.2;
+      meshes.push(base);
+      return meshes;
+    }
+  },
+  magcatch: {
+    label: "Magnetic Catch", icon: "🧲", finish: "black",
+    params: { bodyW: 46, bodyH: 16, bodyD: 12, plateW: 25, plateH: 15, plateT: 2, gap: 1 },
+    build: function (pr) {
+      var meshes = [];
+      var i, pole;
+
+      // Plastic housing, screwed flat to the carcase face. Origin is the mounting
+      // point on the panel, so the box is pushed +Z by half its depth.
+      var body = new THREE.Mesh(new THREE.BoxGeometry(pr.bodyW, pr.bodyH, pr.bodyD));
+      body.position.z = pr.bodyD / 2;
+      meshes.push(body);
+
+      // Two steel pole shoes flanking the central magnet, sitting 1.2mm proud of
+      // the housing front (that lip is what actually touches the strike plate).
+      for (i = -1; i <= 1; i += 2) {
+        pole = new THREE.Mesh(new THREE.BoxGeometry(3, pr.bodyH - 4, 1.2));
+        pole.position.set(i * pr.bodyW * 0.16, 0, pr.bodyD + 0.6);
+        meshes.push(pole);
+      }
+
+      // Strike plate, drawn in the door-closed position: 'gap' mm of air between
+      // the pole faces and the plate (in reality it screws to the door back).
+      var plateZ = pr.bodyD + 1.2 + pr.gap;
+      var plate = new THREE.Mesh(new THREE.BoxGeometry(pr.plateW, pr.plateH, pr.plateT));
+      plate.position.z = plateZ + pr.plateT / 2;
+      meshes.push(plate);
+
+      // Countersunk centre screw head, flush with the magnet-facing front face of
+      // the strike plate (the pivot that lets the plate self-align against the poles).
+      var scr = new THREE.Mesh(_cyl(2.75, 2.75, 1, "z"));
+      scr.position.z = plateZ + 0.5;
+      meshes.push(scr);
+
+      return meshes;
+    }
+  },
+  leveler: {
+      label: 'Leveling Foot', icon: '⊥', finish: 'black',
+      params: { stud: 8, height: 25, padDia: 28, padH: 12 },
+      build: function (pr) {
+        // Anchor = panel underside; foot extends downward along -Y (same as leg).
+        // height = total drop from panel underside to floor; the exposed stud
+        // length is whatever the pad doesn't take up, so raising padH visually
+        // "screws the foot in".
+        var meshes = [];
+        var studR = pr.stud / 2;
+        var drop = Math.max(pr.height - pr.padH, 2); // exposed stud below panel
+        // Threaded stud: runs 10mm up INTO the panel (threaded insert / T-nut)
+        // and 'drop' mm down below it. Spans y = +10 .. -drop.
+        var stud = new THREE.Mesh(_cyl(studR, studR, drop + 10, 'y'));
+        stud.position.y = (10 - drop) / 2;
+        meshes.push(stud);
+        // Hex jam nut just under the panel — 6 radial segments reads as a hex
+        var nut = new THREE.Mesh(new THREE.CylinderGeometry(studR * 1.8, studR * 1.8, 4, 6));
+        nut.position.y = -3;
+        meshes.push(nut);
+        // Base pad, slightly wider at the floor like a real glide pad
+        var pad = new THREE.Mesh(_cyl(pr.padDia * 0.42, pr.padDia / 2, pr.padH, 'y'));
+        pad.position.y = -(drop + pr.padH / 2);
+        meshes.push(pad);
+        return meshes;
+      }
+    },
+  minifix: {
+      label: 'Minifix Cam + Bolt', icon: '⊕', finish: 'steel',
+      params: { camDia: 15, camDepth: 13.5, boltDia: 7, drillDist: 34 },
+      build: function (pr) {
+        var meshes = [];
+        var camR = pr.camDia / 2;
+        // Cam housing, bored into the panel face (along -Z, flush at the face)
+        var cam = new THREE.Mesh(_cyl(camR, camR, pr.camDepth, 'z'));
+        cam.position.z = -pr.camDepth / 2;
+        meshes.push(cam);
+        // Screwdriver slot, sits just proud of the face so the part reads at a glance
+        var slot = new THREE.Mesh(new THREE.BoxGeometry(pr.camDia * 0.8, 3, 1.2));
+        slot.position.z = 0.6;
+        meshes.push(slot);
+        // Bolt runs along +Y toward the panel edge. Its axis is buried at roughly
+        // panel-centre depth: a 13.5 deep cam pairs with 16 mm stock, centre ~8 mm in.
+        var zB = -pr.camDepth * 0.6;
+        var headR = pr.boltDia / 2;
+        var headLen = pr.boltDia; // head is about as long as it is wide
+        // Head engages inside the cam housing (starts at the cam centre, y = 0)
+        var head = new THREE.Mesh(_cyl(headR, headR, headLen, 'y'));
+        head.position.set(0, headLen / 2, zB);
+        meshes.push(head);
+        // Neck/shank spanning cam-to-edge (this is the 5 mm edge-hole section)
+        var shankR = Math.max(1.5, headR * 0.72); // ~2.5 mm for the standard 7 mm head
+        var shankLen = Math.max(2, pr.drillDist - headLen);
+        var shank = new THREE.Mesh(_cyl(shankR, shankR, shankLen, 'y'));
+        shank.position.set(0, headLen + shankLen / 2, zB);
+        meshes.push(shank);
+        // Euro-thread stud past the edge, screws into the mating panel (~11 mm)
+        var thrLen = 11;
+        var thr = new THREE.Mesh(_cyl(headR * 0.7, headR * 0.9, thrLen, 'y')); // narrows toward the +Y thread tip
+        thr.position.set(0, pr.drillDist + thrLen / 2, zB);
+        meshes.push(thr);
+        return meshes;
+      }
+    },
+  euroscrew: {
+      label: 'Euro Screw', icon: '⌀', finish: 'steel',
+      params: { dia: 6.3, length: 13, head: 7 },
+      build: function (pr) {
+        var r = pr.dia / 2;
+        var headR = pr.head / 2;
+        var headTh = Math.max(1.5, headR * 0.45);
+        var meshes = [];
+        // Threaded shank driven into the 5mm system hole (along -Z).
+        // _cyl's first radius is the +Z end, so the slight taper points at the tip.
+        var shank = new THREE.Mesh(_cyl(r, r * 0.85, pr.length, 'z'));
+        shank.position.z = -pr.length / 2;
+        meshes.push(shank);
+        // Two coarse thread ribs — TorusGeometry's axis is already Z,
+        // so it wraps the shank with no rotation needed. Low segment counts.
+        [0.35, 0.7].forEach(function (f) {
+          var rib = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.18, 6, 12));
+          rib.position.z = -pr.length * f;
+          meshes.push(rib);
+        });
+        // Flat pan head sitting proud of the mounting face
+        var head = new THREE.Mesh(_cyl(headR, headR, headTh, 'z'));
+        head.position.z = headTh / 2;
+        meshes.push(head);
+        return meshes;
+      }
+    },
+  confirmat: {
+      label: 'Confirmat Screw', icon: '⎔', finish: 'steel',
+      params: { dia: 7, len: 50, headDia: 10 },
+      build: function (pr) {
+        var meshes = [];
+        var rThread = pr.dia / 2;                  // nominal (outer) thread radius
+        var rCore = rThread * 0.68;                // thin core of the deep coarse thread (~4.8 on a 7mm screw)
+        var headH = pr.headDia * 0.45;             // countersink depth of the flat head
+        var tipLen = pr.dia;                       // short tapered tip
+        var proud = 0.3;                           // sit a hair proud of the face to avoid z-fighting
+        var bodyLen = pr.len - headH - tipLen;
+        if (bodyLen < 1) bodyLen = 1;
+        // Countersunk flat head: wide face out (+Z side, flush-ish with panel face),
+        // tapering down to the core as it sinks into the panel
+        var head = new THREE.Mesh(_cyl(pr.headDia / 2, rCore, headH, 'z'));
+        head.position.z = proud - headH / 2;
+        meshes.push(head);
+        // Core shank going into the panel along -Z
+        var body = new THREE.Mesh(_cyl(rCore, rCore, bodyLen, 'z'));
+        body.position.z = proud - headH - bodyLen / 2;
+        meshes.push(body);
+        // Tapered tip (near-point)
+        var tip = new THREE.Mesh(_cyl(rCore, 0.4, tipLen, 'z'));
+        tip.position.z = proud - headH - bodyLen - tipLen / 2;
+        meshes.push(tip);
+        // Four low-poly rings to suggest the deep coarse confirmat thread.
+        // Torus lies in XY (axis = Z) by default, so no rotation needed.
+        // Center radius + tube chosen so the ring's outer edge = nominal thread dia.
+        var ringR = (rCore + rThread) / 2;
+        var tubeR = (rThread - rCore) / 2;
+        for (var i = 0; i < 4; i++) {
+          var ring = new THREE.Mesh(new THREE.TorusGeometry(ringR, tubeR, 6, 14));
+          ring.position.z = proud - headH - bodyLen * (i + 0.5) / 4;
+          meshes.push(ring);
+        }
+        return meshes;
+      }
+    },
+  cornerblock: {
+    label: 'Plastic Corner Block', icon: '∟', finish: 'black',
+    params: { length: 35, height: 13, depth: 13 },
+    build: function (pr) {
+      var meshes = [];
+      // Solid block tucked into an inside corner:
+      //   back face flat against the mounting panel (z = 0 plane),
+      //   top face at y = 0 so it butts the perpendicular panel above.
+      var body = new THREE.Mesh(new THREE.BoxGeometry(pr.length, pr.height, pr.depth));
+      body.position.set(0, -pr.height / 2, pr.depth / 2);
+      meshes.push(body);
+      // Decorative pan-head screws (no CSG, so heads only).
+      // Head radius scales down for small blocks so it never swallows the body.
+      var headR = Math.min(3.5, pr.height * 0.3);
+      var headT = 1.5;
+      // Two screws driving back into the vertical panel (-Z); heads sit
+      // proud of the block's front face.
+      [-1, 1].forEach(function (s) {
+        var h = new THREE.Mesh(_cyl(headR, headR, headT, 'z'));
+        h.position.set(s * pr.length / 4, -pr.height / 2, pr.depth + headT / 2);
+        meshes.push(h);
+      });
+      // One screw driving up into the horizontal panel (+Y); head sits
+      // on the block's underside.
+      var up = new THREE.Mesh(_cyl(headR, headR, headT, 'y'));
+      up.position.set(0, -pr.height - headT / 2, pr.depth / 2);
+      meshes.push(up);
+      return meshes;
+    }
+  },
+  cuppull: {
+      label: 'Cup Pull', icon: '◡', finish: 'steel',
+      params: { cc: 76, width: 95, height: 42, projection: 25 },
+      build: function (pr) {
+        var meshes = [];
+        var Ro = pr.height / 2;                    // cup half-height = arc radius
+        var Ri = Math.max(Ro - 3, Ro * 0.7);       // ~3mm shell wall
+        // Cross-section is a C-shaped half-annulus (arc from straight down,
+        // through straight out, to straight up). The open side of the C faces
+        // the panel (-Z), so the finger gap under/behind the cup reads correctly.
+        var s = new THREE.Shape();
+        s.absarc(0, 0, Ro, -Math.PI / 2, Math.PI / 2, false); // outer skin
+        s.absarc(0, 0, Ri, Math.PI / 2, -Math.PI / 2, true);  // inner skin, back down
+        var g = new THREE.ExtrudeGeometry(s, {
+          depth: pr.width, bevelEnabled: false, curveSegments: 10
+        });
+        g.translate(0, 0, -pr.width / 2);   // center the extrusion on the origin
+        g.rotateY(-Math.PI / 2);            // extrusion axis -> X, cup bulge -> +Z
+        // Arc radius gave a depth of Ro; squash so the cup stands `height` tall
+        // but only projects `projection` off the face (real cups are shallower
+        // than a half-circle).
+        g.scale(1, 1, pr.projection / Ro);
+        meshes.push(new THREE.Mesh(g));
+        // Screw posts at the drilling centers (cc). They sit inside the cup
+        // hollow, visible when viewed from below. Clamp inside the cup width.
+        var postX = Math.min(pr.cc / 2, pr.width / 2 - 5);
+        [-1, 1].forEach(function (sgn) {
+          var post = new THREE.Mesh(_cyl(2.5, 2.5, 6, 'z'));
+          post.position.set(sgn * postX, 0, 3);
+          meshes.push(post);
+        });
+        return meshes;
+      }
+    },
+  edgepull: {
+      label: "Edge Pull (Finger Tab)", icon: "⌐", finish: "black",
+      // length: pull width along the edge; flange: how far the top plate reaches
+      // back across the panel's top edge; lip: how far the tab hangs down the face;
+      // gap: finger clearance between face and lip; thick: metal thickness
+      params: { length: 80, flange: 11, lip: 10, gap: 3, thick: 2 },
+      build: function (pr) {
+        var meshes = [];
+        var t = pr.thick;
+
+        // Origin = mounting point ON the panel's top edge (place at the edge of
+        // the face). Panel body is at -Z; the top edge runs into -Z from origin.
+
+        // Top plate: sits flat on the panel's top edge. It spans from z = -flange
+        // (screwed onto the edge) forward past the face to z = gap + t, where it
+        // meets the hanging lip. This forms the top bar of the J-profile.
+        var topDepth = pr.flange + pr.gap + t;
+        var top = new THREE.Mesh(new THREE.BoxGeometry(pr.length, t, topDepth));
+        top.position.y = t / 2;                      // rests on top of the edge
+        top.position.z = topDepth / 2 - pr.flange;   // z spans -flange .. gap+t
+        meshes.push(top);
+
+        // Front lip: hangs down the face, stood off by `gap` so fingers can hook
+        // behind it from below. Its outer surface (z = gap + t) is flush with the
+        // front end of the top plate.
+        var lip = new THREE.Mesh(new THREE.BoxGeometry(pr.length, pr.lip, t));
+        lip.position.y = -pr.lip / 2;                // drops from edge level
+        lip.position.z = pr.gap + t / 2;
+        meshes.push(lip);
+
+        return meshes;
+      }
+    }
 };
 
 function hwLabel(type) { return (HW_DEFS[type] || {}).label || type; }
@@ -6646,7 +6973,9 @@ function renderCosts() {
 }
 
 // ── Quote generator (R4 / D2) ───────────────────────────
-var HW_PRICE_DEFAULT = { knob:3, handle:8, leg:12, shelfpin:0.5, hinge:4, slide:14, cleat:6 };
+var HW_PRICE_DEFAULT = { knob:3, handle:8, leg:12, shelfpin:0.5, hinge:4, slide:14, cleat:6,
+  screw:0.2, bumper:0.1, magcatch:3, leveler:4, minifix:1.5, euroscrew:0.3, confirmat:0.4,
+  cornerblock:0.8, cuppull:9, edgepull:7 };
 function projectHardwareCost() {
   var groups = _hwGroups(), total = 0, lines = [];
   Object.keys(groups).forEach(function (k) {
