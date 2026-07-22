@@ -18,3 +18,15 @@ Thumbs.db
 
 # Claude Code internals
 .claude/
+
+# Android shell (Capacitor) — generated, see MOBILE.md
+mobile/www/
+mobile/node_modules/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+*.apk
+*.aab
+*.keystore
+*.jks

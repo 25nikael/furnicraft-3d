@@ -1,0 +1,19 @@
+{
+  "name": "furnicraft-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android shell for FurniCraft 3D (Capacitor). Kept separate from the server package.json so production deploys are unaffected.",
+  "scripts": {
+    "copy:web": "node copy-web.js",
+    "add:android": "npm run copy:web && npx cap add android",
+    "sync": "npm run copy:web && npx cap sync android",
+    "open": "npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/core": "^6.1.0"
+  }
+}
