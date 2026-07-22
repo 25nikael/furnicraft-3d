@@ -127,6 +127,17 @@ body.view-only #prop-panel{opacity:.5;pointer-events:none;filter:grayscale(.35);
 #room-hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(20,20,20,.9);color:var(--txt);padding:5px 12px;border-radius:10px;font-size:12px;font-weight:600;display:none;align-items:center;gap:8px;z-index:20;border:1px solid var(--bd2);}
 #room-hud label{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--txt2);font-weight:500;}
 #room-hud input{width:54px;padding:2px 5px;background:var(--bg3);border:1px solid var(--bd2);border-radius:4px;color:var(--txt);font-size:11px;}
+/* ── Assembly build-animation HUD ── */
+#asm-hud{position:absolute;bottom:72px;left:50%;transform:translateX(-50%);background:rgba(13,13,13,.95);color:var(--txt);padding:8px 12px;border-radius:12px;font-size:12px;display:none;align-items:center;gap:10px;z-index:21;border:1px solid var(--bd2);width:max-content;max-width:min(560px,90vw);box-shadow:0 4px 20px rgba(0,0,0,.6);}
+#asm-hud.show{display:flex;}
+#asm-hud .asm-hud-txt{flex:1;min-width:0;}
+#asm-hud .asm-hud-step{font-size:10px;color:var(--teal);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+#asm-hud .asm-hud-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#asm-hud button{background:var(--bg3);border:1px solid var(--bd2);color:var(--txt2);border-radius:6px;padding:5px 9px;font-size:12px;line-height:1;cursor:pointer;flex-shrink:0;transition:all .12s;}
+#asm-hud button:hover{color:var(--teal);border-color:var(--teal);}
+.asm-step.asm-clickable{cursor:pointer;border-radius:8px;padding:6px;margin-left:-6px;margin-right:-6px;transition:background .12s;}
+.asm-step.asm-clickable:hover{background:var(--teal-dim);}
+.asm-step.asm-current{background:var(--teal-dim);box-shadow:inset 3px 0 0 var(--teal);}
 #info-hud{position:absolute;top:12px;right:220px;background:rgba(0,0,0,.7);color:var(--txt2);padding:5px 10px;border-radius:8px;font-size:11px;pointer-events:none;line-height:1.65;border:1px solid var(--bd);transition:right .24s ease;}
 body.rp-collapsed #info-hud{right:12px;}
 
@@ -767,6 +778,16 @@ body.rp-collapsed #tab-right{right:0;}
       <button id="shared-banner-save" onclick="saveSharedCopy()" style="display:none;">Save a copy</button>
       <button id="shared-banner-close" onclick="dismissSharedBanner()" title="Dismiss">×</button>
     </div>
+    <div id="asm-hud">
+      <div class="asm-hud-txt">
+        <div class="asm-hud-step" id="asm-hud-step">Step 1 / 1</div>
+        <div class="asm-hud-title" id="asm-hud-title">—</div>
+      </div>
+      <button onclick="asmStepBy(-1)" title="Previous step">◀</button>
+      <button onclick="asmTogglePlay()" id="asm-hud-play" title="Pause">❙❙</button>
+      <button onclick="asmStepBy(1)" title="Next step">▶</button>
+      <button onclick="stopAssemblyAnim()" title="Exit build animation">✕</button>
+    </div>
     <div id="snap-hud">⚡ Snapped</div>
     <div id="measure-hud">📏 Click two points to measure <button onclick="clearMeasurements()">Clear</button></div>
     <div id="room-hud">🏠 Room
@@ -1289,7 +1310,11 @@ body.rp-collapsed #tab-right{right:0;}
       <div class="cs-pane" id="pane-asm">
         <div class="cs-sec">
           <h3>Assembly Order of Operations</h3>
-          <p style="font-size:12px;color:#888;margin-bottom:16px;">Steps are generated from your panel positions, names, and joint types. Name your panels (Bottom, Left Side, Top, etc.) for the most accurate guidance.</p>
+          <p style="font-size:12px;color:#888;margin-bottom:12px;">Steps are generated from your panel positions, names, and joint types. Name your panels (Bottom, Left Side, Top, etc.) for the most accurate guidance.</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+            <button class="btn" style="width:auto;margin:0;background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;" onclick="startAssemblyAnim(0)">▶ Animate build sequence</button>
+            <span style="font-size:11px;color:#888;">Watch the parts go together in order — or click any step below to show it on the model.</span>
+          </div>
           <div id="asm-steps"></div>
         </div>
       </div>
@@ -7738,6 +7763,7 @@ var _lastFrameTime = performance.now();
 // ── Exploded view (G-series G2) ─────────────────────────
 var _explode = 0, _explodeTarget = 0, _explodeActive = false;
 function toggleExplode() {
+  if (_asmActive) stopAssemblyAnim();   // the two cannot both own mesh positions
   _explodeTarget = _explodeTarget > 0 ? 0 : 1;
   var b = document.getElementById('btn-explode');
   if (b) b.classList.toggle('on', _explodeTarget > 0);
@@ -8117,10 +8143,13 @@ function animate() {
   var dt  = Math.min((now - _lastFrameTime) / 1000, 0.1); // seconds, capped
   _lastFrameTime = now;
   _tickFPS(dt);
-  // Explode owns all mesh positions while active — the door/drawer animation
-  // would fight it for the same meshes (both write positions every frame).
-  if (_explode <= 0.0001) tickFunctional(dt);
-  tickExplode(dt);
+  // Each of these writes mesh positions every frame, so only one may own them:
+  // assembly playback wins outright, then explode, then the door/drawer poses.
+  if (!_asmActive) {
+    if (_explode <= 0.0001) tickFunctional(dt);
+    tickExplode(dt);
+  }
+  tickAssembly(dt);
   if (_currentNavMode === 'orbit') orbitCtrl.update();
   renderer.render(scene, camera);
   if (isDragging || isResizing || cameraMoving) {
@@ -8226,6 +8255,21 @@ function _directionLabel(placed, p) {
   return dz>0 ? 'in front of' : 'behind';
 }
 
+// Fitting guidance per hardware type, used by the sequenced hardware steps.
+function _hwFitDesc(type, n) {
+  var D = {
+    slide:    'Mount the cabinet member of each slide to the carcase side, level and square to the front edge, then fit the drawer member to the box. Check every drawer runs freely before loading it.',
+    hinge:    'Bore the cup holes in the doors, fit the hinges, then screw the mounting plates to the carcase. Hang the doors and adjust the depth/height/side screws until the gaps are even.',
+    knob:     'Mark and drill the fixing holes from the face side using a template so every knob lands in the same place, then fix from behind.',
+    handle:   'Mark and drill each pair of fixing holes using a template so all handles align, then bolt through from behind.',
+    leg:      'Fix the legs to the underside, inset from the corners, and check the piece sits level on a flat floor before final tightening.',
+    shelfpin: 'Drill the shelf-pin rows at matching heights on both sides — use a jig so the shelves sit level — then insert the pins.',
+    cleat:    'Fix the wall half of the cleat to the studs, dead level, then hang the piece on its matching cleat and check it pulls tight to the wall.'
+  };
+  return (D[type] || 'Fit the ' + escHtml(hwLabel(type)) + ' in the positions shown in the model, pre-drilling where needed to avoid splitting.') +
+         ' (' + n + '× required.)';
+}
+
 function generateAssemblySteps() {
   if (!panels.length) return [];
 
@@ -8282,9 +8326,29 @@ function generateAssemblySteps() {
       if (mitre) desc += ' <em>This joint has a ' + (p.mitreAngle||45) + '° mitre — align the cut edges carefully before clamping.</em>';
     }
 
-    steps.push({ num: steps.length, numClass:'', title:title, desc:desc, tags:tags });
+    // `panel` links the step to the actual design object so the build animation
+    // (and the guide highlight) can drive the model from these steps.
+    steps.push({ num: steps.length, numClass:'', title:title, desc:desc, tags:tags, panel:p });
     placed.push(p);
   });
+
+  // Hardware, one step per type, sequenced after the carcase. Previously this
+  // was a single lump appended at render time, so it could not be stepped or
+  // animated — and the PDF never saw it either.
+  if (hardware.length) {
+    var hwByType = {};
+    hardware.forEach(function (h) { (hwByType[h.type] = hwByType[h.type] || []).push(h); });
+    Object.keys(hwByType).forEach(function (type) {
+      var items = hwByType[type];
+      steps.push({
+        num: steps.length, numClass: '',
+        title: 'Fit ' + items.length + '× ' + escHtml(hwLabel(type)),
+        desc: _hwFitDesc(type, items.length),
+        tags: [{ label: items.length + '× ' + escHtml(hwLabel(type)), cls:'group' }],
+        hw: items
+      });
+    });
+  }
 
   steps.push({
     num: '✓', numClass: 'done',
@@ -8301,9 +8365,11 @@ function renderAssemblyGuide() {
   var steps = generateAssemblySteps();
   var container = document.getElementById('asm-steps');
   if (!steps.length) { container.innerHTML = '<p style="color:#aaa;font-size:13px;">Add panels to the design to generate assembly instructions.</p>'; return; }
-  container.innerHTML = steps.map(function(s) {
+  // Every row is clickable — it jumps the build animation to that step, which
+  // is what links the written guide to the model.
+  container.innerHTML = steps.map(function(s, i) {
     var tags = s.tags.map(function(t){ return '<span class="asm-tag '+t.cls+'">'+t.label+'</span>'; }).join('');
-    return '<div class="asm-step">'
+    return '<div class="asm-step asm-clickable" onclick="asmJumpTo('+i+')" title="Show this step on the model">'
       + '<div class="asm-num '+s.numClass+'">'+s.num+'</div>'
       + '<div class="asm-body">'
       + '<div class="asm-title">'+s.title+'</div>'
@@ -8311,15 +8377,152 @@ function renderAssemblyGuide() {
       + (tags ? '<div class="asm-tags">'+tags+'</div>' : '')
       + '</div></div>';
   }).join('');
-  // Hardware install step (Block 8)
-  if (hardware.length) {
-    var groups = _hwGroups();
-    var list = Object.keys(groups).map(function (k) { return groups[k].count + '× ' + hwLabel(groups[k].type); }).join(', ');
-    container.innerHTML += '<div class="asm-step"><div class="asm-num done">✓</div><div class="asm-body">'
-      + '<div class="asm-title">Install hardware</div>'
-      + '<div class="asm-desc">Fit the following hardware: ' + list + '. Hang doors on their hinges and mount drawers on their slides, checking clearances before final fixing.</div>'
-      + '</div></div>';
+  _asmHighlightGuide();
+}
+
+// ── Assembly build animation ────────────────────────────────────────────
+// Plays the generated guide back on the model: parts from earlier steps sit in
+// place, the current step's part flies in along its natural insertion axis, and
+// later parts stay hidden. Steps carry `panel`/`hw` refs (see
+// generateAssemblySteps), so the written guide and the animation are one list.
+var _asmActive = false, _asmPlaying = false, _asmIdx = 0, _asmT = 1;
+var _asmSteps = [], _asmOff = {}, _asmDimsWere = true;
+var ASM_STEP_DUR = 0.6;                            // seconds per step
+
+function _asmVisible(p, vis) {
+  if (p.mesh)   p.mesh.visible   = vis;
+  if (p.edges)  p.edges.visible  = vis;
+  if (p.selBox) p.selBox.visible = vis;
+  if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.visible = vis; });
+  if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.visible = vis; });
+}
+
+// Fly-in offsets. A panel enters along its THICKNESS axis (so a side panel
+// arrives from the side, a shelf from above, a back from behind); hardware
+// enters along whichever axis separates it most from the design centre.
+function _asmComputeOffsets() {
+  _asmOff = {};
+  if (!panels.length) return;
+  var bb = furnitureBBox();
+  var c = { x:(bb.minX+bb.maxX)/2, y:(bb.minY+bb.maxY)/2, z:(bb.minZ+bb.maxZ)/2 };
+  var dist = Math.max(180, Math.max(bb.maxX-bb.minX, bb.maxY-bb.minY, bb.maxZ-bb.minZ) * 0.6);
+  function off(axis, delta, d) { var o = [0,0,0]; o[axis] = (delta >= 0 ? 1 : -1) * d; return o; }
+  panels.forEach(function (p) {
+    var axis = _panelNormalAxis(p), k = ['x','y','z'][axis];
+    _asmOff[p.id] = off(axis, p[k] - c[k], dist);
+  });
+  hardware.forEach(function (h) {
+    var d = [h.x-c.x, h.y-c.y, h.z-c.z];
+    var ax = Math.abs(d[0]), ay = Math.abs(d[1]), az = Math.abs(d[2]);
+    var axis = (ax >= ay && ax >= az) ? 0 : ((ay >= ax && ay >= az) ? 1 : 2);
+    _asmOff['h'+h.id] = off(axis, d[axis], dist * 0.7);
+  });
+}
+
+// s: -1 = not built yet (hidden), 0..1 = flying in, 1 = seated
+function _asmPlacePanel(p, s) {
+  var vis = s >= 0;
+  _asmVisible(p, vis);
+  if (!vis) return;
+  var o = _asmOff[p.id] || [0,0,0], k = 1 - s;
+  var x = p.x + o[0]*k, y = p.y + o[1]*k, z = p.z + o[2]*k;
+  if (p.mesh)   p.mesh.position.set(x, y, z);
+  if (p.edges)  p.edges.position.set(x, y, z);
+  if (p.selBox) p.selBox.position.set(x, y, z);
+  if (p.jointMarkers) p.jointMarkers.forEach(function (m) { m.position.set(x, y, z); });
+  if (p.mitreLines)   p.mitreLines.forEach(function (l) { l.position.set(x, y, z); });
+}
+function _asmPlaceHw(h, s) {
+  if (!h.mesh) return;
+  h.mesh.visible = s >= 0;
+  if (s < 0) return;
+  var o = _asmOff['h'+h.id] || [0,0,0], k = 1 - s;
+  h.mesh.position.set(h.x + o[0]*k, h.y + o[1]*k, h.z + o[2]*k);
+}
+
+function _asmRender() {
+  var e = _asmT * _asmT * (3 - 2 * _asmT);          // smoothstep the fly-in
+  for (var i = 0; i < _asmSteps.length; i++) {
+    var st = _asmSteps[i];
+    var s = i < _asmIdx ? 1 : (i === _asmIdx ? e : -1);
+    if (st.panel) _asmPlacePanel(st.panel, s);
+    if (st.hw) for (var j = 0; j < st.hw.length; j++) _asmPlaceHw(st.hw[j], s);
   }
+}
+
+function tickAssembly(dt) {
+  if (!_asmActive) return;
+  if (_asmT < 1) _asmT = Math.min(1, _asmT + dt / ASM_STEP_DUR);
+  else if (_asmPlaying) {
+    if (_asmIdx < _asmSteps.length - 1) { _asmIdx++; _asmT = 0; _asmSyncHud(); }
+    else { _asmPlaying = false; _asmSyncHud(); }   // reached the end
+  }
+  _asmRender();
+}
+
+function _asmHighlightGuide() {
+  var cur = _asmActive ? _asmIdx : -1;
+  var rows = document.querySelectorAll('#asm-steps .asm-step');
+  for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('asm-current', i === cur);
+}
+function _asmSyncHud() {
+  var st = _asmSteps[_asmIdx] || {};
+  var n  = document.getElementById('asm-hud-step');
+  var t  = document.getElementById('asm-hud-title');
+  var pb = document.getElementById('asm-hud-play');
+  if (n) n.textContent = 'Step ' + (_asmIdx + 1) + ' / ' + _asmSteps.length;
+  if (t) t.innerHTML = st.title || '';
+  if (pb) { pb.textContent = _asmPlaying ? '❙❙' : '▶'; pb.title = _asmPlaying ? 'Pause' : 'Play'; }
+  _asmHighlightGuide();
+}
+
+function startAssemblyAnim(from) {
+  if (!panels.length) { uiToast('Add some panels first — the build sequence comes from your design.', 'info'); return; }
+  _asmSteps = generateAssemblySteps();
+  if (!_asmSteps.length) return;
+  // Explode also owns mesh positions — collapse it before taking over.
+  _explodeTarget = 0; _explode = 0; _explodeActive = false; _explodeCacheKey = null;
+  var eb = document.getElementById('btn-explode'); if (eb) eb.classList.remove('on');
+  doSelect(null);
+  _asmDimsWere = dimsEnabled; dimsEnabled = false; clearDims();
+  _asmComputeOffsets();
+  _asmActive = true; _asmPlaying = true;
+  _asmIdx = Math.max(0, Math.min(_asmSteps.length - 1, from || 0));
+  _asmT = 0;
+  var hud = document.getElementById('asm-hud'); if (hud) hud.classList.add('show');
+  hideCutSheet();                                   // the guide modal covers the model
+  _asmSyncHud(); _asmRender();
+}
+function stopAssemblyAnim() {
+  if (!_asmActive) return;
+  _asmActive = false; _asmPlaying = false;
+  panels.forEach(function (p) { _asmVisible(p, true); syncPos(p); });
+  hardware.forEach(function (h) { if (h.mesh) h.mesh.visible = true; syncHwPos(h); });
+  dimsEnabled = _asmDimsWere;
+  var hud = document.getElementById('asm-hud'); if (hud) hud.classList.remove('show');
+  _asmHighlightGuide();
+}
+function asmTogglePlay() {
+  if (!_asmActive) return;
+  // Pressing play at the end replays from the start.
+  if (!_asmPlaying && _asmIdx >= _asmSteps.length - 1) { _asmIdx = 0; _asmT = 0; }
+  _asmPlaying = !_asmPlaying;
+  _asmSyncHud();
+}
+function asmStepBy(d) {
+  if (!_asmActive) return;
+  _asmPlaying = false;
+  _asmIdx = Math.max(0, Math.min(_asmSteps.length - 1, _asmIdx + d));
+  // Render immediately so the step change is atomic rather than leaving the
+  // previous step's parts on screen until the next frame.
+  _asmT = 0; _asmSyncHud(); _asmRender();
+}
+// Clicking a row in the written guide shows that step on the model.
+function asmJumpTo(i) {
+  if (!_asmActive) { startAssemblyAnim(i); _asmPlaying = false; _asmSyncHud(); return; }
+  _asmPlaying = false;
+  _asmIdx = Math.max(0, Math.min(_asmSteps.length - 1, i));
+  _asmT = 0; _asmSyncHud(); _asmRender();
 }
 
 // ═══════════════════════════════════════════════════════════════
