@@ -65,10 +65,21 @@ if ('serviceWorker' in navigator) {
 #fps-crosshair::before{width:16px;height:2px;top:-1px;left:-8px;}
 #fps-crosshair::after{width:2px;height:16px;top:-8px;left:-1px;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:var(--txt);height:100vh;overflow:hidden;user-select:none;display:flex;flex-direction:column;}
+html{height:100%;}
+/* Pin the app to the visual viewport: position:fixed + inset:0 stops the whole
+   document from scrolling away on mobile (canvas drags were dragging the page,
+   and 100vh > the visible area when browser/system chrome is present). dvh
+   tracks the dynamic viewport; overscroll-behavior kills rubber-band scroll. */
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:var(--txt);
+  position:fixed;inset:0;height:100vh;height:100dvh;overflow:hidden;overscroll-behavior:none;
+  user-select:none;display:flex;flex-direction:column;}
 
 /* ── Top bar ──────────────────────────────────────── */
-#topbar{height:42px;min-height:42px;background:var(--bg0);color:#fff;display:flex;align-items:center;padding:0 14px;gap:10px;z-index:50;flex-shrink:0;border-bottom:1px solid var(--teal-dim2);}
+/* padding-top = the status-bar height when it is visible (safe-area inset),
+   0 when it is hidden/absent — so the bar never overlaps FurniCraft's topbar
+   in the PWA, and no space is wasted in the immersive APK. */
+#topbar{height:42px;min-height:42px;background:var(--bg0);color:#fff;display:flex;align-items:center;padding:0 14px;gap:10px;z-index:50;flex-shrink:0;border-bottom:1px solid var(--teal-dim2);
+  padding-top:env(safe-area-inset-top);height:calc(42px + env(safe-area-inset-top));min-height:calc(42px + env(safe-area-inset-top));}
 #topbar-logo{font-size:14px;font-weight:700;letter-spacing:.3px;white-space:nowrap;margin-right:6px;}
 #topbar-logo span{color:var(--teal);}
 #topbar-proj{flex:1;display:flex;align-items:center;gap:7px;}
@@ -118,7 +129,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg1);color:
 #three-canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 #dim-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
 
-#toolbar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:20;background:rgba(13,13,13,.94);padding:7px 12px;border-radius:22px;box-shadow:0 2px 20px rgba(0,0,0,.6);border:1px solid var(--bd2);}
+#toolbar{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:20;background:rgba(13,13,13,.94);padding:7px 12px;border-radius:22px;box-shadow:0 2px 20px rgba(0,0,0,.6);border:1px solid var(--bd2);}
 .tbtn{padding:6px 13px;border:1px solid var(--bd2);border-radius:14px;background:var(--bg3);color:var(--txt2);font-size:12px;cursor:pointer;transition:all .12s;white-space:nowrap;}
 .tbtn:hover{background:var(--bg4);color:var(--txt);border-color:var(--teal);}
 .tbtn.on{background:var(--teal);color:#000;border-color:var(--teal);font-weight:600;}
@@ -211,13 +222,13 @@ body.rp-collapsed #tab-right{right:0;}
 /* ── Mobile responsive ────────────────────────────── */
 /* ── Mobile export FAB ───────────────────────────────── */
 #mobile-export-fab{
-  display:none;position:fixed;bottom:80px;right:14px;z-index:60;
+  display:none;position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));right:14px;z-index:60;
   width:52px;height:52px;border-radius:50%;border:none;
   background:var(--teal);color:#000;font-size:20px;cursor:pointer;
   box-shadow:0 4px 16px rgba(0,0,0,.5);align-items:center;justify-content:center;
 }
 #mobile-export-menu{
-  display:none;position:fixed;bottom:142px;right:14px;z-index:61;
+  display:none;position:fixed;bottom:calc(142px + env(safe-area-inset-bottom));right:14px;z-index:61;
   background:var(--bg2);border:1px solid var(--bd2);border-radius:10px;
   box-shadow:0 6px 24px rgba(0,0,0,.5);overflow:hidden;min-width:180px;
 }
@@ -236,14 +247,14 @@ body.rp-collapsed #tab-right{right:0;}
 
   /* Side panels become fixed drawers */
   #left-panel{
-    position:fixed;left:0;top:42px;bottom:0;z-index:56;
+    position:fixed;left:0;top:calc(42px + env(safe-area-inset-top));bottom:0;z-index:56;
     transform:translateX(-100%);transition:transform .22s ease;
     width:220px;min-width:0;box-shadow:4px 0 20px rgba(0,0,0,.5);
   }
   #left-panel.open{transform:translateX(0);}
 
   #right-panel{
-    position:fixed;right:0;top:42px;bottom:0;z-index:56;
+    position:fixed;right:0;top:calc(42px + env(safe-area-inset-top));bottom:0;z-index:56;
     transform:translateX(100%);transition:transform .22s ease;
     width:230px;min-width:0;box-shadow:-4px 0 20px rgba(0,0,0,.5);
   }
