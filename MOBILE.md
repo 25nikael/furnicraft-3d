@@ -30,21 +30,43 @@ affects the Render deploy.
 | Tool | Version |
 |---|---|
 | Node.js | 18+ |
-| JDK | 17 (Android Gradle Plugin 8 requires it) |
-| Android Studio | with Android SDK + Platform-Tools |
+| JDK | 17+ — Android Studio's bundled JBR (21) works; needs Gradle 8.5+, which Capacitor 7 ships |
+| Android Studio | with an installed SDK **platform** + Platform-Tools |
 
-### Build
+The `mobile/` shell uses **Capacitor 7** (Gradle 8.11.1, AGP 8.7.2 — the combo
+that supports JDK 21). `variables.gradle` targets **SDK 36**; change
+`compileSdkVersion`/`targetSdkVersion` there to a platform you actually have
+installed (there is no `sdkmanager` auto-download for platforms).
+
+### Build (verified 2026-07-23)
+
+This exact flow produced a working `app-debug.apk`:
 
 ```bash
 cd mobile
 npm install
 npm run add:android      # copies public/ -> www/ and generates the android project
-npm run sync             # re-run after any web change
-npm run open             # opens Android Studio
+
+# Point Gradle at the JDK and SDK (adjust paths for your machine):
+export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
+export ANDROID_HOME="$HOME/AppData/Local/Android/Sdk"
+
+cd android
+./gradlew assembleDebug        # first run downloads Gradle + AGP (~2-6 min)
 ```
 
-Then in Android Studio: **Build → Build Bundle(s)/APK(s) → Build APK(s)**.
-The debug APK lands in `mobile/android/app/build/outputs/apk/debug/`.
+The debug APK lands in `mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+(~4 MB). Or open Android Studio with `npm run open` and use
+**Build → Build APK(s)** instead of the CLI.
+
+> **local.properties gotcha:** if you write `sdk.dir` by hand, use **forward
+> slashes** (`sdk.dir=C:/Users/you/AppData/Local/Android/Sdk`). Backslashes are
+> escape characters in a `.properties` file, so a Windows path with them fails
+> the build with a cryptic `java.io.IOException: Invalid file path`. Android
+> Studio writes this file correctly on its own.
+
+After a web change run `npm run sync` (re-copies `public/` and re-syncs Gradle),
+then rebuild.
 
 For a release build you need a signing key:
 
