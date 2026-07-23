@@ -9,8 +9,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png" type="image/png">
+<script src="/native-bridge.js"></script>
 <script>
-if ('serviceWorker' in navigator) {
+if (!window.FC_BUNDLED && 'serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('/sw.js').catch(function () {});
   });
@@ -760,7 +761,7 @@ async function api(path, opts) {
 function afterAuth(res) {
   _setToken(res.token);
   var ret = new URLSearchParams(location.search).get('return') || '/';
-  window.location.href = ret;
+  window.location.href = window.fcHref(ret);
 }
 
 /* ── Nav: solid on scroll + smooth scroll helpers ── */
@@ -1218,7 +1219,7 @@ function applyConfig() {
     try {
       await api('/auth/me');
       var ret = new URLSearchParams(location.search).get('return') || '/';
-      window.location.href = ret;
+      window.location.href = window.fcHref(ret);
       return;
     } catch (e) { localStorage.removeItem('fc3d_token'); }
   }
