@@ -3,9 +3,7 @@
   "appName": "FurniCraft 3D",
   "webDir": "www",
   "server": {
-    "url": "https://furnicraft-3d-t77u.onrender.com",
     "androidScheme": "https",
-    "cleartext": false,
     "allowNavigation": [
       "furnicraft-3d-t77u.onrender.com",
       "accounts.google.com"

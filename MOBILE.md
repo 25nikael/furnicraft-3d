@@ -77,45 +77,35 @@ keytool -genkey -v -keystore furnicraft.jks -keyalg RSA -keysize 2048 -validity 
 Keep that file **out of git** (already covered by `.gitignore`) — losing it means
 you can never update the Play Store listing again.
 
-### How it is wired
+### How it is wired — offline-first, bundled (R61)
 
-`mobile/capacitor.config.json` points the WebView at the deployed site:
+`mobile/capacitor.config.json` has **no `server.url`**, so Capacitor serves the
+whole app from inside the APK (`https://localhost`). The editor launches with no
+connection at all — the 3D libraries are bundled too (see below). Only *cloud
+projects* need the network, which is the correct model: you can design offline
+and save/load when you're online.
 
-```json
-"server": { "url": "https://furnicraft-3d-t77u.onrender.com" }
-```
+Three pieces make this work:
 
-That choice is deliberate:
+1. **Self-hosted libraries.** Three.js, its exporters and jsPDF now live in
+   `public/vendor/` and load from `/vendor/*` instead of a CDN. Without this a
+   "bundled" app would still fail to boot offline, because the editor can't run
+   without Three.js. (Bonus: the web app no longer depends on a CDN staying up.)
+2. **`public/native-bridge.js`** — loaded first on every page. It detects the
+   bundled-native case (Capacitor native **and** origin ≠ the backend) and then:
+   * rewrites `/api/*` fetches to the absolute backend URL (CORS is enabled
+     server-side and auth is a Bearer token, so cross-origin is fine);
+   * maps the extensionless routes `/landing` and `/admin` to `landing.html` /
+     `admin.html` via `window.fcHref()`, since there's no Express in the bundle;
+   * skips the service worker (assets are already local).
+   On the normal web and in a remote-URL build it is a **strict no-op**.
+3. **`server.url` removed** from the Capacitor config.
 
-* Everything stays **same-origin**, so `/api/*`, the `/landing` and `/admin`
-  routes and the SPA fallback behave exactly as they do on the web. A bundled
-  build would break all of those (see below).
-* The app **updates itself** whenever you deploy — no re-publishing the APK for
-  a front-end change.
-* The service worker still runs inside the WebView, so the app shell is cached
-  and the editor still launches without a connection after the first run.
-
-Trade-offs to know about: the very first launch needs a connection, and a
-remote-URL wrapper is a thinner "native app" than a bundled one, which is worth
-considering if you submit to the Play Store.
-
-### If you ever want a fully bundled (offline-first) build
-
-Delete the `server.url` line so Capacitor serves `www/` from inside the APK.
-Two things then need fixing, because the bundle is static files with no Express
-in front of it:
-
-1. **API calls** — the app uses relative `/api/...` paths, which would resolve
-   to the local bundle. Add a shim that rewrites them to the absolute backend
-   URL when `window.Capacitor.isNativePlatform()` is true. CORS is already
-   enabled server-side (`app.use(cors())`) and auth is a Bearer token rather
-   than a cookie, so cross-origin calls work.
-2. **Extensionless routes** — `/landing` and `/admin` exist only because Express
-   maps them; as static files they are `landing.html` and `admin.html`. Those
-   redirect targets need rewriting for the native case.
-
-Neither has been implemented, because neither can be tested without an Android
-toolchain — do it alongside a real device build.
+Trade-off vs. the remote-URL approach: a front-end change now needs an APK
+rebuild + reinstall to reach installed users (the web PWA still updates itself).
+If you'd rather have auto-updating and don't need true offline, add
+`"server": { "url": "https://furnicraft-3d-t77u.onrender.com" }` back — the
+bridge deactivates automatically (origin becomes the backend).
 
 ---
 

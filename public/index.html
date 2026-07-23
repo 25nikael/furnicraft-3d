@@ -12,10 +12,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="/icons/icon-192.png" type="image/png">
+<!-- Native bridge FIRST: sets API_BASE / fcHref, patches fetch for the bundled
+     APK. No-op on web. Must run before the app and the SW registration. -->
+<script src="/native-bridge.js"></script>
 <script>
-// Register the app-shell service worker. Failure is non-fatal — the app runs
-// exactly as before without it (e.g. over plain http, or if SW is blocked).
-if ('serviceWorker' in navigator) {
+// Register the app-shell service worker. Skipped in the bundled APK (assets are
+// already local there, and the worker would wrongly cache backend /api GETs
+// since its origin differs from the backend's). Failure is otherwise non-fatal.
+if (!window.FC_BUNDLED && 'serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('/sw.js').catch(function () {});
   });
@@ -475,7 +479,7 @@ body.rp-collapsed #tab-right{right:0;}
     <span id="topbar-user" style="display:none;"></span>
     <button class="tb-btn tb-prim" id="tb-save" style="display:none;" onclick="saveCurrentProject()">Save</button>
     <button class="tb-btn" id="tb-projects" style="display:none;" onclick="openProjectManager()">My Projects</button>
-    <button class="tb-btn" id="tb-admin" style="display:none;" onclick="window.location.href='/admin'">Admin</button>
+    <button class="tb-btn" id="tb-admin" style="display:none;" onclick="window.location.href=window.fcHref('/admin')">Admin</button>
     <button class="tb-btn" id="tb-signin" onclick="openAuth()">Sign In</button>
     <button class="tb-btn" id="tb-logout" style="display:none;" onclick="logoutUser()">Sign Out</button>
     <button class="tb-btn" id="tb-help" title="Shortcuts & help (?)" onclick="toggleCheatsheet()">?</button>
@@ -1378,18 +1382,21 @@ body.rp-collapsed #tab-right{right:0;}
   </div>
 </div>
 
-<!-- Three.js r128 — UMD build with examples/js OrbitControls -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
+<!-- Three.js r128 (UMD) + examples/js OrbitControls and exporters.
+     Self-hosted from /vendor so the editor boots with no CDN — required for
+     the offline-first Android bundle, and removes the CDN-outage risk on web. -->
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
 <!-- 3D exporters (E2) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/OBJExporter.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js" crossorigin="anonymous"></script>
-<!-- Google Identity Services for Google Sign-In -->
+<script src="/vendor/GLTFExporter.js"></script>
+<script src="/vendor/OBJExporter.js"></script>
+<script src="/vendor/STLExporter.js"></script>
+<!-- Google Identity Services for Google Sign-In (stays remote — auth needs the
+     network anyway, and it cannot be meaningfully bundled). -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<!-- jsPDF + autoTable for PDF export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js" crossorigin="anonymous"></script>
+<!-- jsPDF + autoTable for PDF export (self-hosted) -->
+<script src="/vendor/jspdf.umd.min.js"></script>
+<script src="/vendor/jspdf.plugin.autotable.min.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -2461,7 +2468,7 @@ async function logoutUser() {
   _currentProjId = null;
   _dirty         = false;   // leaving the app; don't warn on the navigation below
   _clearToken();
-  window.location.href = '/landing';
+  window.location.href = window.fcHref('/landing');
 }
 
 // ── Settings: theme + navigation ─────────────────────
@@ -3037,13 +3044,13 @@ var _hasShareParam = /[?&]share=/.test(location.search);
     } catch(e) {
       _clearToken();
       if (!_hasShareParam) {
-        window.location.href = '/landing?return=' + encodeURIComponent(location.pathname + location.search);
+        window.location.href = window.fcHref('/landing?return=' + encodeURIComponent(location.pathname + location.search));
         return;
       }
       // Invalid token but a share link is present → continue as a signed-out viewer.
     }
   } else if (!_hasShareParam) {
-    window.location.href = '/landing?return=' + encodeURIComponent(location.pathname + location.search);
+    window.location.href = window.fcHref('/landing?return=' + encodeURIComponent(location.pathname + location.search));
     return;
   }
 

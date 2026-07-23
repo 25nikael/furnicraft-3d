@@ -7,16 +7,13 @@
  *    or be mistaken for the live one.
  *  - Navigations are network-first with a cached fallback, so a deploy is
  *    picked up immediately when online but the app still launches offline.
- *  - Everything else (app HTML, icons, and the CDN copies of Three.js/jsPDF)
- *    is cache-first, which is what actually makes an offline launch work —
- *    without the CDN scripts cached the editor cannot boot.
+ *  - Everything else (app HTML, icons, and the self-hosted /vendor libraries)
+ *    is cache-first, which is what makes an offline launch work on the web PWA.
+ *    The 3D libraries are now same-origin under /vendor (R61), so there is no
+ *    cross-origin/opaque-response problem to work around anymore.
  *
- * Why the library <script> tags carry crossorigin="anonymous": without it a
- * cross-origin script yields an OPAQUE response (status 0), which we refuse to
- * cache — you cannot tell a good one from a 503, and caching a bad one under
- * cache-first would break the app permanently. jsdelivr and cdnjs both send
- * Access-Control-Allow-Origin:*, so the CORS request gives us a real status to
- * check. accounts.google.com does not send CORS and is skipped outright.
+ * (The Android APK is offline-first by bundling, not by this worker — it ships
+ * all of /vendor inside the package. See native-bridge.js and MOBILE.md.)
  */
 // Third-party origins that must always go straight to the network.
 var BYPASS = ['accounts.google.com', 'apis.google.com'];
